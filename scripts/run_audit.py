@@ -246,6 +246,14 @@ def threshold_verdict(value, threshold):
 
 def indicator_rows(report):
     """Return the single peer-level A1--F8 audit register used in every report."""
+    readable_names = {
+        "A1": "已知必纳入文献找回率", "A2": "检索式找回已知相关文献的能力", "A3": "多来源检索到的最少唯一候选数", "A4": "关键标准和核心文献是否找全",
+        "B1": "工程问题的分类框架是否完整", "B2": "每个关键工程场景是否有文献", "B3": "文献分类结果是否可信", "B4": "是否过度依赖单一来源", "B5": "关键场景是否逐项验证找回率",
+        "C1": "所需工程证据类型是否齐全", "C2": "文献是否说明适用工况", "C3": "文献是否给出可比的指标和基线", "C4": "标准、数据和软件版本是否明确", "C5": "验证是否足以支撑工程结论", "C6": "可信度风险是否已处理",
+        "D1": "各检索来源是否仍是最新", "D2": "计划检索的来源是否全部完成", "D3": "新兴技术和新术语是否被覆盖", "D4": "是否使用了最新且正确的文献版本", "D5": "文献年代结构是否已被检查",
+        "E1": "引用数据是否足够用于背景判断", "E2": "影响力是否由少数文献主导", "E3": "是否连到关键研究和技术路线", "E4": "是否过度依赖单一发表渠道", "E5": "领域标准和权威工作是否齐全",
+        "F1": "检索过程能否被他人复跑", "F2": "计划的检索路径是否完成", "F3": "检索是否有趋于饱和的证据", "F4": "每篇纳入文献能否追溯来源和决定", "F5": "题录信息是否完整可用", "F6": "重复和不同版本是否已妥善处理", "F7": "全文、代码和数据是否有获取线索", "F8": "撤稿、更正和异常是否已核查"
+    }
     c, b, s, e, d, i, p, h = (report["coverage"], report["coverage"].get("benchmark", {}),
                               report["structure"], report["evidence"], report["currency"],
                               report["influence"], report["process"], report["library_health"])
@@ -255,7 +263,7 @@ def indicator_rows(report):
     checks = lambda group, key: group.get("checks", {}).get(key, "not_assessable")
     add = []
     def row(parent, sub, name, standard, verdict, current, evidence_state, note):
-        add.append((parent, sub, name, standard, verdict, compact(current), evidence_state, note))
+        add.append((parent, sub, readable_names.get(sub, name), standard, verdict, compact(current), evidence_state, note))
 
     row("A 覆盖验证", "A1", "稳定标识符基准集召回", f"配置阈值 ≥ {a1_min}" if a1_min is not None else "需在 context.standards 配置 a1_min_recall", threshold_verdict(c["a1"].get("recall"), a1_min), c["a1"].get("recall"), c["a1"].get("status"), "仅以 DOI、PMID 等稳定标识符匹配；未配置阈值时不作达标结论。")
     row("A 覆盖验证", "A2", "金标准查询灵敏度", f"配置阈值 ≥ {a2_min}" if a2_min is not None else "需在 context.standards 配置 a2_min_recall", threshold_verdict(c["a2"].get("recall"), a2_min), c["a2"].get("recall"), c["a2"].get("status"), "Gold set 必须有独立来源与纳入依据。")
