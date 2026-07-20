@@ -103,7 +103,8 @@ def a3(sources):
     return result
 
 
-def health(library):
+def health(library, standards=None):
+    standards = standards or {}
     n = len(library)
     fields = {k: round(sum(bool(str(x.get(k) or "").strip()) for x in library) / n, 3) if n else None
               for k in ("title", "creators", "date", "publicationTitle", "abstractNote", "DOI", "url")}
@@ -114,7 +115,12 @@ def health(library):
     oa_links = sum(bool(x.get("open_access_url") or x.get("fulltext_url")) for x in library)
     provenance = sum(bool(x.get("source") or x.get("source_database") or x.get("collection")) for x in library)
     flags = sum(bool(x.get("retracted") or x.get("corrected") or x.get("expression_of_concern")) for x in library)
-    return {"status": "measured" if n else "not_assessable", "records": n, "field_completeness": fields,
+    core_min = float(standards.get("f_core_metadata_rate", 0.95)); abstract_min = float(standards.get("f_abstract_rate", 0.80)); access_min = float(standards.get("f_access_rate", 0.80)); provenance_min = float(standards.get("f_provenance_rate", 0.95))
+    checks = {"F1_metadata": "pass" if all(fields[k] is not None and fields[k] >= core_min for k in ("title", "creators", "date", "publicationTitle", "DOI")) and (fields["abstractNote"] is None or fields["abstractNote"] >= abstract_min) else "fail",
+              "F2_exact_duplicates": "pass" if not sum(v > 1 for v in dois.values()) else "fail",
+              "F3_version_decisions": "not_assessable", "F4_access": "pass" if n and (attachments + oa_links) / n >= access_min else "warning",
+              "F5_provenance": "pass" if n and provenance / n >= provenance_min else "fail", "F6_corrections": "not_assessable"}
+    return {"status": "measured" if n else "not_assessable", "records": n, "field_completeness": fields, "checks": checks,
             "duplicate_doi_groups": sum(v > 1 for v in dois.values()), "duplicate_title_year_groups": sum(v > 1 for v in title_year.values()),
             "attachment_rate": round(attachments / n, 3) if n else None, "open_link_rate": round(oa_links / n, 3) if n else None,
             "provenance_rate": round(provenance / n, 3) if n else None, "correction_flag_records": flags,
@@ -127,12 +133,20 @@ def stability(context):
              if isinstance(x.get("core_before"), (int, float)) and x["core_before"] > 0 and isinstance(x.get("included_high"), (int, float))]
     paths = set(context.get("planned_pathways", [])); done = {x.get("pathway") for x in rounds if x.get("completed")}
     complete = round(len(paths & done) / len(paths), 3) if paths else None
-    threshold = float(context.get("new_rate_threshold", 0.02)); yield_threshold = float(context.get("marginal_yield_threshold", 0.05))
+    standards = context.get("standards", {})
+    threshold = float(standards.get("b_new_rate_threshold", context.get("new_rate_threshold", 0.02)))
+    yield_threshold = float(standards.get("b_marginal_yield_threshold", context.get("marginal_yield_threshold", 0.05)))
     yields = [x.get("yield") for x in context.get("source_marginal_yields", []) if isinstance(x.get("yield"), (int, float))]
     converged = len(rates) >= 2 and all(x < threshold for x in rates[-2:]) and complete == 1.0 and context.get("independent_validation_passed") is True and bool(yields) and all(x < yield_threshold for x in yields)
+    checks = {"B1_new_rate": "pass" if len(rates) >= 2 and all(x < threshold for x in rates[-2:]) else "not_assessable" if len(rates) < 2 else "fail",
+              "B2_pathways": "pass" if complete == 1.0 else "not_assessable" if complete is None else "fail",
+              "B3_marginal_yield": "pass" if yields and all(x < yield_threshold for x in yields) else "not_assessable" if not yields else "fail",
+              "B4_traceability": "pass" if context.get("run_log_complete") is True else "not_assessable",
+              "B5_independent_validation": "pass" if context.get("independent_validation_passed") is True else "not_assessable" if "independent_validation_passed" not in context else "fail"}
     return {"status": "measured" if rounds else "not_assessable", "high_confidence_new_rates": rates, "pathway_completion": complete,
             "independent_validation_passed": context.get("independent_validation_passed") is True, "source_marginal_yields": yields,
-            "verdict": "趋于稳定（仅限声明范围）" if converged else "未证明稳定"}
+            "thresholds": {"new_rate": threshold, "marginal_yield": yield_threshold}, "checks": checks,
+            "verdict": "趋于稳定（仅限声明范围）" if converged and all(x == "pass" for x in checks.values()) else "趋稳不可证明" if "not_assessable" in checks.values() else "未证明稳定"}
 
 
 def currency(context):
@@ -143,24 +157,29 @@ def currency(context):
         try: dates[source] = dt.datetime.fromisoformat(str(value).replace("Z", "+00:00")).date()
         except (TypeError, ValueError): pass
     today = dt.date.today()
-    return {"status": "measured" if dates else "not_assessable", "sources": {k: {"date": v.isoformat(), "days_since": (today-v).days} for k, v in dates.items()},
+    max_days = int(context.get("standards", {}).get("e_freshness_days", 90))
+    return {"status": "measured" if dates else "not_assessable", "freshness_threshold_days": max_days, "sources": {k: {"date": v.isoformat(), "days_since": (today-v).days, "verdict": "pass" if (today-v).days <= max_days else "warning"} for k, v in dates.items()},
             "note": "Report every successful source date; a recent source does not hide stale or failed sources."}
 
 
 def structure(library, context):
     taxonomy = context.get("taxonomy", [])
     mapped = []
+    standards = context.get("standards", {}); required = int(standards.get("c_min_records_per_critical_stratum", 1)); confidence_min = float(standards.get("c_min_classification_confidence", 0.80))
     for row in taxonomy:
         expected = row.get("expected", True)
         count = row.get("high_confidence_records")
         confidence = row.get("classification_confidence")
-        status = "gap" if expected and not count else "covered" if count else "out_of_scope"
+        status = "gap" if expected and (count or 0) < required else "covered" if count else "out_of_scope"
         mapped.append({"name": row.get("name", "unnamed"), "expected": expected, "records": count,
                        "classification_confidence": confidence, "status": status})
     source_counts = Counter(str(x.get("source") or x.get("source_database") or "unknown") for x in library)
     n = len(library); shares = [x / n for x in source_counts.values()] if n else []
     entropy = -sum(p * log(p) for p in shares if p)
-    return {"status": "measured" if taxonomy or library else "not_assessable", "taxonomy": mapped,
+    unclassified_rate = context.get("unclassified_rate")
+    checks = {"C1_taxonomy": "pass" if taxonomy else "not_assessable", "C2_critical_strata": "pass" if taxonomy and not [x for x in mapped if x["status"] == "gap"] else "fail" if taxonomy else "not_assessable",
+              "C3_classification": "pass" if all(x["classification_confidence"] is not None and x["classification_confidence"] >= confidence_min for x in mapped) and (unclassified_rate is None or unclassified_rate <= float(standards.get("c_max_unclassified_rate", 0.10))) else "warning" if taxonomy else "not_assessable"}
+    return {"status": "measured" if taxonomy or library else "not_assessable", "taxonomy": mapped, "checks": checks,
             "uncovered_expected_strata": [x["name"] for x in mapped if x["status"] == "gap"],
             "source_dependence": {"counts": dict(source_counts), "top_source_share": round(max(shares), 3) if shares else None,
                                   "shannon_entropy": round(entropy, 3) if shares else None},
@@ -170,11 +189,15 @@ def structure(library, context):
 def evidence(library, context):
     required = set(context.get("engineering_evidence_types_required", []))
     present = {str(x.get("engineering_evidence_type") or x.get("evidence_type")) for x in library if x.get("engineering_evidence_type") or x.get("evidence_type")}
+    standards = context.get("standards", {}); field_rate = float(standards.get("d_required_field_rate", 0.80)); n = len(library)
     flags = {"preprint": sum(bool(x.get("is_preprint")) for x in library),
              "retraction_or_correction_flags": sum(bool(x.get("retracted") or x.get("corrected") or x.get("expression_of_concern")) for x in library),
              "code_or_data_links": sum(bool(x.get("code_url") or x.get("data_url")) for x in library),
              "missing_conditions": sum(not bool(x.get("operating_conditions") or x.get("test_conditions")) for x in library)}
-    return {"status": "screening" if library else "not_assessable", "required_evidence_types": sorted(required),
+    condition_rate = round(sum(bool(x.get("operating_conditions") or x.get("test_conditions")) for x in library) / n, 3) if n else None
+    metric_rate = round(sum(bool(x.get("baseline") or x.get("performance_metrics")) for x in library) / n, 3) if n else None
+    checks = {"D1_evidence_types": "pass" if not (required-present) else "fail", "D2_conditions": "pass" if condition_rate is not None and condition_rate >= field_rate else "warning", "D3_baselines_metrics": "pass" if metric_rate is not None and metric_rate >= field_rate else "warning"}
+    return {"status": "screening" if library else "not_assessable", "required_evidence_types": sorted(required), "checks": checks, "condition_rate": condition_rate, "baseline_or_metric_rate": metric_rate,
             "present_evidence_types": sorted(present), "missing_required_types": sorted(required - present), "credibility_flags": flags,
             "note": "This is engineering evidence screening. It does not determine causal validity, benchmark fairness, code reproducibility or version equivalence."}
 
@@ -211,11 +234,12 @@ def main():
     p.add_argument("--query-plan"); p.add_argument("--source-snapshot"); p.add_argument("--decision-log"); p.add_argument("--deduplication-log"); p.add_argument("--run-log")
     p.add_argument("--out", required=True); a = p.parse_args()
     context = json.load(open(a.context, encoding="utf-8")) if a.context else {}
-    report = {"generated_at": dt.datetime.now(dt.timezone.utc).isoformat(), "library_health": health(load_items(a.library)),
+    library = load_items(a.library)
+    report = {"generated_at": dt.datetime.now(dt.timezone.utc).isoformat(), "library_health": health(library, context.get("standards", {})),
               "coverage": {"a1": benchmark(load_items(a.library), load_items(a.benchmark) if a.benchmark else []),
                            "a2": a2(load_items(a.gold) if a.gold else None, load_items(a.query_hits) if a.query_hits else None),
                            "a3": a3(load_snapshot(a.candidate_snapshots) if a.candidate_snapshots else {})},
-              "stability": stability(context), "structure": structure(load_items(a.library), context), "evidence": evidence(load_items(a.library), context), "currency": currency(context),
+              "stability": stability(context), "structure": structure(library, context), "evidence": evidence(library, context), "currency": currency(context),
               "artifacts": artifacts({"query-plan": a.query_plan, "source-snapshot": a.source_snapshot, "decision-log": a.decision_log, "deduplication-log": a.deduplication_log, "run-log": a.run_log}),
               "summary": "本报告只将稳定标识符匹配和已保存过程记录标为可复跑证据。",
               "limitations": ["A3 下界不是 Recall；任何区间都需要另行声明模型假设。", "工程适用性、版本等价性、研究设计和更正状态需要人工或专门来源核验。", "未提供的运行产物会明确标为缺失。"]}
