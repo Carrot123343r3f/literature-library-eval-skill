@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.env
+.env.*
+audit-output/
+audit.json
+audit.html
+audit.md
+query-plan.json
+source-snapshot.json
+screening-log.json
+*.log
