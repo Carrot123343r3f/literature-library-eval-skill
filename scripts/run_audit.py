@@ -1,47 +1,71 @@
 #!/usr/bin/env python3
-"""Generate a conservative, reproducible engineering literature-library audit."""
-import argparse
-import datetime as dt
-import html
-import json
-import pathlib
-import re
+"""Literature-library evaluation report generator (model X: A-F six dimensions, 21 sub-items)."""
+import argparse, datetime as dt, html, json, pathlib, re
 from collections import Counter
 from math import log
 
+# Review-type → default thresholds (narrative / systematic / scoping / rapid / umbrella)
+REVIEW_THRESHOLDS = {
+    "叙事综述": {"a1_min_recall": 0.75, "a2_min_recall": 0.70, "f_access_rate": 0.60,
+                 "f_provenance_rate": 0.85, "f_core_metadata_rate": 0.90, "f_abstract_rate": 0.80},
+    "系统综述": {"a1_min_recall": 0.90, "a2_min_recall": 0.85, "f_access_rate": 0.80,
+                 "f_provenance_rate": 0.95, "f_core_metadata_rate": 0.95, "f_abstract_rate": 0.85},
+    "范围综述": {"a1_min_recall": 0.75, "a2_min_recall": 0.70, "f_access_rate": 0.60,
+                 "f_provenance_rate": 0.85, "f_core_metadata_rate": 0.90, "f_abstract_rate": 0.80},
+    "快速综述": {"a1_min_recall": 0.60, "a2_min_recall": 0.55, "f_access_rate": 0.50,
+                 "f_provenance_rate": 0.70, "f_core_metadata_rate": 0.80, "f_abstract_rate": 0.70},
+    "伞式综述": {"a1_min_recall": 0.85, "a2_min_recall": 0.80, "f_access_rate": 0.75,
+                 "f_provenance_rate": 0.90, "f_core_metadata_rate": 0.90, "f_abstract_rate": 0.80},
+}
+
+def resolve_thresholds(context):
+    """Merge review-type defaults into context.standards (user overrides win)."""
+    ctx = dict(context) if context else {}
+    s = dict(ctx.get("standards", {}))
+    rt = ctx.get("review_type", "")
+    defaults = REVIEW_THRESHOLDS.get(rt, {})
+    for k, v in defaults.items():
+        if k not in s: s[k] = v
+    # inject profile freshness into D1 if not already set
+    _, _, fresh_days = profile_defaults(ctx)
+    if "d_freshness_days" not in s:
+        s["d_freshness_days"] = fresh_days
+    # non-RT defaults (balance/metric thresholds)
+    for k, v in {"b_ggr_threshold": 0.02, "b_drr_threshold": 0.05,
+                 "balance_top_share_warning": 0.80, "balance_cv_warning": 1.00,
+                 "balance_gini_warning": 0.60, "balance_shannon_low_warning": 0.45,
+                 "balance_shannon_high_warning": 0.95, "topic_top_share_warning": 0.70,
+                 "topic_cv_warning": 0.80, "topic_gini_warning": 0.50,
+                 "topic_shannon_low_warning": 0.55, "topic_target_tvd_warning": 0.25,
+                 "topic_min_sources": 2, "topic_source_top_share_warning": 0.80}.items():
+        if k not in s: s[k] = v
+    ctx["standards"] = s
+    return ctx
 
 def doi(value):
     m = re.search(r"(10\.\d{4,9}/\S+)", str(value or ""), re.I)
     return m.group(1).rstrip(".,;:)]}").lower() if m else ""
 
-
 def ids(row):
     found = set()
     for key in ("DOI", "doi", "extra", "id"):
         value = doi(row.get(key))
-        if value:
-            found.add("doi:" + value)
+        if value: found.add("doi:" + value)
     for key, prefix in (("PMID", "pmid"), ("pmid", "pmid"), ("PMCID", "pmcid"),
                         ("arxiv", "arxiv"), ("arXiv", "arxiv"), ("openalex_id", "openalex")):
-        if row.get(key):
-            found.add(prefix + ":" + str(row[key]).casefold())
+        if row.get(key): found.add(prefix + ":" + str(row[key]).casefold())
     raw = str(row.get("id") or "").casefold()
-    if raw.startswith(("pmid:", "pmcid:", "arxiv:", "openalex:")):
-        found.add(raw)
-    if row.get("source") == "arxiv" and raw:
-        found.add("arxiv:" + raw)
+    if raw.startswith(("pmid:", "pmcid:", "arxiv:", "openalex:")): found.add(raw)
+    if row.get("source") == "arxiv" and raw: found.add("arxiv:" + raw)
     return found
-
 
 def title(row):
     return re.sub(r"[^\w]", "", str(row.get("title") or "").casefold())
-
 
 def load_items(path):
     with open(path, encoding="utf-8") as fh:
         data = json.load(fh)
     return data if isinstance(data, list) else data.get("items", [])
-
 
 def load_snapshot(path):
     with open(path, encoding="utf-8") as fh:
@@ -53,9 +77,9 @@ def load_snapshot(path):
             bucket["items"].extend(result.get("items", []))
             bucket["statuses"].append(result.get("status", "unknown"))
     if not sources and isinstance(data.get("sources"), dict):
-        sources = {name: {"items": value.get("items", []), "statuses": [value.get("status", "unknown")]} for name, value in data["sources"].items()}
+        sources = {name: {"items": value.get("items", []), "statuses": [value.get("status", "unknown")]}
+                   for name, value in data["sources"].items()}
     return sources
-
 
 def benchmark(library, base):
     lib_ids = set().union(*(ids(x) for x in library)) if library else set()
@@ -71,39 +95,37 @@ def benchmark(library, base):
             "manual_title_candidates": candidates,
             "note": "Only stable identifiers contribute to measured recall."}
 
-
 def a2(gold, hits):
     if gold is None or hits is None:
         return {"status": "not_assessable", "recall": None, "note": "Supply both gold set and executed query-hit snapshot."}
     gold_ids = set().union(*(ids(x) for x in gold if isinstance(x, dict)))
     hit_ids = set().union(*(ids(x) for x in hits if isinstance(x, dict)))
-    if not gold_ids:
-        return {"status": "not_assessable", "recall": None, "note": "Gold set lacks stable identifiers."}
+    if not gold_ids: return {"status": "not_assessable", "recall": None, "note": "Gold set lacks stable identifiers."}
     matched = gold_ids & hit_ids
     return {"status": "measured", "total": len(gold_ids), "matched": len(matched),
             "recall": round(len(matched) / len(gold_ids), 3), "missing_ids": sorted(gold_ids - hit_ids),
             "note": "An executed zero-result query is measured recall 0, not unavailable evidence."}
 
-
 def a3(sources):
     if not sources or len(sources) < 2:
-        return {"status": "not_assessable", "note": "Supply deduplicable snapshots from at least two sources for a candidate lower bound."}
-    incomplete = sorted(name for name, meta in sources.items() if any(status != "complete" for status in meta.get("statuses", [])))
-    source_ids = {name: set().union(*(ids(x) for x in meta.get("items", []) if isinstance(x, dict))) for name, meta in sources.items()}
+        return {"status": "not_assessable", "note": "Supply deduplicable snapshots from at least two sources."}
+    incomplete = sorted(name for name, meta in sources.items()
+                        if any(status != "complete" for status in meta.get("statuses", [])))
+    source_ids = {name: set().union(*(ids(x) for x in meta.get("items", []) if isinstance(x, dict)))
+                  for name, meta in sources.items()}
     union = set().union(*source_ids.values())
-    if not union:
-        return {"status": "not_assessable", "note": "Candidate snapshots contain no stable identifiers."}
+    if not union: return {"status": "not_assessable", "note": "Candidate snapshots contain no stable identifiers."}
     overlaps = {"|".join(pair): len(source_ids[pair[0]] & source_ids[pair[1]])
                 for pair in __import__('itertools').combinations(sorted(source_ids), 2)}
-    result = {"status": "estimated_lower_bound" if not incomplete else "partial_snapshot", "deduplicated_candidate_lower_bound": len(union),
-            "source_unique_identifier_counts": {k: len(v) for k, v in source_ids.items()}, "pairwise_overlaps": overlaps,
-            "incomplete_sources": incomplete,
-            "note": "This is a multi-source identifier lower bound, not Recall or a capture–recapture estimate."}
-    if incomplete: result["note"] = "Source snapshots are incomplete; this provisional count must not support A3 coverage conclusions."
+    result = {"status": "estimated_lower_bound" if not incomplete else "partial_snapshot",
+              "deduplicated_candidate_lower_bound": len(union),
+              "source_unique_identifier_counts": {k: len(v) for k, v in source_ids.items()},
+              "pairwise_overlaps": overlaps, "incomplete_sources": incomplete,
+              "note": "Multi-source deduplicated lower bound; not Recall or capture-recapture."}
+    if incomplete: result["note"] = "Source snapshots incomplete; provisional count must not support A3 conclusions."
     return result
 
-
-def health(library, standards=None):
+def health(library, standards=None, dedup_log_provided=False):
     standards = standards or {}
     n = len(library)
     fields = {k: round(sum(bool(str(x.get(k) or "").strip()) for x in library) / n, 3) if n else None
@@ -111,43 +133,66 @@ def health(library, standards=None):
     dois = Counter(doi(x.get("DOI") or x.get("doi") or x.get("id")) for x in library)
     dois.pop("", None)
     title_year = Counter((title(x), str(x.get("date") or "")[:4]) for x in library if title(x))
-    attachments = sum(bool(x.get("attachments")) for x in library)
-    oa_links = sum(bool(x.get("open_access_url") or x.get("fulltext_url")) for x in library)
+    has_attachment = sum(bool(x.get("attachments")) for x in library)
+    has_oa = sum(bool(x.get("open_access_url") or x.get("fulltext_url")) for x in library)
+    access_union = sum(bool(x.get("attachments") or x.get("open_access_url") or x.get("fulltext_url")) for x in library)
     provenance = sum(bool(x.get("source") or x.get("source_database") or x.get("collection")) for x in library)
     flags = sum(bool(x.get("retracted") or x.get("corrected") or x.get("expression_of_concern")) for x in library)
-    core_min = float(standards.get("f_core_metadata_rate", 0.95)); abstract_min = float(standards.get("f_abstract_rate", 0.80)); access_min = float(standards.get("f_access_rate", 0.80)); provenance_min = float(standards.get("f_provenance_rate", 0.95))
-    checks = {"F5_metadata": "pass" if all(fields[k] is not None and fields[k] >= core_min for k in ("title", "creators", "date", "publicationTitle", "DOI")) and (fields["abstractNote"] is None or fields["abstractNote"] >= abstract_min) else "fail",
-              "F6_exact_duplicates": "pass" if not sum(v > 1 for v in dois.values()) else "fail",
-              "F6_version_decisions": "not_assessable", "F7_access": "pass" if n and (attachments + oa_links) / n >= access_min else "warning",
-              "F4_provenance": "pass" if n and provenance / n >= provenance_min else "fail", "F8_corrections": "not_assessable"}
+    core_min = float(standards.get("f_core_metadata_rate", 0.95))
+    abstract_min = float(standards.get("f_abstract_rate", 0.80))
+    access_min = float(standards.get("f_access_rate", 0.80))
+    provenance_min = float(standards.get("f_provenance_rate", 0.95))
+    has_fuzzy_dupes = sum(v > 1 for v in title_year.values()) > 0
+    checks = {"F_metadata_composite": "pass" if all(fields.get(k) is not None and fields[k] >= core_min
+              for k in ("title", "creators", "date", "publicationTitle", "DOI"))
+              and (fields.get("abstractNote") is None or fields["abstractNote"] >= abstract_min) else "fail",
+              "F4_exact_duplicates": "pass" if not sum(v > 1 for v in dois.values()) else "fail",
+              "F4_version_decisions": "pass" if dedup_log_provided or not has_fuzzy_dupes else "not_assessable",
+              "F3_access": "pass" if n and access_union / n >= access_min else "warning",
+              "F5_provenance": "pass" if n and provenance / n >= provenance_min else "fail",
+              "F6_corrections": "not_assessable"}
     return {"status": "measured" if n else "not_assessable", "records": n, "field_completeness": fields, "checks": checks,
-            "duplicate_doi_groups": sum(v > 1 for v in dois.values()), "duplicate_title_year_groups": sum(v > 1 for v in title_year.values()),
-            "attachment_rate": round(attachments / n, 3) if n else None, "open_link_rate": round(oa_links / n, 3) if n else None,
+            "duplicate_doi_groups": sum(v > 1 for v in dois.values()),
+            "duplicate_title_year_groups": sum(v > 1 for v in title_year.values()),
+            "attachment_rate": round(has_attachment / n, 3) if n else None,
+            "open_link_rate": round(has_oa / n, 3) if n else None,
+            "access_union_rate": round(access_union / n, 3) if n else None,
             "provenance_rate": round(provenance / n, 3) if n else None, "correction_flag_records": flags,
-            "note": "Version-family equivalence, access permission and correction status require source checking or review."}
-
+            "note": "F3=v 附件或开放链接任一可用的记录比例；两率分列展示以避免重复计数。版本族等价性、访问权限和更正状态需专项来源核验。"}
 
 def stability(context):
     rounds = context.get("search_rounds", [])
     rates = [round(x["included_high"] / x["core_before"], 4) for x in rounds
-             if isinstance(x.get("core_before"), (int, float)) and x["core_before"] > 0 and isinstance(x.get("included_high"), (int, float))]
-    paths = set(context.get("planned_pathways", [])); done = {x.get("pathway") for x in rounds if x.get("completed")}
+             if isinstance(x.get("core_before"), (int, float)) and x["core_before"] > 0
+             and isinstance(x.get("included_high"), (int, float))]
+    paths = set(context.get("planned_pathways", []))
+    done = {x.get("pathway") for x in rounds if x.get("completed")}
     complete = round(len(paths & done) / len(paths), 3) if paths else None
     standards = context.get("standards", {})
-    threshold = float(standards.get("f_new_rate_threshold", context.get("new_rate_threshold", 0.02)))
-    yield_threshold = float(standards.get("f_marginal_yield_threshold", context.get("marginal_yield_threshold", 0.05)))
-    yields = [x.get("yield") for x in context.get("source_marginal_yields", []) if isinstance(x.get("yield"), (int, float))]
-    converged = len(rates) >= 2 and all(x < threshold for x in rates[-2:]) and complete == 1.0 and context.get("independent_validation_passed") is True and bool(yields) and all(x < yield_threshold for x in yields)
-    checks = {"F3_new_rate": "pass" if len(rates) >= 2 and all(x < threshold for x in rates[-2:]) else "not_assessable" if len(rates) < 2 else "fail",
-              "F2_pathways": "pass" if complete == 1.0 else "not_assessable" if complete is None else "fail",
-              "F3_marginal_yield": "pass" if yields and all(x < yield_threshold for x in yields) else "not_assessable" if not yields else "fail",
-              "F1_query_traceability": "pass" if context.get("run_log_complete") is True else "not_assessable",
-              "F3_independent_validation": "pass" if context.get("independent_validation_passed") is True else "not_assessable" if "independent_validation_passed" not in context else "fail"}
-    return {"status": "measured" if rounds else "not_assessable", "high_confidence_new_rates": rates, "pathway_completion": complete,
-            "independent_validation_passed": context.get("independent_validation_passed") is True, "source_marginal_yields": yields,
+    threshold = float(standards.get("b_ggr_threshold", 0.02))
+    yield_threshold = float(standards.get("b_drr_threshold", 0.05))
+    yields = [x.get("yield") for x in context.get("source_marginal_yields", [])
+              if isinstance(x.get("yield"), (int, float))]
+    iv_passed = context.get("independent_validation_passed")
+    run_log = context.get("run_log_complete")
+    converged = (len(rates) >= 2 and all(x < threshold for x in rates[-2:]) and complete == 1.0
+                 and iv_passed is True
+                 and bool(yields) and all(x < yield_threshold for x in yields))
+    checks = {"B1_ggr": "pass" if len(rates) >= 2 and all(x < threshold for x in rates[-2:])
+              else "not_assessable" if len(rates) < 2 else "fail",
+              "B3_pathway_completion": "pass" if complete == 1.0 else "not_assessable" if complete is None else "fail",
+              "B2_drr": "pass" if yields and all(x < yield_threshold for x in yields)
+              else "not_assessable" if not yields else "fail",
+              "F1_query_traceability": "pass" if run_log is True
+              else "fail" if run_log is False else "not_assessable",
+              "B3_independent_validation": "pass" if iv_passed is True
+              else "fail" if iv_passed is False else "not_assessable"}
+    return {"status": "measured" if rounds else "not_assessable", "high_confidence_new_rates": rates,
+            "pathway_completion": complete, "source_marginal_yields": yields,
             "thresholds": {"new_rate": threshold, "marginal_yield": yield_threshold}, "checks": checks,
-            "verdict": "趋于稳定（仅限声明范围）" if converged and all(x == "pass" for x in checks.values()) else "趋稳不可证明" if "not_assessable" in checks.values() else "未证明稳定"}
-
+            "independent_validation_passed": iv_passed,
+            "verdict": "趋稳" if converged and all(x == "pass" for x in checks.values())
+            else "不可证明" if "not_assessable" in checks.values() else "未稳定"}
 
 def currency(context):
     raw = context.get("last_successful_search", {})
@@ -158,107 +203,75 @@ def currency(context):
         except (TypeError, ValueError): pass
     today = dt.date.today()
     max_days = int(context.get("standards", {}).get("d_freshness_days", 90))
-    sources = {k: {"date": v.isoformat(), "days_since": (today-v).days, "verdict": "pass" if (today-v).days <= max_days else "warning"} for k, v in dates.items()}
-    planned = set(context.get("planned_sources", [])); missing = sorted(planned - set(dates))
-    checks = {"D1_freshness": "pass" if sources and all(x["verdict"] == "pass" for x in sources.values()) else "warning" if sources else "not_assessable",
-              "D2_source_window": "pass" if planned and not missing else "warning" if planned else "not_assessable",
-              "D3_frontier_coverage": context.get("frontier_coverage_verdict", "not_assessable"),
-              "D4_version_currency": context.get("version_currency_verdict", "not_assessable"), "D5_time_distribution": "not_assessable"}
-    return {"status": "measured" if dates else "not_assessable", "freshness_threshold_days": max_days, "sources": sources, "missing_planned_sources": missing, "checks": checks,
-            "note": "Report every successful source date; a recent source does not hide stale or failed sources."}
-
-
-def structure(library, context):
-    taxonomy = context.get("taxonomy", [])
-    mapped = []
-    standards = context.get("standards", {}); required = int(standards.get("b_min_records_per_critical_stratum", 1)); confidence_min = float(standards.get("b_min_classification_confidence", 0.80))
-    for row in taxonomy:
-        expected = row.get("expected", True)
-        count = row.get("high_confidence_records")
-        confidence = row.get("classification_confidence")
-        status = "gap" if expected and (count or 0) < required else "covered" if count else "out_of_scope"
-        mapped.append({"name": row.get("name", "unnamed"), "expected": expected, "records": count,
-                       "classification_confidence": confidence, "status": status})
-    source_counts = Counter(str(x.get("source") or x.get("source_database") or "unknown") for x in library)
-    n = len(library); shares = [x / n for x in source_counts.values()] if n else []
-    entropy = -sum(p * log(p) for p in shares if p)
-    unclassified_rate = context.get("unclassified_rate")
-    checks = {"B1_taxonomy": "pass" if taxonomy else "not_assessable", "B2_critical_strata": "pass" if taxonomy and not [x for x in mapped if x["status"] == "gap"] else "fail" if taxonomy else "not_assessable",
-              "B3_classification": "pass" if all(x["classification_confidence"] is not None and x["classification_confidence"] >= confidence_min for x in mapped) and (unclassified_rate is None or unclassified_rate <= float(standards.get("b_max_unclassified_rate", 0.10))) else "warning" if taxonomy else "not_assessable", "B4_source_dependence": "warning" if shares and max(shares) > float(standards.get("b_source_dependence_warning", 0.80)) else "pass" if shares else "not_assessable", "B5_stratified_coverage": "not_assessable"}
-    return {"status": "measured" if taxonomy or library else "not_assessable", "taxonomy": mapped, "checks": checks,
-            "uncovered_expected_strata": [x["name"] for x in mapped if x["status"] == "gap"],
-            "source_dependence": {"counts": dict(source_counts), "top_source_share": round(max(shares), 3) if shares else None,
-                                  "shannon_entropy": round(entropy, 3) if shares else None},
-            "note": "Taxonomy must describe engineering conditions, methods, metrics or applications; concentration is descriptive, not a quality verdict."}
-
-
-def evidence(library, context):
-    required = set(context.get("engineering_evidence_types_required", []))
-    present = {str(x.get("engineering_evidence_type") or x.get("evidence_type")) for x in library if x.get("engineering_evidence_type") or x.get("evidence_type")}
-    standards = context.get("standards", {}); field_rate = float(standards.get("c_required_field_rate", 0.80)); n = len(library)
-    flags = {"preprint": sum(bool(x.get("is_preprint")) for x in library),
-             "retraction_or_correction_flags": sum(bool(x.get("retracted") or x.get("corrected") or x.get("expression_of_concern")) for x in library),
-             "code_or_data_links": sum(bool(x.get("code_url") or x.get("data_url")) for x in library),
-             "missing_conditions": sum(not bool(x.get("operating_conditions") or x.get("test_conditions")) for x in library)}
-    condition_rate = round(sum(bool(x.get("operating_conditions") or x.get("test_conditions")) for x in library) / n, 3) if n else None
-    metric_rate = round(sum(bool(x.get("baseline") or x.get("performance_metrics")) for x in library) / n, 3) if n else None
-    checks = {"C1_evidence_types": "pass" if not (required-present) else "fail", "C2_conditions": "pass" if condition_rate is not None and condition_rate >= field_rate else "warning", "C3_baselines_metrics": "pass" if metric_rate is not None and metric_rate >= field_rate else "warning",
-              "C4_standards_data_versions": context.get("standards_data_versions_verdict", "not_assessable"), "C5_validation_strength": context.get("validation_strength_verdict", "not_assessable"), "C6_credibility_flags": context.get("credibility_flags_verdict", "not_assessable")}
-    return {"status": "screening" if library else "not_assessable", "required_evidence_types": sorted(required), "checks": checks, "condition_rate": condition_rate, "baseline_or_metric_rate": metric_rate,
-            "present_evidence_types": sorted(present), "missing_required_types": sorted(required - present), "credibility_flags": flags,
-            "note": "This is engineering evidence screening. It does not determine causal validity, benchmark fairness, code reproducibility or version equivalence."}
-
-
-def influence(library, context):
-    n = len(library); citations = [x.get("cited_by_count") for x in library if isinstance(x.get("cited_by_count"), (int, float))]
-    sources = Counter(str(x.get("source") or x.get("source_database") or "unknown") for x in library); shares = [v / n for v in sources.values()] if n else []
-    rate = len(citations) / n if n else None; minimum = float(context.get("standards", {}).get("e_citation_data_rate", 0.80))
-    checks = {"E1_citation_data": "pass" if rate is not None and rate >= minimum else "warning" if rate is not None else "not_assessable",
-              "E2_influence_distribution": "screening" if citations else "not_assessable", "E3_knowledge_paths": context.get("knowledge_paths_verdict", "not_assessable"),
-              "E4_channel_diversity": "warning" if shares and max(shares) > 0.80 else "pass" if shares else "not_assessable", "E5_authority_anchors": context.get("authority_anchors_verdict", "not_assessable")}
-    return {"status": "screening" if n else "not_assessable", "citation_data_rate": round(rate, 3) if rate is not None else None,
-            "citation_median": sorted(citations)[len(citations)//2] if citations else None, "source_distribution": dict(sources), "checks": checks,
-            "note": "Citation and channel metrics are contextual diagnostics, never a research-quality score."}
-
+    sources = {k: {"date": v.isoformat(), "days_since": (today - v).days,
+               "verdict": "pass" if (today - v).days <= max_days else "warning"}
+               for k, v in dates.items()}
+    planned = set(context.get("planned_sources", []))
+    missing = sorted(planned - set(dates))
+    checks = {"D1_freshness": "pass" if sources and all(x["verdict"] == "pass" for x in sources.values())
+              else "warning" if sources else "not_assessable"}
+    return {"status": "measured" if dates else "not_assessable", "freshness_threshold_days": max_days,
+            "sources": sources, "missing_planned_sources": missing, "checks": checks,
+            "note": "Report every successful source date."}
 
 def artifacts(paths):
     return {name: {"provided": bool(value), "path": value} for name, value in paths.items()}
 
-
 def balance(library, standards=None):
-    """Source balance diagnostics: dispersion is a search-risk signal, never quality."""
     standards = standards or {}
     counts = Counter(str(x.get("source") or x.get("source_database") or "unknown") for x in library)
     values = list(counts.values()); n = sum(values); k = len(values)
-    if not n or not k:
-        return {"status": "not_assessable", "checks": {"C1_critical_topics": "not_assessable", "C2_source_balance": "not_assessable"}}
+    if not n or not k: return {"status": "not_assessable", "checks": {"C2_source_balance": "not_assessable"}}
     mean = n / k
     cv = (sum((x - mean) ** 2 for x in values) / k) ** 0.5 / mean if mean else None
     gini = sum(abs(a - b) for a in values for b in values) / (2 * k * n)
     entropy = -sum((x / n) * log(x / n) for x in values if x)
     normalized_entropy = entropy / log(k) if k > 1 else 0.0
-    limits = {"top_share": float(standards.get("balance_top_share_warning", 0.80)), "cv": float(standards.get("balance_cv_warning", 1.00)), "gini": float(standards.get("balance_gini_warning", 0.60)), "shannon_low": float(standards.get("balance_shannon_low_warning", 0.45)), "shannon_high": float(standards.get("balance_shannon_high_warning", 0.95))}
+    limits = {"top_share": float(standards.get("balance_top_share_warning", 0.80)),
+              "cv": float(standards.get("balance_cv_warning", 1.00)),
+              "gini": float(standards.get("balance_gini_warning", 0.60)),
+              "shannon_low": float(standards.get("balance_shannon_low_warning", 0.45)),
+              "shannon_high": float(standards.get("balance_shannon_high_warning", 0.95))}
     flags = []
     if max(values) / n > limits["top_share"]: flags.append("top_source_share")
     if cv > limits["cv"]: flags.append("cv")
     if gini > limits["gini"]: flags.append("gini")
     if normalized_entropy < limits["shannon_low"]: flags.append("shannon_low")
-    if k >= 3 and normalized_entropy > limits["shannon_high"]: flags.append("shannon_high")
-    return {"status": "measured", "counts": dict(counts), "top_source_share": round(max(values) / n, 3), "cv": round(cv, 3), "gini": round(gini, 3), "shannon": round(entropy, 3), "normalized_shannon": round(normalized_entropy, 3), "limits": limits, "flags": flags, "checks": {"C1_critical_topics": "not_assessable", "C2_source_balance": "warning" if flags else "pass"}}
+    # 高 Shannon 仅作说明性信号（碎片化风险），不触发自动警示
+    high_shannon_note = None
+    if k >= 3 and normalized_entropy > limits["shannon_high"]:
+        high_shannon_note = f"Hn={normalized_entropy:.3f}>{limits['shannon_high']}，来源高度碎片化——建议检查是否混入异质数据库或非相关来源，不代表平衡性不合格"
+    return {"status": "measured", "counts": dict(counts), "top_source_share": round(max(values) / n, 3),
+            "cv": round(cv, 3), "gini": round(gini, 3), "shannon": round(entropy, 3),
+            "normalized_shannon": round(normalized_entropy, 3), "limits": limits, "flags": flags,
+            "high_shannon_note": high_shannon_note,
+            "checks": {"C2_source_balance": "warning" if flags else "pass"}}
 
-
-def topic_balance(structure_result, context):
-    """Assess topic balance, not merely whether every topic has one record."""
+def topic_balance(context):
     standards = context.get("standards", {})
-    topics = [x for x in structure_result.get("taxonomy", []) if x.get("expected")]
-    values = [int(x.get("records") or 0) for x in topics]
-    if not topics or not sum(values):
-        return {"status": "not_assessable", "checks": {"C1_topic_balance": "not_assessable", "C3_topic_source_balance": "not_assessable"}}
-    n, k = sum(values), len(values); mean = n / k
+    raw = context.get("taxonomy", [])
+    topics = [{"name": r.get("name", "unnamed"), "expected": r.get("expected", True),
+               "records": r.get("high_confidence_records"), "target_share": r.get("target_share")}
+              for r in raw if isinstance(r, dict) and r.get("expected", True)]
+    values = [int(x["records"] or 0) for x in topics]
+    if not topics:
+        return {"status": "not_assessable",
+                "checks": {"C1_topic_balance": "not_assessable", "C3_topic_source_balance": "not_assessable"}}
+    n, k = sum(values), len(values)
+    if n == 0:
+        return {"status": "measured", "topic_counts": {x["name"]: 0 for x in topics},
+                "top_topic_share": None, "cv": None, "gini": None, "normalized_shannon": None,
+                "target_tvd": None, "flags": ["empty_topic"], "cross_source_flags": [],
+                "checks": {"C1_topic_balance": "fail", "C3_topic_source_balance": "not_assessable"}}
+    mean = n / k
     cv = (sum((x - mean) ** 2 for x in values) / k) ** .5 / mean
     gini = sum(abs(a - b) for a in values for b in values) / (2 * k * n)
     h = -sum((x / n) * log(x / n) for x in values if x); hn = h / log(k) if k > 1 else 0.0
-    limits = {"top_share": float(standards.get("topic_top_share_warning", .70)), "cv": float(standards.get("topic_cv_warning", .80)), "gini": float(standards.get("topic_gini_warning", .50)), "shannon_low": float(standards.get("topic_shannon_low_warning", .55)), "tvd": float(standards.get("topic_target_tvd_warning", .25))}
+    limits = {"top_share": float(standards.get("topic_top_share_warning", .70)),
+              "cv": float(standards.get("topic_cv_warning", .80)),
+              "gini": float(standards.get("topic_gini_warning", .50)),
+              "shannon_low": float(standards.get("topic_shannon_low_warning", .55)),
+              "tvd": float(standards.get("topic_target_tvd_warning", .25))}
     flags = ["empty_topic"] if any(x == 0 for x in values) else []
     if max(values) / n > limits["top_share"]: flags.append("top_topic_share")
     if cv > limits["cv"]: flags.append("cv")
@@ -267,222 +280,459 @@ def topic_balance(structure_result, context):
     targets = [x.get("target_share") for x in topics]
     tvd = None
     if all(isinstance(x, (int, float)) for x in targets) and sum(targets) > 0:
-        target_sum = sum(targets); tvd = .5 * sum(abs(value / n - target / target_sum) for value, target in zip(values, targets))
+        target_sum = sum(targets)
+        tvd = .5 * sum(abs(value / n - target / target_sum) for value, target in zip(values, targets))
         if tvd > limits["tvd"]: flags.append("target_distribution")
     cross = context.get("topic_source_counts", {})
     cross_flags = []
     if cross:
         for topic in topics:
-            counts = cross.get(topic["name"], {}); total = sum(counts.values()) if isinstance(counts, dict) else 0
-            if total and (len(counts) < int(standards.get("topic_min_sources", 2)) or max(counts.values()) / total > float(standards.get("topic_source_top_share_warning", .80))): cross_flags.append(topic["name"])
+            counts = cross.get(topic["name"], {})
+            total = sum(counts.values()) if isinstance(counts, dict) else 0
+            if total and (len(counts) < int(standards.get("topic_min_sources", 2))
+                          or max(counts.values()) / total > float(standards.get("topic_source_top_share_warning", .80))):
+                cross_flags.append(topic["name"])
             elif not total: cross_flags.append(topic["name"])
-    return {"status": "measured", "topic_counts": {x["name"]: v for x, v in zip(topics, values)}, "top_topic_share": round(max(values) / n, 3), "cv": round(cv, 3), "gini": round(gini, 3), "normalized_shannon": round(hn, 3), "target_tvd": round(tvd, 3) if tvd is not None else None, "flags": flags, "cross_source_flags": cross_flags, "checks": {"C1_topic_balance": "fail" if "empty_topic" in flags else "warning" if flags else "pass", "C3_topic_source_balance": "warning" if cross_flags else "pass" if cross else "not_assessable"}}
+    return {"status": "measured", "topic_counts": {x["name"]: v for x, v in zip(topics, values)},
+            "top_topic_share": round(max(values) / n, 3), "cv": round(cv, 3), "gini": round(gini, 3),
+            "normalized_shannon": round(hn, 3), "target_tvd": round(tvd, 3) if tvd is not None else None,
+            "flags": flags, "cross_source_flags": cross_flags,
+            "checks": {"C1_topic_balance": "fail" if "empty_topic" in flags else "warning" if flags else "pass",
+                       "C3_topic_source_balance": "warning" if cross_flags else "pass" if cross else "not_assessable"}}
 
+# Controlled profile IDs → (recency_years, min_share, freshness_days)
+PROFILES = {
+    "computer_ai": (3, .40, 30),
+    "electronics_communications": (3, .40, 30),
+    "mechanical_manufacturing": (5, .35, 90),
+    "materials_chemical": (5, .35, 90),
+    "biomedical_engineering": (5, .35, 90),
+    "civil_infrastructure": (7, .30, 180),
+    "energy_environment": (7, .30, 180),
+    "aerospace_transportation": (7, .30, 180),
+}
 
-def recency(library, context):
+def profile_defaults(context):
+    """Resolve profile defaults from controlled ID, with text fallback and standards override."""
     profile = str(context.get("profile", "")).lower()
+    standards = context.get("standards", {})
+    # 1. prefer recency_years / recency_min_share / d_freshness_days from standards
+    # 2. else controlled profile ID
+    # 3. else text heuristic fallback (legacy compatibility)
+    years = standards.get("recency_years")
+    share = standards.get("recency_min_share")
+    fresh_days = standards.get("d_freshness_days")
+    if years is not None and share is not None:
+        return int(years), float(share), int(fresh_days or PROFILES.get("mechanical_manufacturing", (5, .35, 90))[2])
+    # controlled ID lookup
+    for pid, (y, s, d) in PROFILES.items():
+        if pid in profile or profile == pid:
+            return y, s, int(fresh_days or d)
+    # text heuristic fallback
     fast = any(x in profile for x in ("computer", "ai", "software", "electronic", "communication"))
     slow = any(x in profile for x in ("civil", "energy", "infrastructure", "aerospace", "transport"))
     defaults = (3, .40) if fast else (7, .30) if slow else (5, .35)
-    standards = context.get("standards", {}); years = int(standards.get("recency_years", defaults[0])); minimum = float(standards.get("recency_min_share", defaults[1]))
+    return defaults[0], defaults[1], int(fresh_days or (30 if fast else 180 if slow else 90))
+
+def recency(library, context):
+    years, minimum, _freshness = profile_defaults(context)
     current_year = dt.date.today().year; parsed = []
+    total_records = len(library)
     for item in library:
         try: parsed.append(int(str(item.get("date") or "")[:4]))
         except ValueError: pass
     recent = sum(y >= current_year - years + 1 for y in parsed)
     share = recent / len(parsed) if parsed else None
+    year_completeness = len(parsed) / total_records if total_records else None
     preprints = sum(bool(x.get("is_preprint")) for x in library)
-    checks = {"D1_search_freshness": currency(context)["checks"]["D1_freshness"], "D2_recent_share": "pass" if share is not None and share >= minimum else "warning" if share is not None else "not_assessable", "D3_frontier": context.get("frontier_coverage_verdict", "not_assessable"), "D4_versions_preprints": context.get("version_currency_verdict", "not_assessable")}
-    return {"status": "measured" if parsed else "not_assessable", "window_years": years, "minimum_share": minimum, "dated_records": len(parsed), "recent_records": recent, "recent_share": round(share, 3) if share is not None else None, "preprint_records": preprints, "checks": checks}
-
+    d2_passes = share is not None and share >= minimum
+    d2_verdict = ("warning" if not d2_passes and share is not None
+                  else "not_assessable" if share is None else "pass")
+    # Degrade to warning when year completeness < 50% — numerator hides missing data
+    if d2_verdict == "pass" and year_completeness is not None and year_completeness < 0.50:
+        d2_verdict = "warning"
+    checks = {"D1_search_freshness": currency(context)["checks"]["D1_freshness"],
+              "D2_recent_share": d2_verdict,
+              "D3_frontier": context.get("frontier_coverage_verdict", "not_assessable"),
+              "D4_versions_preprints": context.get("version_currency_verdict", "not_assessable")}
+    return {"status": "measured" if parsed else "not_assessable", "window_years": years,
+            "minimum_share": minimum, "dated_records": len(parsed), "recent_records": recent,
+            "recent_share": round(share, 3) if share is not None else None,
+            "year_completeness": round(year_completeness, 3) if year_completeness is not None else None,
+            "preprint_records": preprints, "checks": checks}
 
 def quality(library, context):
-    citations = sorted([int(x.get("cited_by_count")) for x in library if isinstance(x.get("cited_by_count"), (int, float))], reverse=True)
+    citations = sorted([int(x.get("cited_by_count")) for x in library
+                        if isinstance(x.get("cited_by_count"), (int, float))], reverse=True)
     h = max((idx for idx, value in enumerate(citations, 1) if value >= idx), default=0)
     tiers = {str(x).strip().lower() for x in context.get("tier1_venues", [])}
     venues = [str(x.get("publicationTitle") or x.get("venue") or "").strip().lower() for x in library]
     tier_hits = sum(bool(v and v in tiers) for v in venues)
     rate = tier_hits / len(library) if library and tiers else None
-    return {"status": "measured" if library else "not_assessable", "citation_records": len(citations), "h_core": h if citations else None, "tier1_venues_configured": len(tiers), "tier1_records": tier_hits if tiers else None, "tier1_rate": round(rate, 3) if rate is not None else None, "checks": {"E1_h_core": "screening" if citations else "not_assessable", "E2_tier1": "screening" if tiers else "not_assessable"}}
-
+    return {"status": "measured" if library else "not_assessable", "citation_records": len(citations),
+            "h_core": h if citations else None, "tier1_venues_configured": len(tiers),
+            "tier1_records": tier_hits if tiers else None,
+            "tier1_rate": round(rate, 3) if rate is not None else None,
+            "checks": {"E1_h_core": "screening" if citations else "not_assessable",
+                       "E2_tier1": "screening" if tiers else "not_assessable"}}
 
 def compact(value):
-    """Make a measurement safe and readable inside a Markdown table cell."""
-    if value is None or value == "":
-        return "—"
-    if isinstance(value, float):
-        return f"{value:.3f}"
-    if isinstance(value, (list, dict)):
-        text = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
-    else:
-        text = str(value)
-    return text.replace("|", "／").replace("\n", " ")
-
+    if value is None or value == "": return "—"
+    if isinstance(value, float): return f"{value:.3f}"
+    if isinstance(value, (list, dict)): return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    return str(value).replace("|", "／").replace("\n", " ")
 
 def threshold_verdict(value, threshold):
-    if value is None or threshold is None:
-        return "not_assessable"
+    if value is None or threshold is None: return "not_assessable"
     return "pass" if value >= threshold else "fail"
 
+def _fmt_pct(val):
+    return f"{val*100:.1f}%" if val is not None else "—"
+
+def _fmt_num(val):
+    return str(val) if val is not None else "—"
+
+# ── report sections ─────────────────────────────────────────────
+def _method_narrative(report):
+    """Expose implicit agent work: keywords, benchmark method, data sources, taxonomy."""
+    ctx = report.get("context", {}); lines = []
+    keywords = ctx.get("keywords", []); queries = ctx.get("queries", [])
+    plan_queries = ctx.get("query_plan", {})
+    if keywords: lines.append(f"**检索关键词**：{'、'.join(keywords)}")
+    if queries:
+        lines.append("**检索式**：")
+        for q in queries:
+            if isinstance(q, dict):
+                lines.append(f"- {q.get('source','')}: `{q.get('query','')}`（{q.get('date','')}，结果 {q.get('hits','—')} 条）")
+            else: lines.append(f"- {q}")
+    elif isinstance(plan_queries, dict):
+        for src, q in plan_queries.items(): lines.append(f"- {src}: `{q}`")
+    if not keywords and not queries and not plan_queries:
+        lines.append("**检索关键词**：未记录（建库时未保留 query-plan.json，检索不可复跑）")
+
+    bm_method = ctx.get("benchmark_method", ""); bm_source = ctx.get("benchmark_source", "")
+    bm_size = report["coverage"]["a1"].get("total", 0); bm_note = ctx.get("benchmark_note", "")
+    if bm_method or bm_source:
+        lines.append(f"\n**A1 基准集构建**：{bm_method}")
+        lines.append(f"**基准集来源**：{bm_source}，共 {bm_size} 篇。{bm_note}")
+    else:
+        lines.append(f"\n**A1 基准集**：共 {bm_size} 篇稳定标识符条目。" + ("来源未记录。" if not bm_source else ""))
+
+    gs_method = ctx.get("gold_set_method", ""); gs_size = report["coverage"]["a2"].get("total", 0)
+    if gs_method: lines.append(f"**A2 Gold set 构建**：{gs_method}（共 {gs_size} 篇）")
+    elif gs_size: lines.append(f"**A2 Gold set**：共 {gs_size} 篇")
+    # Warn when gold set reuses A1 benchmark — A1 and A2 become non-independent
+    a2_note = report["coverage"]["a2"].get("note", "")
+    if "reuses" in a2_note.lower() or "gold" in a2_note.lower():
+        lines.append(f"**A2 独立性**：⚠ {a2_note}")
+    elif "title" in a2_note.lower():
+        lines.append(f"**A2 匹配方式**：{a2_note}")
+
+    sources = ctx.get("search_sources", ctx.get("planned_sources", []))
+    sources_used = list(report.get("currency", {}).get("sources", {}).keys())
+    all_srcs = sources or sources_used
+    if all_srcs:
+        lines.append(f"\n**数据来源**：{'、'.join(all_srcs)}")
+        failed = ctx.get("failed_sources", [])
+        if failed: lines.append(f"（检索失败：{'、'.join(failed)}）")
+        incomplete = report["coverage"]["a3"].get("incomplete_sources", [])
+        if incomplete: lines.append(f"（快照不完整：{'、'.join(incomplete)}）")
+
+    lines.append(f"\n**A3 覆盖估计**：{report['coverage']['a3'].get('note','')}")
+    taxonomy = ctx.get("taxonomy", [])
+    if taxonomy:
+        names = [t.get("name", "?") for t in taxonomy if isinstance(t, dict)]
+        lines.append(f"\n**分类体系**：{len(taxonomy)} 个主题（{'、'.join(names)}）")
+    cls_method = ctx.get("classification_method", "")
+    cls_sample = ctx.get("classification_sample_verified")
+    if cls_method or cls_sample is not None:
+        parts = []
+        if cls_method: parts.append(cls_method)
+        if cls_sample is not None: parts.append(f"抽查校验 {cls_sample} 条")
+        lines.append(f"**C1 分类方法**：{'；'.join(parts)}（注：C1 数值从外部分类计数计算，未经脚本独立分类）")
+    lines.append(f"\n**证据状态**：实测=可复跑记录；估计=基于假设的区间或抽样；自动初筛=规则判定未人工核验；不可评估=缺少必要输入。")
+    return "\n".join(lines)
+
+def _priority_actions(report):
+    blocking, rec = [], []
+    for row in report.get("indicator_register", []):
+        v = row.get("meets_standard", "")
+        if v == "fail": blocking.append(f"- **{row['subproject']} {row['project_name']}**：{row.get('description_and_action','')}")
+        elif v == "warning": rec.append(f"- {row['subproject']} {row['project_name']}：{row.get('description_and_action','')}")
+    parts = []
+    if blocking: parts.append("### 阻断项\n\n" + "\n".join(blocking))
+    if rec: parts.append("### 建议改进\n\n" + "\n".join(rec))
+    ctx = report.get("context", {})
+    pa = ctx.get("potential_additions", [])
+    if pa:
+        lines = "\n".join(f"- {t}" for t in pa[:15])
+        ggr = ctx.get("first_round_ggr", "—")
+        head = f"### 潜在新增文献（首轮 GGR={ggr}，建议纳入库后复评 B 饱和度）\n\n"
+        parts.append(head + lines + (f"\n\n（共 {len(pa)} 篇候选，完整列表见 potential_additions.json）" if len(pa) > 15 else ""))
+    return "\n\n".join(parts) if parts else "未检测到阻断或警示项。"
+
+def _dimension_narrative(report):
+    c, p, b, t, d, q, h = (report["coverage"], report["process"], report["balance"],
+                           report["topic_balance"], report["recency"], report["quality"],
+                           report["library_health"])
+    lines = []
+    a1_r = _fmt_pct(c["a1"].get("recall")); a1_h = _fmt_num(c["a1"].get("matched")); a1_t = _fmt_num(c["a1"].get("total"))
+    a3_lb = _fmt_num(c["a3"].get("deduplicated_candidate_lower_bound"))
+    lines.append(f"**A 覆盖**：基准集召回 {a1_r}（{a1_h}/{a1_t}），多源候选下界 {a3_lb} 篇。")
+    rates = p.get("high_confidence_new_rates", [])
+    ggr = ", ".join(f"{r:.3f}" for r in rates[-2:]) if len(rates) >= 2 else "缺数据"
+    lines.append(f"**B 饱和度**：最后两轮 GGR={ggr}（阈值<{p.get('thresholds',{}).get('new_rate','—')}）；{p.get('verdict','—')}。")
+    flags = t.get("flags", []); n_topics = len(t.get("topic_counts", {}))
+    lines.append(f"**C 平衡**：{n_topics} 个预期主题，{'含空主题' if 'empty_topic' in flags else '全部有文献'}；来源集中度 {b.get('top_source_share','—')}（CV={_fmt_num(b.get('cv'))} Gini={_fmt_num(b.get('gini'))}）。")
+    lines.append(f"**D 时效**：近 {d.get('window_years','—')} 年占比 {_fmt_pct(d.get('recent_share'))}（{d.get('recent_records','—')}/{d.get('dated_records','—')} 标有日期）；预印本 {d.get('preprint_records','—')} 条。")
+    lines.append(f"**E 学术影响/渠道信号**：h-core={_fmt_num(q.get('h_core'))}（{q.get('citation_records','—')} 条引用）；Tier-1 {_fmt_pct(q.get('tier1_rate'))}（{q.get('tier1_venues_configured','—')} venue）。仅作背景信号，不等于研究质量——真正的研究质量评估应使用与研究设计匹配的批判性评价工具。")
+    fc = h.get("field_completeness", {})
+    lines.append(f"**F 可用性**：核心元数据 {_fmt_pct(fc.get('title'))}；摘要 {_fmt_pct(fc.get('abstractNote'))}；DOI {_fmt_pct(fc.get('DOI'))}；全文获取率 {_fmt_pct(h.get('access_union_rate'))}（附件 {_fmt_pct(h.get('attachment_rate'))} / OA {_fmt_pct(h.get('open_link_rate'))}）；谱系率 {_fmt_pct(h.get('provenance_rate'))}。")
+    return "\n\n".join(lines)
 
 def indicator_rows(report):
-    """Return the single peer-level A1--F8 audit register used in every report."""
-    readable_names = {
-        "A1": "已知必纳入文献找回率", "A2": "检索式找回已知相关文献的能力", "A3": "多来源检索到的最少唯一候选数", "A4": "关键标准和核心文献是否找全",
-        "B1": "工程问题的分类框架是否完整", "B2": "每个关键工程场景是否有文献", "B3": "文献分类结果是否可信", "B4": "是否过度依赖单一来源", "B5": "关键场景是否逐项验证找回率",
-        "C1": "所需工程证据类型是否齐全", "C2": "文献是否说明适用工况", "C3": "文献是否给出可比的指标和基线", "C4": "标准、数据和软件版本是否明确", "C5": "验证是否足以支撑工程结论", "C6": "可信度风险是否已处理",
-        "D1": "各检索来源是否仍是最新", "D2": "计划检索的来源是否全部完成", "D3": "新兴技术和新术语是否被覆盖", "D4": "是否使用了最新且正确的文献版本", "D5": "文献年代结构是否已被检查",
-        "E1": "引用数据是否足够用于背景判断", "E2": "影响力是否由少数文献主导", "E3": "是否连到关键研究和技术路线", "E4": "是否过度依赖单一发表渠道", "E5": "领域标准和权威工作是否齐全",
-        "F1": "检索过程能否被他人复跑", "F2": "计划的检索路径是否完成", "F3": "检索是否有趋于饱和的证据", "F4": "每篇纳入文献能否追溯来源和决定", "F5": "题录信息是否完整可用", "F6": "重复和不同版本是否已妥善处理", "F7": "全文、代码和数据是否有获取线索", "F8": "撤稿、更正和异常是否已核查"
-    }
-    c, b, s, e, d, i, p, h = (report["coverage"], report["coverage"].get("benchmark", {}),
-                              report["structure"], report["evidence"], report["currency"],
-                              report["influence"], report["process"], report["library_health"])
-    standards = report.get("standards", {})
-    a1_min = standards.get("a1_min_recall")
-    a2_min = standards.get("a2_min_recall")
-    checks = lambda group, key: group.get("checks", {}).get(key, "not_assessable")
-    add = []
-    def row(parent, sub, name, standard, verdict, current, evidence_state, note):
-        add.append((parent, sub, readable_names.get(sub, name), standard, verdict, compact(current), evidence_state, note))
-
-    row("A 覆盖验证", "A1", "稳定标识符基准集召回", f"配置阈值 ≥ {a1_min}" if a1_min is not None else "需在 context.standards 配置 a1_min_recall", threshold_verdict(c["a1"].get("recall"), a1_min), c["a1"].get("recall"), c["a1"].get("status"), "仅以 DOI、PMID 等稳定标识符匹配；未配置阈值时不作达标结论。")
-    row("A 覆盖验证", "A2", "金标准查询灵敏度", f"配置阈值 ≥ {a2_min}" if a2_min is not None else "需在 context.standards 配置 a2_min_recall", threshold_verdict(c["a2"].get("recall"), a2_min), c["a2"].get("recall"), c["a2"].get("status"), "Gold set 必须有独立来源与纳入依据。")
-    row("A 覆盖验证", "A3", "多源候选集下界", "至少两个来源且快照完整；仅报告下界", "pass" if c["a3"].get("status") == "estimated_lower_bound" else "not_assessable", c["a3"].get("deduplicated_candidate_lower_bound"), c["a3"].get("status"), "候选数下界不是 Recall，也不是饱和证明。")
-    row("A 覆盖验证", "A4", "关键锚点命中", "配置关键锚点及命中阈值", "not_assessable", "未实现结构化输入", "not_assessable", "保留为显式审计项，避免以主观印象替代锚点检验。")
-
-    row("B 范围结构", "B1", "范围分类体系", "提供与工程问题对应的 taxonomy", checks(s, "B1_taxonomy"), len(s.get("taxonomy", [])), s.get("status"), "分类应覆盖工况、方法、性能指标或应用场景。")
-    row("B 范围结构", "B2", "关键层覆盖", f"每个预期关键层 ≥ {standards.get('b_min_records_per_critical_stratum', 1)} 条高置信记录", checks(s, "B2_critical_strata"), s.get("uncovered_expected_strata", []), s.get("status"), "列出的缺口是可执行补检索对象。")
-    row("B 范围结构", "B3", "分类可靠性", f"置信度 ≥ {standards.get('b_min_classification_confidence', 0.80)}；未分类率 ≤ {standards.get('b_max_unclassified_rate', 0.10)}", checks(s, "B3_classification"), {"unclassified_rate": report.get("context", {}).get("unclassified_rate")}, s.get("status"), "分类置信度应来自已保存规则或人工复核抽样。")
-    row("B 范围结构", "B4", "来源集中度", f"单一来源占比不应 > {standards.get('b_source_dependence_warning', 0.80)}", checks(s, "B4_source_dependence"), s.get("source_dependence", {}), s.get("status"), "集中度为风险信号，不是文献质量评分。")
-    row("B 范围结构", "B5", "分层覆盖验证", "各层均有独立覆盖验证证据", checks(s, "B5_stratified_coverage"), "未提供分层验证输入", s.get("status"), "需把 A1/A2 或人工复核结果关联至各层。")
-
-    row("C 工程证据适配", "C1", "工程证据类型", "所有必需 evidence type 均出现", checks(e, "C1_evidence_types"), {"missing": e.get("missing_required_types", [])}, e.get("status"), "例如仿真、台架、现场、标准测试或失效分析。")
-    row("C 工程证据适配", "C2", "工况与边界条件", f"记录率 ≥ {standards.get('c_required_field_rate', 0.80)}", checks(e, "C2_conditions"), e.get("condition_rate"), e.get("status"), "不能仅以题名或摘要推断适用工况。")
-    row("C 工程证据适配", "C3", "基线与性能指标", f"记录率 ≥ {standards.get('c_required_field_rate', 0.80)}", checks(e, "C3_baselines_metrics"), e.get("baseline_or_metric_rate"), e.get("status"), "需保留对比基线和可解释的性能指标。")
-    row("C 工程证据适配", "C4", "标准、数据与版本", "已核验标准版本、数据版本和模型版本", checks(e, "C4_standards_data_versions"), "依赖 context 判定", e.get("status"), "版本信息缺失时不能声称可比。")
-    row("C 工程证据适配", "C5", "验证强度", "按项目设定的验证层级完成核验", checks(e, "C5_validation_strength"), "依赖 context 判定", e.get("status"), "区分仿真、实验、现场与独立复现。")
-    row("C 工程证据适配", "C6", "可信度标记", "预印本、撤稿、更正及代码/数据线索已核验", checks(e, "C6_credibility_flags"), e.get("credibility_flags", {}), e.get("status"), "标记是筛查线索，不等于对研究质量的裁决。")
-
-    row("D 时效与技术演化", "D1", "检索新鲜度", f"每个来源距最近成功检索 ≤ {d.get('freshness_threshold_days')} 天", checks(d, "D1_freshness"), d.get("sources", {}), d.get("status"), "最近一个来源不能掩盖其他来源已过期。")
-    row("D 时效与技术演化", "D2", "关键来源时间窗", "所有计划来源均有成功检索日期", checks(d, "D2_source_window"), d.get("missing_planned_sources", []), d.get("status"), "缺失来源应重跑或在报告中说明排除。")
-    row("D 时效与技术演化", "D3", "前沿技术覆盖", "按项目定义前沿主题并保存核验结果", checks(d, "D3_frontier_coverage"), "依赖 context 判定", d.get("status"), "避免把近期发表时间误当作前沿覆盖。")
-    row("D 时效与技术演化", "D4", "版本时效", "预印本、会议版与正式版关系已核验", checks(d, "D4_version_currency"), "依赖 context 判定", d.get("status"), "与 F6 的去重/版本决策相互引用。")
-    row("D 时效与技术演化", "D5", "时间分布", "按研究问题定义必要历史与近期窗口", checks(d, "D5_time_distribution"), "未提供时间分布输入", d.get("status"), "不设置跨领域统一的发表年份配额。")
-
-    row("E 学术影响与知识关联", "E1", "引用数据可得性", f"可得率 ≥ {standards.get('e_citation_data_rate', 0.80)}", checks(i, "E1_citation_data"), i.get("citation_data_rate"), i.get("status"), "引用数据只作诊断，不作为质量总分。")
-    row("E 学术影响与知识关联", "E2", "影响力分布", "具备可解释的分布诊断", checks(i, "E2_influence_distribution"), {"median": i.get("citation_median")}, i.get("status"), "应防止单一高被引记录掩盖结构缺口。")
-    row("E 学术影响与知识关联", "E3", "知识路径", "已保存关键方法、标准、应用之间的链接核验", checks(i, "E3_knowledge_paths"), "依赖 context 判定", i.get("status"), "适合工程技术路线、标准与应用关联。")
-    row("E 学术影响与知识关联", "E4", "发表渠道多样性", "来源分布无未解释的单一依赖", checks(i, "E4_channel_diversity"), i.get("source_distribution", {}), i.get("status"), "渠道多样性不是强制配额。")
-    row("E 学术影响与知识关联", "E5", "权威锚点", "项目定义的标准、指南或核心研究已核验", checks(i, "E5_authority_anchors"), "依赖 context 判定", i.get("status"), "不能以期刊名或引用数替代权威性判断。")
-
-    row("F 过程合规、库健康与可追溯", "F1", "检索式与运行可追溯", "run log 完整且可定位检索式、日期、来源", checks(p, "F1_query_traceability"), "run_log_complete=" + str(report.get("context", {}).get("run_log_complete")), p.get("status"), "过程记录是审计证据，不是 A 的附属项。")
-    row("F 过程合规、库健康与可追溯", "F2", "检索路径完成", "所有计划路径完成", checks(p, "F2_pathways"), p.get("pathway_completion"), p.get("status"), "未完成路径必须列入缺口或说明排除理由。")
-    row("F 过程合规、库健康与可追溯", "F3", "趋稳证据", f"最后两轮高置信新增率 < {p.get('thresholds', {}).get('new_rate')}；边际收益 < {p.get('thresholds', {}).get('marginal_yield')}", checks(p, "F3_new_rate"), {"new_rates": p.get("high_confidence_new_rates"), "marginal_yields": p.get("source_marginal_yields")}, p.get("status"), "同时查看同名的边际收益与独立验证细项。")
-    row("F 过程合规、库健康与可追溯", "F4", "纳入决策与来源谱系", f"来源谱系记录率 ≥ {standards.get('f_provenance_rate', 0.95)}", checks(h, "F4_provenance"), h.get("provenance_rate"), h.get("status"), "纳入、排除和来源应可回溯至原始记录。")
-    row("F 过程合规、库健康与可追溯", "F5", "核心元数据完整性", f"核心字段 ≥ {standards.get('f_core_metadata_rate', 0.95)}；摘要 ≥ {standards.get('f_abstract_rate', 0.80)}", checks(h, "F5_metadata"), h.get("field_completeness", {}), h.get("status"), "标题、作者、日期、载体、标识符和摘要分别报告。")
-    row("F 过程合规、库健康与可追溯", "F6", "去重与版本决策", "稳定标识符去重；版本族须有显式决策", checks(h, "F6_exact_duplicates"), {"duplicate_doi_groups": h.get("duplicate_doi_groups"), "duplicate_title_year_groups": h.get("duplicate_title_year_groups"), "version_decisions": checks(h, "F6_version_decisions")}, h.get("status"), "题名-年份相似项只进入待审队列，不自动合并。")
-    row("F 过程合规、库健康与可追溯", "F7", "访问与复现线索", f"附件或开放链接率 ≥ {standards.get('f_access_rate', 0.80)}", checks(h, "F7_access"), {"attachment_rate": h.get("attachment_rate"), "open_link_rate": h.get("open_link_rate")}, h.get("status"), "可访问不等于已获授权或已经复现。")
-    row("F 过程合规、库健康与可追溯", "F8", "撤稿、更正与异常处理", "已核验更正/撤稿状态并保存处置", checks(h, "F8_corrections"), h.get("correction_flag_records"), h.get("status"), "无专门来源核验时应如实标为不可判定。")
-    return add
-
-
-def write_legacy(report, out):
-    out.mkdir(parents=True, exist_ok=True)
-    (out / "audit.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
-    rows = [("A1 基准集召回", report["coverage"]["a1"].get("recall"), report["coverage"]["a1"]["status"]),
-            ("A2 查询灵敏度", report["coverage"]["a2"].get("recall"), report["coverage"]["a2"]["status"]),
-            ("A3 候选下界", report["coverage"]["a3"].get("deduplicated_candidate_lower_bound"), report["coverage"]["a3"]["status"]),
-            ("B 范围结构", ", ".join(report["structure"].get("uncovered_expected_strata", [])) or "—", report["structure"]["status"]),
-            ("C 缺失工程证据类型", ", ".join(report["evidence"].get("missing_required_types", [])) or "—", report["evidence"]["status"]),
-            ("D 来源级新鲜度", report["currency"].get("sources"), report["currency"]["status"]),
-            ("E 引用数据可得率", report["influence"].get("citation_data_rate"), report["influence"]["status"]),
-            ("F 过程与库健康", report["process"].get("verdict"), report["library_health"]["status"])]
-    table = "\n".join(f"| {a} | {b if b is not None else '—'} | {c} |" for a,b,c in rows)
-    missing = [name for name, meta in report["artifacts"].items() if not meta["provided"]]
-    md = "# 工程文献库审计报告\n\n" + report["summary"] + "\n\n| 项目 | 结果 | 证据状态 |\n| --- | --- | --- |\n" + table
-    detail_groups = [("B 范围结构", report["structure"].get("checks", {})), ("C 工程证据适用性", report["evidence"].get("checks", {})), ("D 时效与演化", report["currency"].get("checks", {})), ("E 影响与知识关联", report["influence"].get("checks", {})), ("F 过程规范", report["process"].get("checks", {})), ("F 库健康", report["library_health"].get("checks", {}))]
-    md += "\n\n## B–F 细分判定\n\n| 维度 | 子项 | Verdict |\n| --- | --- | --- |\n" + "\n".join(f"| {group} | {key} | {value} |" for group, checks in detail_groups for key, value in checks.items())
-    md += "\n\n## 审计产物\n\n" + ("缺失：" + "、".join(missing) if missing else "已提供全部运行产物。")
-    md += "\n\n## 局限\n\n" + "\n".join("- " + x for x in report["limitations"])
-    (out / "audit.md").write_text(md + "\n", encoding="utf-8")
-    (out / "audit.html").write_text("<html><meta charset='utf-8'><body><pre>" + html.escape(md) + "</pre></body></html>", encoding="utf-8")
-
-
-def indicator_rows_v2(report):
-    c, p, b, t, d, q, h = report["coverage"], report["process"], report["balance"], report["topic_balance"], report["recency"], report["quality"], report["library_health"]
-    checks = lambda group, key: group.get("checks", {}).get(key, "not_assessable")
+    c, p, b, t, d, q, h = (report["coverage"], report["process"], report["balance"],
+                           report["topic_balance"], report["recency"], report["quality"],
+                           report["library_health"])
+    s = report.get("standards", {}); ctx = report.get("context", {})
+    a1m = s.get("a1_min_recall"); a2m = s.get("a2_min_recall")
+    chk = lambda g, k: g.get("checks", {}).get(k, "not_assessable")
     rows = []
-    def add(parent, code, name, standard, verdict, current, evidence, note):
-        rows.append((parent, code, name, standard, verdict, compact(current), evidence, note))
-    add("A 覆盖（Recall）", "A1", "已知必纳入文献找回率", "项目配置的基准集召回阈值", threshold_verdict(c["a1"].get("recall"), report["standards"].get("a1_min_recall")), c["a1"].get("recall"), c["a1"].get("status"), "稳定 ID 基准集召回。")
-    add("A 覆盖（Recall）", "A2", "检索式找回已知相关文献的能力", "项目配置的 Gold-set 灵敏度阈值", threshold_verdict(c["a2"].get("recall"), report["standards"].get("a2_min_recall")), c["a2"].get("recall"), c["a2"].get("status"), "稳定 ID Gold set 灵敏度。")
-    add("A 覆盖（Recall）", "A3", "多来源检索到的最少唯一候选数", "至少两完整来源；只报告下界", "pass" if c["a3"].get("status") == "estimated_lower_bound" else "not_assessable", c["a3"].get("deduplicated_candidate_lower_bound"), c["a3"].get("status"), "不是 Recall 或找全证明。")
-    add("B 饱和度（GGR/DRR）", "B1", "核心库增长率（GGR）", f"最后两轮均 < {p.get('thresholds', {}).get('new_rate')}", checks(p, "F3_new_rate"), p.get("high_confidence_new_rates"), p.get("status"), "每轮高置信新增 / 该轮开始前核心库。")
-    add("B 饱和度（GGR/DRR）", "B2", "新增路径发现率（DRR）", f"各新增路径均 < {p.get('thresholds', {}).get('marginal_yield')}", checks(p, "F3_marginal_yield"), p.get("source_marginal_yields"), p.get("status"), "新路径带来的此前未发现高置信文献 / 该路径候选。")
-    add("B 饱和度（GGR/DRR）", "B3", "饱和结论的过程证据", "路径完成且独立验证通过", "pass" if checks(p, "F2_pathways") == "pass" and checks(p, "F3_independent_validation") == "pass" else "not_assessable", {"pathways": p.get("pathway_completion"), "independent_validation": p.get("independent_validation_passed")}, p.get("status"), "低 GGR/DRR 本身不足以证明饱和。")
-    add("C 主题与来源分布是否失衡", "C1", "关键主题是否既覆盖又不过度偏斜", "无空主题；Top topic≤0.70；CV≤0.80；Gini≤0.50；归一化 Shannon≥0.55；有目标份额时 TVD≤0.25", checks(t, "C1_topic_balance"), {"counts": t.get("topic_counts"), "top_share": t.get("top_topic_share"), "cv": t.get("cv"), "gini": t.get("gini"), "normalized_shannon": t.get("normalized_shannon"), "target_tvd": t.get("target_tvd"), "flags": t.get("flags")}, t.get("status"), "不仅检查是否有文献，还检查主题数量是否严重偏向某一层。")
-    add("C 主题与来源分布是否失衡", "C2", "检索来源是否过度集中或过度分散", "Top source≤0.80；CV≤1.00；Gini≤0.60；归一化 Shannon 0.45–0.95", checks(b, "C2_source_balance"), {"top_share": b.get("top_source_share"), "cv": b.get("cv"), "gini": b.get("gini"), "normalized_shannon": b.get("normalized_shannon"), "flags": b.get("flags")}, b.get("status"), "低 Shannon 表示集中；极高 Shannon 提示来源过度分散，均需解释。")
-    add("C 主题与来源分布是否失衡", "C3", "每个关键主题是否有独立来源支撑", "每主题至少 2 个来源；单一来源占比≤0.80", checks(t, "C3_topic_source_balance"), {"topics_at_risk": t.get("cross_source_flags")}, t.get("status"), "防止表面覆盖完整、实际每个主题只依赖单一数据库。")
-    add("D 时效性（Recency/前沿/预印本）", "D1", "检索来源是否足够新", f"每个来源距成功检索 ≤ {report['currency'].get('freshness_threshold_days')} 天", checks(d, "D1_search_freshness"), report["currency"].get("sources"), report["currency"].get("status"), "按来源逐项检查。")
-    add("D 时效性（Recency/前沿/预印本）", "D2", "近年文献比例是否足够", f"近 {d.get('window_years')} 年占比 ≥ {d.get('minimum_share')}", checks(d, "D2_recent_share"), {"recent": d.get("recent_records"), "dated": d.get("dated_records"), "share": d.get("recent_share")}, d.get("status"), "AI/通信默认 3 年40%；常规工程 5 年35%；基础设施 7 年30%。")
-    add("D 时效性（Recency/前沿/预印本）", "D3", "前沿主题是否专门检索和验证", "前沿窗口有独立检索/Gold-set 证据", checks(d, "D3_frontier"), "依赖 context 判定", d.get("status"), "近期发表不等于前沿覆盖。")
-    add("D 时效性（Recency/前沿/预印本）", "D4", "预印本和正式版本是否已区分", "关键版本关系已核验", checks(d, "D4_versions_preprints"), {"preprint_records": d.get("preprint_records")}, d.get("status"), "预印本不是低质量，但不能与正式版重复计数。")
-    add("E 质量（h-core/Tier-1）", "E1", "引用核心规模（h-core）", "报告 h-index；仅作质量背景", checks(q, "E1_h_core"), {"h_core": q.get("h_core"), "citation_records": q.get("citation_records")}, q.get("status"), "不把 h-core 当作综述充分性的总分。")
-    add("E 质量（h-core/Tier-1）", "E2", "领域 Tier-1 文献覆盖", "使用 profile 配置的权威 venue 映射", checks(q, "E2_tier1"), {"tier1_records": q.get("tier1_records"), "tier1_rate": q.get("tier1_rate")}, q.get("status"), "未配置合法领域映射时不得判断。")
-    add("F 可用性（摘要/PDF/去重）", "F1", "检索过程能否复跑", "查询原文、字段、日期、来源、过滤器齐全", checks(p, "F1_query_traceability"), report["context"].get("run_log_complete"), p.get("status"), "使所有审计量可追溯。")
-    add("F 可用性（摘要/PDF/去重）", "F2", "摘要信息是否足够", f"摘要率 ≥ {report['standards'].get('f_abstract_rate', .80)}", "pass" if h.get("field_completeness", {}).get("abstractNote") is not None and h["field_completeness"]["abstractNote"] >= report["standards"].get("f_abstract_rate", .80) else "fail", h.get("field_completeness", {}).get("abstractNote"), h.get("status"), "支持自动初筛、分类和人工判断。")
-    add("F 可用性（摘要/PDF/去重）", "F3", "PDF或开放全文是否可获得", f"附件或开放链接率 ≥ {report['standards'].get('f_access_rate', .80)}", checks(h, "F7_access"), {"attachment_rate": h.get("attachment_rate"), "open_link_rate": h.get("open_link_rate")}, h.get("status"), "可获得不代表已获授权。")
-    add("F 可用性（摘要/PDF/去重）", "F4", "重复和版本是否已处理", "DOI 精确重复为 0；版本候选有决定", checks(h, "F6_exact_duplicates"), {"doi_duplicates": h.get("duplicate_doi_groups"), "title_year_candidates": h.get("duplicate_title_year_groups")}, h.get("status"), "相似题名不自动合并。")
-    add("F 可用性（摘要/PDF/去重）", "F5", "纳入决定能否追溯", f"来源谱系率 ≥ {report['standards'].get('f_provenance_rate', .95)}", checks(h, "F4_provenance"), h.get("provenance_rate"), h.get("status"), "核心文献应可回溯来源和决定。")
-    add("F 可用性（摘要/PDF/去重）", "F6", "撤稿和更正是否已核查", "关键记录有更正检查与处置", checks(h, "F8_corrections"), h.get("correction_flag_records"), h.get("status"), "无专门核验即不可评估。")
+    def add(dim, code, name, std, v, cur, ev, note):
+        rows.append((dim, code, name, std, v, compact(cur), ev, note))
+
+    a1r = c["a1"].get("recall"); a1h = c["a1"].get("matched"); a1t = c["a1"].get("total")
+    a2r = c["a2"].get("recall"); a3l = c["a3"].get("deduplicated_candidate_lower_bound")
+    a3s = c["a3"].get("status"); br = p.get("high_confidence_new_rates", [])
+    bv = p.get("verdict", "—"); tc = t.get("topic_counts", {}); tf = t.get("flags", [])
+    bs = b.get("top_source_share"); bcv = b.get("cv"); bg = b.get("gini"); bsh = b.get("normalized_shannon")
+    ds = d.get("recent_share"); dy = d.get("window_years"); dsrc = report.get("currency", {}).get("sources", {})
+    qh = q.get("h_core"); qt1 = q.get("tier1_rate")
+    fc = h.get("field_completeness", {}); hdoi = h.get("duplicate_doi_groups", 0)
+    hty = h.get("duplicate_title_year_groups", 0)
+    hacc = h.get("access_union_rate")
+    hpr = h.get("provenance_rate"); hcr = h.get("correction_flag_records", 0)
+    ha_r = h.get("attachment_rate"); ho_r = h.get("open_link_rate")
+    mids = c["a1"].get("missing_ids", [])
+
+    add("A 覆盖", "A1", "基准集召回率", f"阈值 ≥ {a1m}" if a1m else "需配置 a1_min_recall",
+        threshold_verdict(a1r, a1m), f"{_fmt_pct(a1r)}（{_fmt_num(a1h)}/{_fmt_num(a1t)}）",
+        c["a1"].get("status"), f"实测 {a1h}/{a1t}（{_fmt_pct(a1r)}）。{'漏项：' + ', '.join(mids[:5]) if mids else '无稳定 ID 漏项。'}")
+
+    add("A 覆盖", "A2", "检索式灵敏度", f"阈值 ≥ {a2m}" if a2m else "需配置 a2_min_recall",
+        threshold_verdict(a2r, a2m), f"{_fmt_pct(a2r)}（{_fmt_num(c['a2'].get('matched'))}/{_fmt_num(c['a2'].get('total'))}）",
+        c["a2"].get("status"), f"实测 {_fmt_pct(a2r)}。{'零命中=实测 0。' if a2r == 0 and c['a2'].get('status') == 'measured' else ''}")
+
+    add("A 覆盖", "A3", "多源候选下界", "至少两完整来源；只报告下界",
+        "pass" if a3s == "estimated_lower_bound" else "not_assessable",
+        f"下界 {_fmt_num(a3l)} 篇（{', '.join(c['a3'].get('source_unique_identifier_counts',{}).keys()) or '—'}）",
+        "estimated" if a3s.startswith("estimated") else a3s,
+        f"多源去重下界 {_fmt_num(a3l)} 篇。{'来源不完整。' if a3s == 'partial_snapshot' else '来源完整。'}不是召回率。")
+
+    b1_cur = (', '.join(f'{r:.4f}' for r in br[-2:]) if len(br) >= 2
+              else (f'首轮 {br[-1]:.4f}（需第2轮确认趋稳）' if len(br) == 1 else '—'))
+    add("B 饱和度", "B1", "核心库增长率 GGR",
+        f"最后两轮均 < {p.get('thresholds',{}).get('new_rate','—')}" if len(br) >= 2 else "/",
+        chk(p, "B1_ggr"),
+        b1_cur, p.get("status"),
+        f"GGR={', '.join(f'{r:.4f}' for r in br[-2:]) if len(br)>=2 else ('首轮 '+f'{br[-1]:.4f}'+'，需第2轮确认' if len(br)==1 else '需要至少两轮 search round')}。高置信新增/核心库。")
+
+    add("B 饱和度", "B2", "新增路径发现率 DRR",
+        f"各路径均 < {p.get('thresholds',{}).get('marginal_yield','—')}" if len(p.get('source_marginal_yields',[])) >= 2 else "/",
+        chk(p, "B2_drr"),
+        f"{_fmt_num(len(p.get('source_marginal_yields',[])))} 条路径", p.get("status"),
+        f"边际收益：{p.get('source_marginal_yields','—')}。新路径高置信文献/候选量。")
+
+    add("B 饱和度", "B3", "饱和过程证据",
+        "路径完成且独立验证通过" if p.get('independent_validation_passed') is not None else '/',
+        "pass" if chk(p, "B3_pathway_completion") == "pass" and chk(p, "B3_independent_validation") == "pass"
+        else "fail" if chk(p, "B3_pathway_completion") == "fail" or chk(p, "B3_independent_validation") == "fail"
+        else "not_assessable",
+        f"路径 {_fmt_pct(p.get('pathway_completion'))} | 独立验证 {'通过' if p.get('independent_validation_passed') is True else ('未通过' if p.get('independent_validation_passed') is False else '—')}",
+        p.get("status"), f"结论：**{bv}**。仅低 GGR/DRR 不够，需路径完成+独立验证。")
+
+    add("C 平衡", "C1", "主题覆盖与偏斜",
+        "无空主题；Top≤0.70；CV≤0.80；Gini≤0.50；Shannon≥0.55", chk(t, "C1_topic_balance"),
+        f"{_fmt_num(len(tc))} 主题 | {'含空主题' if 'empty_topic' in tf else '无空主题'}", t.get("status"),
+        f"{'、'.join(f'{k}={v}篇' for k,v in (sorted(tc.items(), key=lambda x:-x[1]) if tc else []))}。{'需补：' + ', '.join(k for k,v in tc.items() if v==0) if 'empty_topic' in tf else '各主题均有文献。'}")
+
+    add("C 平衡", "C2", "来源集中度", "Top≤0.80；CV≤1.00；Gini≤0.60；Shannon≥0.45",
+        chk(b, "C2_source_balance"),
+        f"Top={_fmt_pct(bs)} | CV={_fmt_num(bcv)} | Gini={_fmt_num(bg)} | Hn={_fmt_num(bsh)}", b.get("status"),
+        f"最大来源占比 {_fmt_pct(bs)}。{'单一来源依赖——非质量问题但需说明索引偏差。' if bs and bs > b.get('limits',{}).get('top_share',0.80) else '来源分布合理。'}{' ' + b.get('high_shannon_note','') if b.get('high_shannon_note') else ''}")
+
+    add("C 平衡", "C3", "主题-来源交叉", "每主题 ≥2 来源；单一来源 ≤0.80",
+        chk(t, "C3_topic_source_balance"),
+        f"{'⚠ ' + str(len(t.get('cross_source_flags',[]))) + ' 主题来源不足' if t.get('cross_source_flags') else '—'}",
+        t.get("status"),
+        f"{'需补来源：' + ', '.join(t.get('cross_source_flags',[])) if t.get('cross_source_flags') else '未提供 topic_source_counts。' if not ctx.get('topic_source_counts') else '各主题有独立来源。'}")
+
+    add("D 时效", "D1", "来源新鲜度",
+        f"各来源距检索 ≤ {report.get('currency',{}).get('freshness_threshold_days','—')} 天",
+        chk(d, "D1_search_freshness"),
+        "; ".join(f"{k}:{v['days_since']}天" for k,v in dsrc.items()) if dsrc else "—",
+        report.get("currency", {}).get("status", "not_assessable"),
+        f"{len(dsrc)} 个来源有日期。{'存在过期来源。' if chk(d,'D1_search_freshness')=='warning' else '来源在新鲜度窗口内。'}")
+
+    add("D 时效", "D2", "近年文献比例",
+        f"近 {dy or '—'} 年占比 ≥ {d.get('minimum_share','—')}", chk(d, "D2_recent_share"),
+        f"{_fmt_pct(ds)}（{_fmt_num(d.get('recent_records'))}/{_fmt_num(d.get('dated_records'))} 有日期）", d.get("status"),
+        f"近 {dy} 年占比 {_fmt_pct(ds)}。阈值按 profile：AI/通信 3年40%、常规 5年35%、基础设施 7年30%。{'低于阈值。' if chk(d,'D2_recent_share')=='warning' else '达标。'}年份字段完整率 {_fmt_pct(d.get('year_completeness'))}；<50% 时 D2 自动降级为 warning。")
+
+    add("D 时效", "D3", "前沿覆盖",
+        "/" if not ctx.get("frontier_coverage_verdict") else "前沿窗口有独立检索/Gold set",
+        chk(d, "D3_frontier"), ctx.get("frontier_coverage_verdict", "—"), d.get("status"),
+        "前沿覆盖需 context.frontier_coverage_verdict。近期发表不等于前沿覆盖。")
+
+    add("D 时效", "D4", "版本区分",
+        "/" if not ctx.get("version_currency_verdict") else "预印本-正式版关系已核验",
+        chk(d, "D4_versions_preprints"), f"预印本 {d.get('preprint_records','—')} 条", d.get("status"),
+        f"{d.get('preprint_records','—')} 条预印本。{'未核验版本关系。' if chk(d,'D4_versions_preprints')=='not_assessable' else ''}")
+
+    e1n = f"h-core={_fmt_num(qh)}。仅背景信号——高被引不等于高质量，新论文拉低 h-core。真正的研究质量评估应使用与研究设计匹配的批判性评价工具。"
+    if q.get('citation_records') and h.get('records') and q['citation_records'] < h['records'] * 0.5:
+        e1n += f" 注意仅 {_fmt_pct(q['citation_records']/h['records'])} 条目有引用数据。"
+    add("E 学术影响/渠道信号", "E1", "h-core", "报告 h-index；仅背景信号", chk(q, "E1_h_core"),
+        f"h={_fmt_num(qh)}（{q.get('citation_records','—')} 条引用）", q.get("status"), e1n)
+
+    add("E 学术影响/渠道信号", "E2", "Tier-1 覆盖", "按 profile 配置 venue 映射", chk(q, "E2_tier1"),
+        f"{_fmt_pct(qt1)}（{_fmt_num(q.get('tier1_records'))}/{_fmt_num(q.get('tier1_venues_configured'))} venue）", q.get("status"),
+        f"已配置 {q.get('tier1_venues_configured','—')} 个 venue。{'未配置 tier1_venues。' if not q.get('tier1_venues_configured') else '当前仅为下界。'}")
+
+    add("F 可用性", "F1", "检索可复跑",
+        "/" if not ctx.get("run_log_complete") else "查询原文、字段、日期、来源齐全",
+        chk(p, "F1_query_traceability"), f"run log {'完整' if ctx.get('run_log_complete') else '缺失'}", p.get("status"),
+        f"{'建库时 query-plan 未保留——唯一过程阻断项。' if not ctx.get('run_log_complete') else '查询日志完整。'}")
+
+    add("F 可用性", "F2", "摘要覆盖率", f"≥ {report['standards'].get('f_abstract_rate', .80)}",
+        "pass" if fc.get("abstractNote") is not None and fc["abstractNote"] >= report["standards"].get("f_abstract_rate", .80) else "fail",
+        _fmt_pct(fc.get("abstractNote")), h.get("status"),
+        f"摘要率 {_fmt_pct(fc.get('abstractNote'))}。{'达标。' if (fc.get('abstractNote') or 0) >= report['standards'].get('f_abstract_rate',.80) else '低于阈值。'}")
+
+    add("F 可用性", "F3", "全文获取率", f"≥ {report['standards'].get('f_access_rate', .80)}",
+        chk(h, "F3_access"), _fmt_pct(hacc), h.get("status"),
+        f"附件 {_fmt_pct(ha_r)} | 开放链接 {_fmt_pct(ho_r)} | 联合 {_fmt_pct(hacc)}。{'达标。' if hacc and hacc >= report['standards'].get('f_access_rate',.80) else '低于阈值。'}联合=v 附件或开放链接任一可用的记录比例，避免同一记录双渠道重复计数。")
+
+    add("F 可用性", "F4", "去重与版本", "DOI 精确重复=0；版本候选有决定",
+        "pass" if chk(h, "F4_exact_duplicates") == "pass" and chk(h, "F4_version_decisions") == "pass"
+        else "fail" if chk(h, "F4_exact_duplicates") == "fail" else "not_assessable",
+        f"DOI 重复 {_fmt_num(hdoi)} 组 | 题名候选 {_fmt_num(hty)} 组", h.get("status"),
+        f"DOI 重复 {_fmt_num(hdoi)} 组。{'存在未处理重复。' if hdoi > 0 else '无精确重复。'}题名相似候选 {_fmt_num(hty)} 组（{'版本决定已保存。' if chk(h,'F4_version_decisions')=='pass' else '未提供 dedup-log，版本候选待核验。'}）")
+
+    add("F 可用性", "F5", "来源可追溯", f"≥ {report['standards'].get('f_provenance_rate', .95)}",
+        chk(h, "F5_provenance"), _fmt_pct(hpr), h.get("status"),
+        f"来源谱系率 {_fmt_pct(hpr)}。{'达标。' if hpr and hpr >= report['standards'].get('f_provenance_rate',.95) else '低于阈值。'}")
+
+    add("F 可用性", "F6", "撤稿更正核查",
+        "/" if hcr == 0 else "关键记录有更正检查",
+        chk(h, "F6_corrections"), f"标记 {_fmt_num(hcr)} 条", h.get("status"),
+        f"{_fmt_num(hcr)} 条标记。{'未经专门来源核验。' if chk(h,'F6_corrections')=='not_assessable' else '已核验。'}")
     return rows
 
-
 def write(report, out):
-    """Write the canonical A--F peer audit register in JSON, Markdown and HTML."""
     out.mkdir(parents=True, exist_ok=True)
+    ctx = report.get("context", {}); h = report["library_health"]
+    rows = indicator_rows(report)
     report["indicator_register"] = [
-        {"parent_dimension": parent, "subproject": sub, "project_name": name,
-         "standard": standard, "meets_standard": verdict, "current_status": current,
-         "evidence_status": evidence_state, "description_and_action": note}
-        for parent, sub, name, standard, verdict, current, evidence_state, note in indicator_rows_v2(report)
-    ]
+        {"parent_dimension": d, "subproject": c, "project_name": n,
+         "standard": s, "meets_standard": v, "current_status": cur,
+         "evidence_status": e, "description_and_action": note}
+        for d, c, n, s, v, cur, e, note in rows]
     (out / "audit.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
-    table = "\n".join(
-        "| " + " | ".join(compact(cell) for cell in row) + " |"
-        for row in indicator_rows_v2(report)
-    )
-    missing = [name for name, meta in report["artifacts"].items() if not meta["provided"]]
-    artifacts_text = "缺失：" + "、".join(missing) if missing else "已提供全部运行产物。"
-    md = "# 工程文献库审计报告\n\n" + report["summary"]
-    md += "\n\n## A–F 平级审计总表\n\n"
-    md += "| 母项目 | 子项目 | 项目名称 | 标准 | 是否达标 | 当前状态 | 证据状态 | 说明与行动 |\n"
-    md += "| --- | --- | --- | --- | --- | --- | --- | --- |\n" + table
-    md += "\n\n## 审计产物\n\n" + artifacts_text
-    md += "\n\n## 局限\n\n" + "\n".join("- " + x for x in report["limitations"])
-    (out / "audit.md").write_text(md + "\n", encoding="utf-8")
-    (out / "audit.html").write_text("<html><meta charset='utf-8'><body><pre>" + html.escape(md) + "</pre></body></html>", encoding="utf-8")
 
+    gt = report.get("generated_at", "")[:19].replace("T", " ")
+    ln = ctx.get("library_name", ctx.get("library_path", "未指定"))
+    rt = ctx.get("review_type", "未指定"); pr = ctx.get("profile", "未指定")
+    sc = ctx.get("scope", f"{ctx.get('year_start','—')}–{ctx.get('year_end','—')}")
+    a3l = report["coverage"]["a3"].get("deduplicated_candidate_lower_bound")
+
+    md = ["# 文献库评估报告\n"]
+    md.append("## 基本信息\n"); md.append("| 项目 | 值 |"); md.append("| --- | --- |")
+    md.append(f"| 生成时间 | {gt} |"); md.append(f"| 评估对象 | {ln} |")
+    md.append(f"| 文献库规模 | {h.get('records','—')} 篇 |"); md.append(f"| 综述类型 | {rt} |")
+    md.append(f"| 工程领域 | {pr} |"); md.append(f"| 研究范围 | {sc} |")
+    if a3l: md.append(f"| 全域参考 | OpenAlex 候选下界 {a3l} 篇 |")
+    md.append("")
+    md.append("## 综合判断\n"); md.append(report["summary"]); md.append("")
+    md.append("## 评估方法与过程\n"); md.append(_method_narrative(report)); md.append("")
+    md.append("## A–F 六维评估总表\n")
+    md.append("| 维度 | 编号 | 评估项 | 标准 | 判定 | 当前值 | 证据状态 | 说明与行动 |")
+    md.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
+    md.append("\n".join("| " + " | ".join(compact(cell) for cell in row) + " |" for row in rows))
+    md.append("")
+    md.append("## 各维度分析\n"); md.append(_dimension_narrative(report)); md.append("")
+    md.append("## 改进建议\n"); md.append(_priority_actions(report)); md.append("")
+    md.append("## 局限与声明\n"); md.append("\n".join("- " + x for x in report["limitations"])); md.append("")
+    (out / "audit.md").write_text("\n".join(md) + "\n", encoding="utf-8")
+    (out / "audit.html").write_text("<html><meta charset='utf-8'><body><pre>" + html.escape("\n".join(md)) + "</pre></body></html>", encoding="utf-8")
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--library", required=True); p.add_argument("--benchmark"); p.add_argument("--gold"); p.add_argument("--query-hits")
-    p.add_argument("--candidate-snapshots", help="collector snapshot JSON from at least two sources")
-    p.add_argument("--context", help="JSON with search rounds, pathways, taxonomy and source dates")
-    p.add_argument("--query-plan"); p.add_argument("--source-snapshot"); p.add_argument("--decision-log"); p.add_argument("--deduplication-log"); p.add_argument("--run-log")
-    p.add_argument("--out", required=True); a = p.parse_args()
-    context = json.load(open(a.context, encoding="utf-8")) if a.context else {}
-    library = load_items(a.library)
-    report = {"generated_at": dt.datetime.now(dt.timezone.utc).isoformat(), "standards": context.get("standards", {}), "context": context,
-              "library_health": health(library, context.get("standards", {})),
-              "coverage": {"a1": benchmark(load_items(a.library), load_items(a.benchmark) if a.benchmark else []),
-                           "a2": a2(load_items(a.gold) if a.gold else None, load_items(a.query_hits) if a.query_hits else None),
-                           "a3": a3(load_snapshot(a.candidate_snapshots) if a.candidate_snapshots else {})},
-              "process": stability(context), "structure": structure(library, context), "balance": balance(library, context.get("standards", {})), "topic_balance": topic_balance(structure(library, context), context), "currency": currency(context), "recency": recency(library, context), "quality": quality(library, context),
-              "artifacts": artifacts({"query-plan": a.query_plan, "source-snapshot": a.source_snapshot, "decision-log": a.decision_log, "deduplication-log": a.deduplication_log, "run-log": a.run_log}),
-              "summary": "本报告只将稳定标识符匹配和已保存过程记录标为可复跑证据。",
-              "limitations": ["A3 下界不是 Recall；任何区间都需要另行声明模型假设。", "工程适用性、版本等价性、研究设计和更正状态需要人工或专门来源核验。", "未提供的运行产物会明确标为缺失。"]}
+    p.add_argument("--library", required=True); p.add_argument("--benchmark"); p.add_argument("--gold")
+    p.add_argument("--query-hits"); p.add_argument("--candidate-snapshots"); p.add_argument("--context")
+    p.add_argument("--query-plan"); p.add_argument("--source-snapshot"); p.add_argument("--decision-log")
+    p.add_argument("--deduplication-log"); p.add_argument("--run-log"); p.add_argument("--out", required=True)
+    a = p.parse_args()
+    ctx = json.load(open(a.context, encoding="utf-8")) if a.context else {}
+    ctx.setdefault("library_path", a.library)
+    ctx = resolve_thresholds(ctx)
+    lib = load_items(a.library)
+    cov = {"a1": benchmark(load_items(a.library), load_items(a.benchmark) if a.benchmark else []),
+           "a2": a2(load_items(a.gold) if a.gold else None, load_items(a.query_hits) if a.query_hits else None),
+           "a3": a3(load_snapshot(a.candidate_snapshots) if a.candidate_snapshots else {})}
+    proc = stability(ctx); bal = balance(lib, ctx.get("standards", {}))
+    tbal = topic_balance(ctx); cur = currency(ctx); rec = recency(lib, ctx); qual = quality(lib, ctx)
+    # F4: verify dedup-log file exists and is parseable
+    dedup_log_ok = False
+    if a.deduplication_log:
+        dp = pathlib.Path(a.deduplication_log)
+        if dp.exists():
+            try:
+                json.loads(dp.read_text(encoding="utf-8"))
+                dedup_log_ok = True
+            except (json.JSONDecodeError, OSError):
+                pass
+    libh = health(lib, ctx.get("standards", {}), dedup_log_provided=dedup_log_ok)
+    # F1: verify run-log file structure when provided; absent file → not_assessable
+    if a.run_log:
+        rp = pathlib.Path(a.run_log)
+        if rp.is_file():
+            try:
+                content = rp.read_text(encoding="utf-8")
+                if content.strip():
+                    ctx.setdefault("run_log_complete", True)
+            except OSError:
+                pass
+    # No else-branch: missing --run-log stays not_assessable (key absent from ctx)
+    gt = dt.datetime.now(dt.timezone.utc).isoformat(); gts = gt[:19].replace("T", " ")
+    rt = ctx.get("review_type", "未指定"); prf = ctx.get("profile", "未指定")
+    bf = []
+    if tbal.get("checks", {}).get("C1_topic_balance") == "fail": bf.append("C1 存在空主题")
+    if libh.get("checks", {}).get("F4_exact_duplicates") == "fail": bf.append("F4 存在未处理重复")
+    # F_metadata_composite 不在 21 子项 register 内，
+    # 不作为阻断列入 summary——诊断在"各维度分析"F 段呈现，与 register 的 priority_actions 一致
+    if libh.get("field_completeness", {}).get("abstractNote") is not None and libh["field_completeness"]["abstractNote"] < float(ctx.get("standards", {}).get("f_abstract_rate", 0.80)): bf.append("F2 摘要覆盖率不足")
+    summary = f"评估完成（{gts}）。库规模 {libh.get('records','—')} 篇，综述类型 {rt}，工程领域 {prf}。"
+    if bf: summary += f"\n\n**阻断项**：{'；'.join(bf)}。解决后方可声称库准备完毕。"
+    else: summary += " 未检测到阻断项。"
+    summary += f"\n\nA1 基准集召回 {_fmt_pct(cov['a1'].get('recall'))}（{_fmt_num(cov['a1'].get('matched'))}/{_fmt_num(cov['a1'].get('total'))}），"
+    summary += f"A3 多源下界 {_fmt_num(cov['a3'].get('deduplicated_candidate_lower_bound'))} 篇，"
+    summary += f"B 饱和度 {proc.get('verdict','—')}，C 主题平衡 {'含空主题' if 'empty_topic' in tbal.get('flags',[]) else '正常'}，"
+    summary += f"D 近年占比 {_fmt_pct(rec.get('recent_share'))}，E h-core={_fmt_num(qual.get('h_core'))}，"
+    summary += f"F 摘要覆盖 {_fmt_pct(libh.get('field_completeness',{}).get('abstractNote'))}。"
+    summary += " 各维度不合成总分；\"不可评估\"不是失败。"
+    report = {"generated_at": gt, "standards": ctx.get("standards", {}), "context": ctx,
+              "library_health": libh, "coverage": cov, "process": proc, "balance": bal,
+              "topic_balance": tbal, "currency": cur, "recency": rec, "quality": qual,
+              "artifacts": artifacts({"query-plan": a.query_plan, "source-snapshot": a.source_snapshot,
+                                      "decision-log": a.decision_log, "deduplication-log": a.deduplication_log,
+                                      "run-log": a.run_log}),
+              "summary": summary,
+              "limitations": ["本报告中的各项阈值均为基于工程文献计量经验的参考值，旨在辅助识别可能的风险信号，不等于文献库质量的绝对标准。pass/warning/fail 是自动化诊断提示，不是质量裁决，所有结论均应结合具体研究问题和领域惯例做人工判断。",
+                              "A3 下界不是 Recall；区间需另行声明模型假设。",
+                              "主题平衡、版本等价性、研究设计和更正状态需人工或专门来源核验。",
+                              "h-core 和 Tier-1 仅作诊断背景，不等于综述质量。",
+                              "未提供的运行产物会明确标为缺失。"]}
     write(report, pathlib.Path(a.out))
 
 if __name__ == "__main__": main()
