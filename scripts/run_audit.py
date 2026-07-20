@@ -247,6 +247,38 @@ def balance(library, standards=None):
     return {"status": "measured", "counts": dict(counts), "top_source_share": round(max(values) / n, 3), "cv": round(cv, 3), "gini": round(gini, 3), "shannon": round(entropy, 3), "normalized_shannon": round(normalized_entropy, 3), "limits": limits, "flags": flags, "checks": {"C1_critical_topics": "not_assessable", "C2_source_balance": "warning" if flags else "pass"}}
 
 
+def topic_balance(structure_result, context):
+    """Assess topic balance, not merely whether every topic has one record."""
+    standards = context.get("standards", {})
+    topics = [x for x in structure_result.get("taxonomy", []) if x.get("expected")]
+    values = [int(x.get("records") or 0) for x in topics]
+    if not topics or not sum(values):
+        return {"status": "not_assessable", "checks": {"C1_topic_balance": "not_assessable", "C3_topic_source_balance": "not_assessable"}}
+    n, k = sum(values), len(values); mean = n / k
+    cv = (sum((x - mean) ** 2 for x in values) / k) ** .5 / mean
+    gini = sum(abs(a - b) for a in values for b in values) / (2 * k * n)
+    h = -sum((x / n) * log(x / n) for x in values if x); hn = h / log(k) if k > 1 else 0.0
+    limits = {"top_share": float(standards.get("topic_top_share_warning", .70)), "cv": float(standards.get("topic_cv_warning", .80)), "gini": float(standards.get("topic_gini_warning", .50)), "shannon_low": float(standards.get("topic_shannon_low_warning", .55)), "tvd": float(standards.get("topic_target_tvd_warning", .25))}
+    flags = ["empty_topic"] if any(x == 0 for x in values) else []
+    if max(values) / n > limits["top_share"]: flags.append("top_topic_share")
+    if cv > limits["cv"]: flags.append("cv")
+    if gini > limits["gini"]: flags.append("gini")
+    if hn < limits["shannon_low"]: flags.append("shannon_low")
+    targets = [x.get("target_share") for x in topics]
+    tvd = None
+    if all(isinstance(x, (int, float)) for x in targets) and sum(targets) > 0:
+        target_sum = sum(targets); tvd = .5 * sum(abs(value / n - target / target_sum) for value, target in zip(values, targets))
+        if tvd > limits["tvd"]: flags.append("target_distribution")
+    cross = context.get("topic_source_counts", {})
+    cross_flags = []
+    if cross:
+        for topic in topics:
+            counts = cross.get(topic["name"], {}); total = sum(counts.values()) if isinstance(counts, dict) else 0
+            if total and (len(counts) < int(standards.get("topic_min_sources", 2)) or max(counts.values()) / total > float(standards.get("topic_source_top_share_warning", .80))): cross_flags.append(topic["name"])
+            elif not total: cross_flags.append(topic["name"])
+    return {"status": "measured", "topic_counts": {x["name"]: v for x, v in zip(topics, values)}, "top_topic_share": round(max(values) / n, 3), "cv": round(cv, 3), "gini": round(gini, 3), "normalized_shannon": round(hn, 3), "target_tvd": round(tvd, 3) if tvd is not None else None, "flags": flags, "cross_source_flags": cross_flags, "checks": {"C1_topic_balance": "fail" if "empty_topic" in flags else "warning" if flags else "pass", "C3_topic_source_balance": "warning" if cross_flags else "pass" if cross else "not_assessable"}}
+
+
 def recency(library, context):
     profile = str(context.get("profile", "")).lower()
     fast = any(x in profile for x in ("computer", "ai", "software", "electronic", "communication"))
@@ -378,7 +410,7 @@ def write_legacy(report, out):
 
 
 def indicator_rows_v2(report):
-    c, p, b, d, q, h = report["coverage"], report["process"], report["balance"], report["recency"], report["quality"], report["library_health"]
+    c, p, b, t, d, q, h = report["coverage"], report["process"], report["balance"], report["topic_balance"], report["recency"], report["quality"], report["library_health"]
     checks = lambda group, key: group.get("checks", {}).get(key, "not_assessable")
     rows = []
     def add(parent, code, name, standard, verdict, current, evidence, note):
@@ -389,8 +421,9 @@ def indicator_rows_v2(report):
     add("B 饱和度（GGR/DRR）", "B1", "核心库增长率（GGR）", f"最后两轮均 < {p.get('thresholds', {}).get('new_rate')}", checks(p, "F3_new_rate"), p.get("high_confidence_new_rates"), p.get("status"), "每轮高置信新增 / 该轮开始前核心库。")
     add("B 饱和度（GGR/DRR）", "B2", "新增路径发现率（DRR）", f"各新增路径均 < {p.get('thresholds', {}).get('marginal_yield')}", checks(p, "F3_marginal_yield"), p.get("source_marginal_yields"), p.get("status"), "新路径带来的此前未发现高置信文献 / 该路径候选。")
     add("B 饱和度（GGR/DRR）", "B3", "饱和结论的过程证据", "路径完成且独立验证通过", "pass" if checks(p, "F2_pathways") == "pass" and checks(p, "F3_independent_validation") == "pass" else "not_assessable", {"pathways": p.get("pathway_completion"), "independent_validation": p.get("independent_validation_passed")}, p.get("status"), "低 GGR/DRR 本身不足以证明饱和。")
-    add("C 平衡（CV/Gini/Shannon）", "C1", "关键主题层是否平衡覆盖", "项目 taxonomy 的预期层均有记录", checks(report["structure"], "B2_critical_strata"), report["structure"].get("uncovered_expected_strata"), report["structure"].get("status"), "防止主题、方法或应用层出现空白。")
-    add("C 平衡（CV/Gini/Shannon）", "C2", "来源分布是否过度集中或过度分散", "Top share≤0.80；CV≤1.00；Gini≤0.60；归一化 Shannon 0.45–0.95", checks(b, "C2_source_balance"), {"top_share": b.get("top_source_share"), "cv": b.get("cv"), "gini": b.get("gini"), "normalized_shannon": b.get("normalized_shannon"), "flags": b.get("flags")}, b.get("status"), "低 Shannon 表示集中；极高 Shannon 提示来源过度分散，均需解释。")
+    add("C 主题与来源分布是否失衡", "C1", "关键主题是否既覆盖又不过度偏斜", "无空主题；Top topic≤0.70；CV≤0.80；Gini≤0.50；归一化 Shannon≥0.55；有目标份额时 TVD≤0.25", checks(t, "C1_topic_balance"), {"counts": t.get("topic_counts"), "top_share": t.get("top_topic_share"), "cv": t.get("cv"), "gini": t.get("gini"), "normalized_shannon": t.get("normalized_shannon"), "target_tvd": t.get("target_tvd"), "flags": t.get("flags")}, t.get("status"), "不仅检查是否有文献，还检查主题数量是否严重偏向某一层。")
+    add("C 主题与来源分布是否失衡", "C2", "检索来源是否过度集中或过度分散", "Top source≤0.80；CV≤1.00；Gini≤0.60；归一化 Shannon 0.45–0.95", checks(b, "C2_source_balance"), {"top_share": b.get("top_source_share"), "cv": b.get("cv"), "gini": b.get("gini"), "normalized_shannon": b.get("normalized_shannon"), "flags": b.get("flags")}, b.get("status"), "低 Shannon 表示集中；极高 Shannon 提示来源过度分散，均需解释。")
+    add("C 主题与来源分布是否失衡", "C3", "每个关键主题是否有独立来源支撑", "每主题至少 2 个来源；单一来源占比≤0.80", checks(t, "C3_topic_source_balance"), {"topics_at_risk": t.get("cross_source_flags")}, t.get("status"), "防止表面覆盖完整、实际每个主题只依赖单一数据库。")
     add("D 时效性（Recency/前沿/预印本）", "D1", "检索来源是否足够新", f"每个来源距成功检索 ≤ {report['currency'].get('freshness_threshold_days')} 天", checks(d, "D1_search_freshness"), report["currency"].get("sources"), report["currency"].get("status"), "按来源逐项检查。")
     add("D 时效性（Recency/前沿/预印本）", "D2", "近年文献比例是否足够", f"近 {d.get('window_years')} 年占比 ≥ {d.get('minimum_share')}", checks(d, "D2_recent_share"), {"recent": d.get("recent_records"), "dated": d.get("dated_records"), "share": d.get("recent_share")}, d.get("status"), "AI/通信默认 3 年40%；常规工程 5 年35%；基础设施 7 年30%。")
     add("D 时效性（Recency/前沿/预印本）", "D3", "前沿主题是否专门检索和验证", "前沿窗口有独立检索/Gold-set 证据", checks(d, "D3_frontier"), "依赖 context 判定", d.get("status"), "近期发表不等于前沿覆盖。")
@@ -446,7 +479,7 @@ def main():
               "coverage": {"a1": benchmark(load_items(a.library), load_items(a.benchmark) if a.benchmark else []),
                            "a2": a2(load_items(a.gold) if a.gold else None, load_items(a.query_hits) if a.query_hits else None),
                            "a3": a3(load_snapshot(a.candidate_snapshots) if a.candidate_snapshots else {})},
-              "process": stability(context), "structure": structure(library, context), "balance": balance(library, context.get("standards", {})), "currency": currency(context), "recency": recency(library, context), "quality": quality(library, context),
+              "process": stability(context), "structure": structure(library, context), "balance": balance(library, context.get("standards", {})), "topic_balance": topic_balance(structure(library, context), context), "currency": currency(context), "recency": recency(library, context), "quality": quality(library, context),
               "artifacts": artifacts({"query-plan": a.query_plan, "source-snapshot": a.source_snapshot, "decision-log": a.decision_log, "deduplication-log": a.deduplication_log, "run-log": a.run_log}),
               "summary": "本报告只将稳定标识符匹配和已保存过程记录标为可复跑证据。",
               "limitations": ["A3 下界不是 Recall；任何区间都需要另行声明模型假设。", "工程适用性、版本等价性、研究设计和更正状态需要人工或专门来源核验。", "未提供的运行产物会明确标为缺失。"]}

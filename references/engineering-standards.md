@@ -21,7 +21,14 @@
   "balance_cv_warning": 1.00,
   "balance_gini_warning": 0.60,
   "balance_shannon_low_warning": 0.45,
-  "balance_shannon_high_warning": 0.95
+  "balance_shannon_high_warning": 0.95,
+  "topic_top_share_warning": 0.70,
+  "topic_cv_warning": 0.80,
+  "topic_gini_warning": 0.50,
+  "topic_shannon_low_warning": 0.55,
+  "topic_target_tvd_warning": 0.25,
+  "topic_min_sources": 2,
+  "topic_source_top_share_warning": 0.80
 }
 ```
 
