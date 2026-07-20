@@ -225,6 +225,55 @@ def artifacts(paths):
     return {name: {"provided": bool(value), "path": value} for name, value in paths.items()}
 
 
+def balance(library, standards=None):
+    """Source balance diagnostics: dispersion is a search-risk signal, never quality."""
+    standards = standards or {}
+    counts = Counter(str(x.get("source") or x.get("source_database") or "unknown") for x in library)
+    values = list(counts.values()); n = sum(values); k = len(values)
+    if not n or not k:
+        return {"status": "not_assessable", "checks": {"C1_critical_topics": "not_assessable", "C2_source_balance": "not_assessable"}}
+    mean = n / k
+    cv = (sum((x - mean) ** 2 for x in values) / k) ** 0.5 / mean if mean else None
+    gini = sum(abs(a - b) for a in values for b in values) / (2 * k * n)
+    entropy = -sum((x / n) * log(x / n) for x in values if x)
+    normalized_entropy = entropy / log(k) if k > 1 else 0.0
+    limits = {"top_share": float(standards.get("balance_top_share_warning", 0.80)), "cv": float(standards.get("balance_cv_warning", 1.00)), "gini": float(standards.get("balance_gini_warning", 0.60)), "shannon_low": float(standards.get("balance_shannon_low_warning", 0.45)), "shannon_high": float(standards.get("balance_shannon_high_warning", 0.95))}
+    flags = []
+    if max(values) / n > limits["top_share"]: flags.append("top_source_share")
+    if cv > limits["cv"]: flags.append("cv")
+    if gini > limits["gini"]: flags.append("gini")
+    if normalized_entropy < limits["shannon_low"]: flags.append("shannon_low")
+    if k >= 3 and normalized_entropy > limits["shannon_high"]: flags.append("shannon_high")
+    return {"status": "measured", "counts": dict(counts), "top_source_share": round(max(values) / n, 3), "cv": round(cv, 3), "gini": round(gini, 3), "shannon": round(entropy, 3), "normalized_shannon": round(normalized_entropy, 3), "limits": limits, "flags": flags, "checks": {"C1_critical_topics": "not_assessable", "C2_source_balance": "warning" if flags else "pass"}}
+
+
+def recency(library, context):
+    profile = str(context.get("profile", "")).lower()
+    fast = any(x in profile for x in ("computer", "ai", "software", "electronic", "communication"))
+    slow = any(x in profile for x in ("civil", "energy", "infrastructure", "aerospace", "transport"))
+    defaults = (3, .40) if fast else (7, .30) if slow else (5, .35)
+    standards = context.get("standards", {}); years = int(standards.get("recency_years", defaults[0])); minimum = float(standards.get("recency_min_share", defaults[1]))
+    current_year = dt.date.today().year; parsed = []
+    for item in library:
+        try: parsed.append(int(str(item.get("date") or "")[:4]))
+        except ValueError: pass
+    recent = sum(y >= current_year - years + 1 for y in parsed)
+    share = recent / len(parsed) if parsed else None
+    preprints = sum(bool(x.get("is_preprint")) for x in library)
+    checks = {"D1_search_freshness": currency(context)["checks"]["D1_freshness"], "D2_recent_share": "pass" if share is not None and share >= minimum else "warning" if share is not None else "not_assessable", "D3_frontier": context.get("frontier_coverage_verdict", "not_assessable"), "D4_versions_preprints": context.get("version_currency_verdict", "not_assessable")}
+    return {"status": "measured" if parsed else "not_assessable", "window_years": years, "minimum_share": minimum, "dated_records": len(parsed), "recent_records": recent, "recent_share": round(share, 3) if share is not None else None, "preprint_records": preprints, "checks": checks}
+
+
+def quality(library, context):
+    citations = sorted([int(x.get("cited_by_count")) for x in library if isinstance(x.get("cited_by_count"), (int, float))], reverse=True)
+    h = max((idx for idx, value in enumerate(citations, 1) if value >= idx), default=0)
+    tiers = {str(x).strip().lower() for x in context.get("tier1_venues", [])}
+    venues = [str(x.get("publicationTitle") or x.get("venue") or "").strip().lower() for x in library]
+    tier_hits = sum(bool(v and v in tiers) for v in venues)
+    rate = tier_hits / len(library) if library and tiers else None
+    return {"status": "measured" if library else "not_assessable", "citation_records": len(citations), "h_core": h if citations else None, "tier1_venues_configured": len(tiers), "tier1_records": tier_hits if tiers else None, "tier1_rate": round(rate, 3) if rate is not None else None, "checks": {"E1_h_core": "screening" if citations else "not_assessable", "E2_tier1": "screening" if tiers else "not_assessable"}}
+
+
 def compact(value):
     """Make a measurement safe and readable inside a Markdown table cell."""
     if value is None or value == "":
@@ -328,6 +377,35 @@ def write_legacy(report, out):
     (out / "audit.html").write_text("<html><meta charset='utf-8'><body><pre>" + html.escape(md) + "</pre></body></html>", encoding="utf-8")
 
 
+def indicator_rows_v2(report):
+    c, p, b, d, q, h = report["coverage"], report["process"], report["balance"], report["recency"], report["quality"], report["library_health"]
+    checks = lambda group, key: group.get("checks", {}).get(key, "not_assessable")
+    rows = []
+    def add(parent, code, name, standard, verdict, current, evidence, note):
+        rows.append((parent, code, name, standard, verdict, compact(current), evidence, note))
+    add("A 覆盖（Recall）", "A1", "已知必纳入文献找回率", "项目配置的基准集召回阈值", threshold_verdict(c["a1"].get("recall"), report["standards"].get("a1_min_recall")), c["a1"].get("recall"), c["a1"].get("status"), "稳定 ID 基准集召回。")
+    add("A 覆盖（Recall）", "A2", "检索式找回已知相关文献的能力", "项目配置的 Gold-set 灵敏度阈值", threshold_verdict(c["a2"].get("recall"), report["standards"].get("a2_min_recall")), c["a2"].get("recall"), c["a2"].get("status"), "稳定 ID Gold set 灵敏度。")
+    add("A 覆盖（Recall）", "A3", "多来源检索到的最少唯一候选数", "至少两完整来源；只报告下界", "pass" if c["a3"].get("status") == "estimated_lower_bound" else "not_assessable", c["a3"].get("deduplicated_candidate_lower_bound"), c["a3"].get("status"), "不是 Recall 或找全证明。")
+    add("B 饱和度（GGR/DRR）", "B1", "核心库增长率（GGR）", f"最后两轮均 < {p.get('thresholds', {}).get('new_rate')}", checks(p, "F3_new_rate"), p.get("high_confidence_new_rates"), p.get("status"), "每轮高置信新增 / 该轮开始前核心库。")
+    add("B 饱和度（GGR/DRR）", "B2", "新增路径发现率（DRR）", f"各新增路径均 < {p.get('thresholds', {}).get('marginal_yield')}", checks(p, "F3_marginal_yield"), p.get("source_marginal_yields"), p.get("status"), "新路径带来的此前未发现高置信文献 / 该路径候选。")
+    add("B 饱和度（GGR/DRR）", "B3", "饱和结论的过程证据", "路径完成且独立验证通过", "pass" if checks(p, "F2_pathways") == "pass" and checks(p, "F3_independent_validation") == "pass" else "not_assessable", {"pathways": p.get("pathway_completion"), "independent_validation": p.get("independent_validation_passed")}, p.get("status"), "低 GGR/DRR 本身不足以证明饱和。")
+    add("C 平衡（CV/Gini/Shannon）", "C1", "关键主题层是否平衡覆盖", "项目 taxonomy 的预期层均有记录", checks(report["structure"], "B2_critical_strata"), report["structure"].get("uncovered_expected_strata"), report["structure"].get("status"), "防止主题、方法或应用层出现空白。")
+    add("C 平衡（CV/Gini/Shannon）", "C2", "来源分布是否过度集中或过度分散", "Top share≤0.80；CV≤1.00；Gini≤0.60；归一化 Shannon 0.45–0.95", checks(b, "C2_source_balance"), {"top_share": b.get("top_source_share"), "cv": b.get("cv"), "gini": b.get("gini"), "normalized_shannon": b.get("normalized_shannon"), "flags": b.get("flags")}, b.get("status"), "低 Shannon 表示集中；极高 Shannon 提示来源过度分散，均需解释。")
+    add("D 时效性（Recency/前沿/预印本）", "D1", "检索来源是否足够新", f"每个来源距成功检索 ≤ {report['currency'].get('freshness_threshold_days')} 天", checks(d, "D1_search_freshness"), report["currency"].get("sources"), report["currency"].get("status"), "按来源逐项检查。")
+    add("D 时效性（Recency/前沿/预印本）", "D2", "近年文献比例是否足够", f"近 {d.get('window_years')} 年占比 ≥ {d.get('minimum_share')}", checks(d, "D2_recent_share"), {"recent": d.get("recent_records"), "dated": d.get("dated_records"), "share": d.get("recent_share")}, d.get("status"), "AI/通信默认 3 年40%；常规工程 5 年35%；基础设施 7 年30%。")
+    add("D 时效性（Recency/前沿/预印本）", "D3", "前沿主题是否专门检索和验证", "前沿窗口有独立检索/Gold-set 证据", checks(d, "D3_frontier"), "依赖 context 判定", d.get("status"), "近期发表不等于前沿覆盖。")
+    add("D 时效性（Recency/前沿/预印本）", "D4", "预印本和正式版本是否已区分", "关键版本关系已核验", checks(d, "D4_versions_preprints"), {"preprint_records": d.get("preprint_records")}, d.get("status"), "预印本不是低质量，但不能与正式版重复计数。")
+    add("E 质量（h-core/Tier-1）", "E1", "引用核心规模（h-core）", "报告 h-index；仅作质量背景", checks(q, "E1_h_core"), {"h_core": q.get("h_core"), "citation_records": q.get("citation_records")}, q.get("status"), "不把 h-core 当作综述充分性的总分。")
+    add("E 质量（h-core/Tier-1）", "E2", "领域 Tier-1 文献覆盖", "使用 profile 配置的权威 venue 映射", checks(q, "E2_tier1"), {"tier1_records": q.get("tier1_records"), "tier1_rate": q.get("tier1_rate")}, q.get("status"), "未配置合法领域映射时不得判断。")
+    add("F 可用性（摘要/PDF/去重）", "F1", "检索过程能否复跑", "查询原文、字段、日期、来源、过滤器齐全", checks(p, "F1_query_traceability"), report["context"].get("run_log_complete"), p.get("status"), "使所有审计量可追溯。")
+    add("F 可用性（摘要/PDF/去重）", "F2", "摘要信息是否足够", f"摘要率 ≥ {report['standards'].get('f_abstract_rate', .80)}", "pass" if h.get("field_completeness", {}).get("abstractNote") is not None and h["field_completeness"]["abstractNote"] >= report["standards"].get("f_abstract_rate", .80) else "fail", h.get("field_completeness", {}).get("abstractNote"), h.get("status"), "支持自动初筛、分类和人工判断。")
+    add("F 可用性（摘要/PDF/去重）", "F3", "PDF或开放全文是否可获得", f"附件或开放链接率 ≥ {report['standards'].get('f_access_rate', .80)}", checks(h, "F7_access"), {"attachment_rate": h.get("attachment_rate"), "open_link_rate": h.get("open_link_rate")}, h.get("status"), "可获得不代表已获授权。")
+    add("F 可用性（摘要/PDF/去重）", "F4", "重复和版本是否已处理", "DOI 精确重复为 0；版本候选有决定", checks(h, "F6_exact_duplicates"), {"doi_duplicates": h.get("duplicate_doi_groups"), "title_year_candidates": h.get("duplicate_title_year_groups")}, h.get("status"), "相似题名不自动合并。")
+    add("F 可用性（摘要/PDF/去重）", "F5", "纳入决定能否追溯", f"来源谱系率 ≥ {report['standards'].get('f_provenance_rate', .95)}", checks(h, "F4_provenance"), h.get("provenance_rate"), h.get("status"), "核心文献应可回溯来源和决定。")
+    add("F 可用性（摘要/PDF/去重）", "F6", "撤稿和更正是否已核查", "关键记录有更正检查与处置", checks(h, "F8_corrections"), h.get("correction_flag_records"), h.get("status"), "无专门核验即不可评估。")
+    return rows
+
+
 def write(report, out):
     """Write the canonical A--F peer audit register in JSON, Markdown and HTML."""
     out.mkdir(parents=True, exist_ok=True)
@@ -335,12 +413,12 @@ def write(report, out):
         {"parent_dimension": parent, "subproject": sub, "project_name": name,
          "standard": standard, "meets_standard": verdict, "current_status": current,
          "evidence_status": evidence_state, "description_and_action": note}
-        for parent, sub, name, standard, verdict, current, evidence_state, note in indicator_rows(report)
+        for parent, sub, name, standard, verdict, current, evidence_state, note in indicator_rows_v2(report)
     ]
     (out / "audit.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     table = "\n".join(
         "| " + " | ".join(compact(cell) for cell in row) + " |"
-        for row in indicator_rows(report)
+        for row in indicator_rows_v2(report)
     )
     missing = [name for name, meta in report["artifacts"].items() if not meta["provided"]]
     artifacts_text = "缺失：" + "、".join(missing) if missing else "已提供全部运行产物。"
@@ -368,7 +446,7 @@ def main():
               "coverage": {"a1": benchmark(load_items(a.library), load_items(a.benchmark) if a.benchmark else []),
                            "a2": a2(load_items(a.gold) if a.gold else None, load_items(a.query_hits) if a.query_hits else None),
                            "a3": a3(load_snapshot(a.candidate_snapshots) if a.candidate_snapshots else {})},
-              "process": stability(context), "structure": structure(library, context), "evidence": evidence(library, context), "currency": currency(context), "influence": influence(library, context),
+              "process": stability(context), "structure": structure(library, context), "balance": balance(library, context.get("standards", {})), "currency": currency(context), "recency": recency(library, context), "quality": quality(library, context),
               "artifacts": artifacts({"query-plan": a.query_plan, "source-snapshot": a.source_snapshot, "decision-log": a.decision_log, "deduplication-log": a.deduplication_log, "run-log": a.run_log}),
               "summary": "本报告只将稳定标识符匹配和已保存过程记录标为可复跑证据。",
               "limitations": ["A3 下界不是 Recall；任何区间都需要另行声明模型假设。", "工程适用性、版本等价性、研究设计和更正状态需要人工或专门来源核验。", "未提供的运行产物会明确标为缺失。"]}

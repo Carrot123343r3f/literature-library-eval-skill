@@ -19,14 +19,16 @@ with tempfile.TemporaryDirectory() as temp:
     assert audit["coverage"]["a2"]["recall"] == 0.0
     assert audit["coverage"]["a3"]["deduplicated_candidate_lower_bound"] == 3
     assert audit["structure"]["uncovered_expected_strata"] == ["low-light"]
-    assert audit["evidence"]["missing_required_types"] == ["field-test"]
+    assert audit["balance"]["top_source_share"] == 0.5
+    assert audit["recency"]["recent_share"] == 1.0
     assert (out / "audit.md").exists() and (out / "audit.html").exists()
     markdown = (out / "audit.md").read_text(encoding="utf-8")
     assert "| 母项目 | 子项目 | 项目名称 | 标准 | 是否达标 | 当前状态 | 证据状态 | 说明与行动 |" in markdown
-    assert "| A 覆盖验证 | A1 |" in markdown
-    assert "| B 范围结构 | B1 |" in markdown
-    assert "| F 过程合规、库健康与可追溯 | F8 |" in markdown
+    assert "| A 覆盖（Recall） | A1 |" in markdown
+    assert "| B 饱和度（GGR/DRR） | B1 |" in markdown
+    assert "| C 平衡（CV/Gini/Shannon） | C2 |" in markdown
+    assert "| F 可用性（摘要/PDF/去重） | F6 |" in markdown
     register = audit["indicator_register"]
-    assert len(register) == 33
-    assert {row["subproject"] for row in register} >= {"A1", "B1", "C1", "D1", "E1", "F8"}
+    assert len(register) == 20
+    assert {row["subproject"] for row in register} >= {"A1", "B1", "C1", "D1", "E1", "F6"}
 print("run_audit tests passed")

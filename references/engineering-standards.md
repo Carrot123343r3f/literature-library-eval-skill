@@ -16,7 +16,12 @@
   "f_core_metadata_rate": 0.95,
   "f_abstract_rate": 0.80,
   "f_access_rate": 0.80,
-  "f_provenance_rate": 0.95
+  "f_provenance_rate": 0.95,
+  "balance_top_share_warning": 0.80,
+  "balance_cv_warning": 1.00,
+  "balance_gini_warning": 0.60,
+  "balance_shannon_low_warning": 0.45,
+  "balance_shannon_high_warning": 0.95
 }
 ```
 
