@@ -21,4 +21,5 @@ with tempfile.TemporaryDirectory() as temp:
     assert audit["structure"]["uncovered_expected_strata"] == ["low-light"]
     assert audit["evidence"]["missing_required_types"] == ["field-test"]
     assert (out / "audit.md").exists() and (out / "audit.html").exists()
+    assert "B1_new_rate" in (out / "audit.md").read_text(encoding="utf-8")
 print("run_audit tests passed")

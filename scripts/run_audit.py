@@ -158,7 +158,13 @@ def currency(context):
         except (TypeError, ValueError): pass
     today = dt.date.today()
     max_days = int(context.get("standards", {}).get("e_freshness_days", 90))
-    return {"status": "measured" if dates else "not_assessable", "freshness_threshold_days": max_days, "sources": {k: {"date": v.isoformat(), "days_since": (today-v).days, "verdict": "pass" if (today-v).days <= max_days else "warning"} for k, v in dates.items()},
+    sources = {k: {"date": v.isoformat(), "days_since": (today-v).days, "verdict": "pass" if (today-v).days <= max_days else "warning"} for k, v in dates.items()}
+    planned = set(context.get("planned_sources", [])); missing = sorted(planned - set(dates))
+    checks = {"E1_freshness": "pass" if sources and all(x["verdict"] == "pass" for x in sources.values()) else "warning" if sources else "not_assessable",
+              "E2_source_window": "pass" if planned and not missing else "warning" if planned else "not_assessable",
+              "E3_frontier_coverage": context.get("frontier_coverage_verdict", "not_assessable"),
+              "E4_version_currency": context.get("version_currency_verdict", "not_assessable")}
+    return {"status": "measured" if dates else "not_assessable", "freshness_threshold_days": max_days, "sources": sources, "missing_planned_sources": missing, "checks": checks,
             "note": "Report every successful source date; a recent source does not hide stale or failed sources."}
 
 
@@ -196,7 +202,8 @@ def evidence(library, context):
              "missing_conditions": sum(not bool(x.get("operating_conditions") or x.get("test_conditions")) for x in library)}
     condition_rate = round(sum(bool(x.get("operating_conditions") or x.get("test_conditions")) for x in library) / n, 3) if n else None
     metric_rate = round(sum(bool(x.get("baseline") or x.get("performance_metrics")) for x in library) / n, 3) if n else None
-    checks = {"D1_evidence_types": "pass" if not (required-present) else "fail", "D2_conditions": "pass" if condition_rate is not None and condition_rate >= field_rate else "warning", "D3_baselines_metrics": "pass" if metric_rate is not None and metric_rate >= field_rate else "warning"}
+    checks = {"D1_evidence_types": "pass" if not (required-present) else "fail", "D2_conditions": "pass" if condition_rate is not None and condition_rate >= field_rate else "warning", "D3_baselines_metrics": "pass" if metric_rate is not None and metric_rate >= field_rate else "warning",
+              "D4_standards_data_versions": context.get("standards_data_versions_verdict", "not_assessable"), "D5_credibility_flags": context.get("credibility_flags_verdict", "not_assessable"), "D6_reproducibility_signals": "screening" if flags["code_or_data_links"] else "not_assessable"}
     return {"status": "screening" if library else "not_assessable", "required_evidence_types": sorted(required), "checks": checks, "condition_rate": condition_rate, "baseline_or_metric_rate": metric_rate,
             "present_evidence_types": sorted(present), "missing_required_types": sorted(required - present), "credibility_flags": flags,
             "note": "This is engineering evidence screening. It does not determine causal validity, benchmark fairness, code reproducibility or version equivalence."}
@@ -220,6 +227,8 @@ def write(report, out):
     table = "\n".join(f"| {a} | {b if b is not None else '—'} | {c} |" for a,b,c in rows)
     missing = [name for name, meta in report["artifacts"].items() if not meta["provided"]]
     md = "# 工程文献库审计报告\n\n" + report["summary"] + "\n\n| 项目 | 结果 | 证据状态 |\n| --- | --- | --- |\n" + table
+    detail_groups = [("B 检索趋稳", report["stability"].get("checks", {})), ("C 范围结构", report["structure"].get("checks", {})), ("D 工程证据适用性", report["evidence"].get("checks", {})), ("E 时效与更新", report["currency"].get("checks", {})), ("F 库健康", report["library_health"].get("checks", {}))]
+    md += "\n\n## B–F 细分判定\n\n| 维度 | 子项 | Verdict |\n| --- | --- | --- |\n" + "\n".join(f"| {group} | {key} | {value} |" for group, checks in detail_groups for key, value in checks.items())
     md += "\n\n## 审计产物\n\n" + ("缺失：" + "、".join(missing) if missing else "已提供全部运行产物。")
     md += "\n\n## 局限\n\n" + "\n".join("- " + x for x in report["limitations"])
     (out / "audit.md").write_text(md + "\n", encoding="utf-8")

@@ -14,6 +14,10 @@
 6. 被引、venue、预印本、代码链接只提供上下文或警示，不是研究质量裁决。
 7. 不把 API key、令牌、绝对本地路径、受限全文写入输出。
 
+## B–F 标准的使用
+
+先读取 `engineering-standards.md`，把默认值与 profile、综述类型和用户协议合并后写入 `context.standards`。逐项执行 B1–B5、C1–C5、D1–D6、E1–E4、F1–F6；每项必须同时输出采用阈值、证据状态、verdict、定位原因和行动。不可自动验证的子项写 `not_assessable`，不得省略或默认为通过。
+
 ## 交付物
 
 输出目录必须有：`audit.md`、`audit.html`、`audit.json`、`query-plan.json`、`source-snapshot.json`、`decision-log.json`、`deduplication-log.json` 和 `run-log.json`。对缺失来源、失败查询、低置信度候选和无法验证项单独列出。
