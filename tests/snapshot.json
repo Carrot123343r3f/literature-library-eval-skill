@@ -1,0 +1,1 @@
+{"queries":[{"id":"q1","sources":{"openalex":{"items":[{"id":"https://doi.org/10.1000/known"},{"id":"https://doi.org/10.1000/a"}]},"crossref":{"items":[{"id":"doi:10.1000/a"},{"id":"doi:10.1000/b"}]}}}]}

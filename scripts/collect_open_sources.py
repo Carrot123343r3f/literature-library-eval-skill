@@ -22,7 +22,7 @@ def get_json(url):
 
 def openalex(query):
     data = get_json("https://api.openalex.org/works?per-page=50&search=" + urllib.parse.quote(query))
-    items = [{"id": w.get("doi") or w.get("id"), "title": w.get("title"), "year": w.get("publication_year")}
+    items = [{"id": w.get("doi") or w.get("id"), "title": w.get("title"), "year": w.get("publication_year"), "source": "openalex"}
              for w in data.get("results", [])]
     return {"count": data.get("meta", {}).get("count"), "items": items}
 
@@ -33,14 +33,16 @@ def crossref(query):
     items = [{"id": "doi:" + x["DOI"].lower() if x.get("DOI") else None,
               "title": (x.get("title") or [None])[0], "year": (x.get("published", {}).get("date-parts") or [[None]])[0][0]}
              for x in message.get("items", [])]
-    return {"count": message.get("total-results"), "items": items}
+    for item in items: item["source"] = "crossref"
+    return {"count": message.get("total-results"), "items": items, "note": "first 50 records only; not a complete source export"}
 
 
 def europepmc(query):
     data = get_json("https://www.ebi.ac.uk/europepmc/webservices/rest/search?format=json&pageSize=50&query=" + urllib.parse.quote(query))
     items = [{"id": "pmid:" + x["pmid"] if x.get("pmid") else x.get("doi"),
               "title": x.get("title"), "year": x.get("pubYear")} for x in data.get("resultList", {}).get("result", [])]
-    return {"count": data.get("hitCount"), "items": items}
+    for item in items: item["source"] = "europepmc"
+    return {"count": data.get("hitCount"), "items": items, "note": "first 50 records only; not a complete source export"}
 
 
 def arxiv(query):
@@ -50,7 +52,7 @@ def arxiv(query):
         root = ET.fromstring(response.read())
     ns = {"a": "http://www.w3.org/2005/Atom"}
     entries = root.findall("a:entry", ns)
-    items = [{"id": (x.findtext("a:id", default="", namespaces=ns).split("/")[-1]),
+    items = [{"id": (x.findtext("a:id", default="", namespaces=ns).split("/")[-1]), "source": "arxiv",
               "title": " ".join((x.findtext("a:title", default="", namespaces=ns)).split()),
               "year": (x.findtext("a:published", default="", namespaces=ns)[:4])} for x in entries]
     return {"count": len(items), "items": items, "note": "arXiv API returns a page snapshot; count is not corpus total"}
