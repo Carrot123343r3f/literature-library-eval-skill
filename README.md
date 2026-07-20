@@ -44,8 +44,7 @@ literature-library-eval/
 ├── agents/openai.yaml
 ├── references/
 │   ├── engineering-profiles.md
-│   ├── coverage-model.md
-│   ├── noncoverage-model.md
+│   ├── dimension-model.md
 │   ├── indicator-dictionary.md
 │   ├── engineering-standards.md
 │   ├── confirmation-template.md
