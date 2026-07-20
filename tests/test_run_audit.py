@@ -21,6 +21,12 @@ with tempfile.TemporaryDirectory() as temp:
     assert audit["structure"]["uncovered_expected_strata"] == ["low-light"]
     assert audit["evidence"]["missing_required_types"] == ["field-test"]
     assert (out / "audit.md").exists() and (out / "audit.html").exists()
-    assert "B1_taxonomy" in (out / "audit.md").read_text(encoding="utf-8")
-    assert "F3_new_rate" in (out / "audit.md").read_text(encoding="utf-8")
+    markdown = (out / "audit.md").read_text(encoding="utf-8")
+    assert "| 母项目 | 子项目 | 项目名称 | 标准 | 是否达标 | 当前状态 | 证据状态 | 说明与行动 |" in markdown
+    assert "| A 覆盖验证 | A1 |" in markdown
+    assert "| B 范围结构 | B1 |" in markdown
+    assert "| F 过程合规、库健康与可追溯 | F8 |" in markdown
+    register = audit["indicator_register"]
+    assert len(register) == 33
+    assert {row["subproject"] for row in register} >= {"A1", "B1", "C1", "D1", "E1", "F8"}
 print("run_audit tests passed")

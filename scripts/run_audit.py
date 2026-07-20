@@ -225,7 +225,80 @@ def artifacts(paths):
     return {name: {"provided": bool(value), "path": value} for name, value in paths.items()}
 
 
-def write(report, out):
+def compact(value):
+    """Make a measurement safe and readable inside a Markdown table cell."""
+    if value is None or value == "":
+        return "—"
+    if isinstance(value, float):
+        return f"{value:.3f}"
+    if isinstance(value, (list, dict)):
+        text = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    else:
+        text = str(value)
+    return text.replace("|", "／").replace("\n", " ")
+
+
+def threshold_verdict(value, threshold):
+    if value is None or threshold is None:
+        return "not_assessable"
+    return "pass" if value >= threshold else "fail"
+
+
+def indicator_rows(report):
+    """Return the single peer-level A1--F8 audit register used in every report."""
+    c, b, s, e, d, i, p, h = (report["coverage"], report["coverage"].get("benchmark", {}),
+                              report["structure"], report["evidence"], report["currency"],
+                              report["influence"], report["process"], report["library_health"])
+    standards = report.get("standards", {})
+    a1_min = standards.get("a1_min_recall")
+    a2_min = standards.get("a2_min_recall")
+    checks = lambda group, key: group.get("checks", {}).get(key, "not_assessable")
+    add = []
+    def row(parent, sub, name, standard, verdict, current, evidence_state, note):
+        add.append((parent, sub, name, standard, verdict, compact(current), evidence_state, note))
+
+    row("A 覆盖验证", "A1", "稳定标识符基准集召回", f"配置阈值 ≥ {a1_min}" if a1_min is not None else "需在 context.standards 配置 a1_min_recall", threshold_verdict(c["a1"].get("recall"), a1_min), c["a1"].get("recall"), c["a1"].get("status"), "仅以 DOI、PMID 等稳定标识符匹配；未配置阈值时不作达标结论。")
+    row("A 覆盖验证", "A2", "金标准查询灵敏度", f"配置阈值 ≥ {a2_min}" if a2_min is not None else "需在 context.standards 配置 a2_min_recall", threshold_verdict(c["a2"].get("recall"), a2_min), c["a2"].get("recall"), c["a2"].get("status"), "Gold set 必须有独立来源与纳入依据。")
+    row("A 覆盖验证", "A3", "多源候选集下界", "至少两个来源且快照完整；仅报告下界", "pass" if c["a3"].get("status") == "estimated_lower_bound" else "not_assessable", c["a3"].get("deduplicated_candidate_lower_bound"), c["a3"].get("status"), "候选数下界不是 Recall，也不是饱和证明。")
+    row("A 覆盖验证", "A4", "关键锚点命中", "配置关键锚点及命中阈值", "not_assessable", "未实现结构化输入", "not_assessable", "保留为显式审计项，避免以主观印象替代锚点检验。")
+
+    row("B 范围结构", "B1", "范围分类体系", "提供与工程问题对应的 taxonomy", checks(s, "B1_taxonomy"), len(s.get("taxonomy", [])), s.get("status"), "分类应覆盖工况、方法、性能指标或应用场景。")
+    row("B 范围结构", "B2", "关键层覆盖", f"每个预期关键层 ≥ {standards.get('b_min_records_per_critical_stratum', 1)} 条高置信记录", checks(s, "B2_critical_strata"), s.get("uncovered_expected_strata", []), s.get("status"), "列出的缺口是可执行补检索对象。")
+    row("B 范围结构", "B3", "分类可靠性", f"置信度 ≥ {standards.get('b_min_classification_confidence', 0.80)}；未分类率 ≤ {standards.get('b_max_unclassified_rate', 0.10)}", checks(s, "B3_classification"), {"unclassified_rate": report.get("context", {}).get("unclassified_rate")}, s.get("status"), "分类置信度应来自已保存规则或人工复核抽样。")
+    row("B 范围结构", "B4", "来源集中度", f"单一来源占比不应 > {standards.get('b_source_dependence_warning', 0.80)}", checks(s, "B4_source_dependence"), s.get("source_dependence", {}), s.get("status"), "集中度为风险信号，不是文献质量评分。")
+    row("B 范围结构", "B5", "分层覆盖验证", "各层均有独立覆盖验证证据", checks(s, "B5_stratified_coverage"), "未提供分层验证输入", s.get("status"), "需把 A1/A2 或人工复核结果关联至各层。")
+
+    row("C 工程证据适配", "C1", "工程证据类型", "所有必需 evidence type 均出现", checks(e, "C1_evidence_types"), {"missing": e.get("missing_required_types", [])}, e.get("status"), "例如仿真、台架、现场、标准测试或失效分析。")
+    row("C 工程证据适配", "C2", "工况与边界条件", f"记录率 ≥ {standards.get('c_required_field_rate', 0.80)}", checks(e, "C2_conditions"), e.get("condition_rate"), e.get("status"), "不能仅以题名或摘要推断适用工况。")
+    row("C 工程证据适配", "C3", "基线与性能指标", f"记录率 ≥ {standards.get('c_required_field_rate', 0.80)}", checks(e, "C3_baselines_metrics"), e.get("baseline_or_metric_rate"), e.get("status"), "需保留对比基线和可解释的性能指标。")
+    row("C 工程证据适配", "C4", "标准、数据与版本", "已核验标准版本、数据版本和模型版本", checks(e, "C4_standards_data_versions"), "依赖 context 判定", e.get("status"), "版本信息缺失时不能声称可比。")
+    row("C 工程证据适配", "C5", "验证强度", "按项目设定的验证层级完成核验", checks(e, "C5_validation_strength"), "依赖 context 判定", e.get("status"), "区分仿真、实验、现场与独立复现。")
+    row("C 工程证据适配", "C6", "可信度标记", "预印本、撤稿、更正及代码/数据线索已核验", checks(e, "C6_credibility_flags"), e.get("credibility_flags", {}), e.get("status"), "标记是筛查线索，不等于对研究质量的裁决。")
+
+    row("D 时效与技术演化", "D1", "检索新鲜度", f"每个来源距最近成功检索 ≤ {d.get('freshness_threshold_days')} 天", checks(d, "D1_freshness"), d.get("sources", {}), d.get("status"), "最近一个来源不能掩盖其他来源已过期。")
+    row("D 时效与技术演化", "D2", "关键来源时间窗", "所有计划来源均有成功检索日期", checks(d, "D2_source_window"), d.get("missing_planned_sources", []), d.get("status"), "缺失来源应重跑或在报告中说明排除。")
+    row("D 时效与技术演化", "D3", "前沿技术覆盖", "按项目定义前沿主题并保存核验结果", checks(d, "D3_frontier_coverage"), "依赖 context 判定", d.get("status"), "避免把近期发表时间误当作前沿覆盖。")
+    row("D 时效与技术演化", "D4", "版本时效", "预印本、会议版与正式版关系已核验", checks(d, "D4_version_currency"), "依赖 context 判定", d.get("status"), "与 F6 的去重/版本决策相互引用。")
+    row("D 时效与技术演化", "D5", "时间分布", "按研究问题定义必要历史与近期窗口", checks(d, "D5_time_distribution"), "未提供时间分布输入", d.get("status"), "不设置跨领域统一的发表年份配额。")
+
+    row("E 学术影响与知识关联", "E1", "引用数据可得性", f"可得率 ≥ {standards.get('e_citation_data_rate', 0.80)}", checks(i, "E1_citation_data"), i.get("citation_data_rate"), i.get("status"), "引用数据只作诊断，不作为质量总分。")
+    row("E 学术影响与知识关联", "E2", "影响力分布", "具备可解释的分布诊断", checks(i, "E2_influence_distribution"), {"median": i.get("citation_median")}, i.get("status"), "应防止单一高被引记录掩盖结构缺口。")
+    row("E 学术影响与知识关联", "E3", "知识路径", "已保存关键方法、标准、应用之间的链接核验", checks(i, "E3_knowledge_paths"), "依赖 context 判定", i.get("status"), "适合工程技术路线、标准与应用关联。")
+    row("E 学术影响与知识关联", "E4", "发表渠道多样性", "来源分布无未解释的单一依赖", checks(i, "E4_channel_diversity"), i.get("source_distribution", {}), i.get("status"), "渠道多样性不是强制配额。")
+    row("E 学术影响与知识关联", "E5", "权威锚点", "项目定义的标准、指南或核心研究已核验", checks(i, "E5_authority_anchors"), "依赖 context 判定", i.get("status"), "不能以期刊名或引用数替代权威性判断。")
+
+    row("F 过程合规、库健康与可追溯", "F1", "检索式与运行可追溯", "run log 完整且可定位检索式、日期、来源", checks(p, "F1_query_traceability"), "run_log_complete=" + str(report.get("context", {}).get("run_log_complete")), p.get("status"), "过程记录是审计证据，不是 A 的附属项。")
+    row("F 过程合规、库健康与可追溯", "F2", "检索路径完成", "所有计划路径完成", checks(p, "F2_pathways"), p.get("pathway_completion"), p.get("status"), "未完成路径必须列入缺口或说明排除理由。")
+    row("F 过程合规、库健康与可追溯", "F3", "趋稳证据", f"最后两轮高置信新增率 < {p.get('thresholds', {}).get('new_rate')}；边际收益 < {p.get('thresholds', {}).get('marginal_yield')}", checks(p, "F3_new_rate"), {"new_rates": p.get("high_confidence_new_rates"), "marginal_yields": p.get("source_marginal_yields")}, p.get("status"), "同时查看同名的边际收益与独立验证细项。")
+    row("F 过程合规、库健康与可追溯", "F4", "纳入决策与来源谱系", f"来源谱系记录率 ≥ {standards.get('f_provenance_rate', 0.95)}", checks(h, "F4_provenance"), h.get("provenance_rate"), h.get("status"), "纳入、排除和来源应可回溯至原始记录。")
+    row("F 过程合规、库健康与可追溯", "F5", "核心元数据完整性", f"核心字段 ≥ {standards.get('f_core_metadata_rate', 0.95)}；摘要 ≥ {standards.get('f_abstract_rate', 0.80)}", checks(h, "F5_metadata"), h.get("field_completeness", {}), h.get("status"), "标题、作者、日期、载体、标识符和摘要分别报告。")
+    row("F 过程合规、库健康与可追溯", "F6", "去重与版本决策", "稳定标识符去重；版本族须有显式决策", checks(h, "F6_exact_duplicates"), {"duplicate_doi_groups": h.get("duplicate_doi_groups"), "duplicate_title_year_groups": h.get("duplicate_title_year_groups"), "version_decisions": checks(h, "F6_version_decisions")}, h.get("status"), "题名-年份相似项只进入待审队列，不自动合并。")
+    row("F 过程合规、库健康与可追溯", "F7", "访问与复现线索", f"附件或开放链接率 ≥ {standards.get('f_access_rate', 0.80)}", checks(h, "F7_access"), {"attachment_rate": h.get("attachment_rate"), "open_link_rate": h.get("open_link_rate")}, h.get("status"), "可访问不等于已获授权或已经复现。")
+    row("F 过程合规、库健康与可追溯", "F8", "撤稿、更正与异常处理", "已核验更正/撤稿状态并保存处置", checks(h, "F8_corrections"), h.get("correction_flag_records"), h.get("status"), "无专门来源核验时应如实标为不可判定。")
+    return add
+
+
+def write_legacy(report, out):
     out.mkdir(parents=True, exist_ok=True)
     (out / "audit.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     rows = [("A1 基准集召回", report["coverage"]["a1"].get("recall"), report["coverage"]["a1"]["status"]),
@@ -247,6 +320,32 @@ def write(report, out):
     (out / "audit.html").write_text("<html><meta charset='utf-8'><body><pre>" + html.escape(md) + "</pre></body></html>", encoding="utf-8")
 
 
+def write(report, out):
+    """Write the canonical A--F peer audit register in JSON, Markdown and HTML."""
+    out.mkdir(parents=True, exist_ok=True)
+    report["indicator_register"] = [
+        {"parent_dimension": parent, "subproject": sub, "project_name": name,
+         "standard": standard, "meets_standard": verdict, "current_status": current,
+         "evidence_status": evidence_state, "description_and_action": note}
+        for parent, sub, name, standard, verdict, current, evidence_state, note in indicator_rows(report)
+    ]
+    (out / "audit.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    table = "\n".join(
+        "| " + " | ".join(compact(cell) for cell in row) + " |"
+        for row in indicator_rows(report)
+    )
+    missing = [name for name, meta in report["artifacts"].items() if not meta["provided"]]
+    artifacts_text = "缺失：" + "、".join(missing) if missing else "已提供全部运行产物。"
+    md = "# 工程文献库审计报告\n\n" + report["summary"]
+    md += "\n\n## A–F 平级审计总表\n\n"
+    md += "| 母项目 | 子项目 | 项目名称 | 标准 | 是否达标 | 当前状态 | 证据状态 | 说明与行动 |\n"
+    md += "| --- | --- | --- | --- | --- | --- | --- | --- |\n" + table
+    md += "\n\n## 审计产物\n\n" + artifacts_text
+    md += "\n\n## 局限\n\n" + "\n".join("- " + x for x in report["limitations"])
+    (out / "audit.md").write_text(md + "\n", encoding="utf-8")
+    (out / "audit.html").write_text("<html><meta charset='utf-8'><body><pre>" + html.escape(md) + "</pre></body></html>", encoding="utf-8")
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--library", required=True); p.add_argument("--benchmark"); p.add_argument("--gold"); p.add_argument("--query-hits")
@@ -256,7 +355,8 @@ def main():
     p.add_argument("--out", required=True); a = p.parse_args()
     context = json.load(open(a.context, encoding="utf-8")) if a.context else {}
     library = load_items(a.library)
-    report = {"generated_at": dt.datetime.now(dt.timezone.utc).isoformat(), "library_health": health(library, context.get("standards", {})),
+    report = {"generated_at": dt.datetime.now(dt.timezone.utc).isoformat(), "standards": context.get("standards", {}), "context": context,
+              "library_health": health(library, context.get("standards", {})),
               "coverage": {"a1": benchmark(load_items(a.library), load_items(a.benchmark) if a.benchmark else []),
                            "a2": a2(load_items(a.gold) if a.gold else None, load_items(a.query_hits) if a.query_hits else None),
                            "a3": a3(load_snapshot(a.candidate_snapshots) if a.candidate_snapshots else {})},
