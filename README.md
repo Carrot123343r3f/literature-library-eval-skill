@@ -23,7 +23,7 @@
 
 首次确认后，AI 会自主生成检索计划、执行可访问来源、迭代查询、筛选和生成审计包。自动化不会虚构订阅数据库访问、全文质量、撤稿状态或“全世界文献已收齐”。每项结论都会标注为实测、估计、自动初筛、待人工核验或不可评估。
 
-开放源默认包括 OpenAlex、Crossref、Europe PMC 和 arXiv；工程订阅来源只在已有合法访问方式时使用。不要在提示词、报告或仓库中写入 API key。
+开放源默认包括 OpenAlex、Crossref、Europe PMC 和 arXiv；采集器会记录分页是否完成，达到上限的来源只能形成“部分快照”。归一化器仅自动合并共享稳定标识符，标题相似和预印本—正式版关系会进入复核队列。工程订阅来源只在已有合法访问方式时使用。不要在提示词、报告或仓库中写入 API key。
 
 ## 文件结构
 
@@ -42,6 +42,7 @@ literature-library-eval/
 │   └── keywords.md
 ├── scripts/
 │   ├── collect_open_sources.py
+│   ├── normalize_candidates.py
 │   └── run_audit.py
 ├── tests/                 # A1/A2/A3 与报告的最小端到端测试
 └── example-report.md

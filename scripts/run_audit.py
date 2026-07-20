@@ -49,9 +49,11 @@ def load_snapshot(path):
     sources = {}
     for query in data.get("queries", []):
         for name, result in query.get("sources", {}).items():
-            sources.setdefault(name, []).extend(result.get("items", []))
+            bucket = sources.setdefault(name, {"items": [], "statuses": []})
+            bucket["items"].extend(result.get("items", []))
+            bucket["statuses"].append(result.get("status", "unknown"))
     if not sources and isinstance(data.get("sources"), dict):
-        sources = {name: value.get("items", []) for name, value in data["sources"].items()}
+        sources = {name: {"items": value.get("items", []), "statuses": [value.get("status", "unknown")]} for name, value in data["sources"].items()}
     return sources
 
 
@@ -86,15 +88,19 @@ def a2(gold, hits):
 def a3(sources):
     if not sources or len(sources) < 2:
         return {"status": "not_assessable", "note": "Supply deduplicable snapshots from at least two sources for a candidate lower bound."}
-    source_ids = {name: set().union(*(ids(x) for x in rows if isinstance(x, dict))) for name, rows in sources.items()}
+    incomplete = sorted(name for name, meta in sources.items() if any(status != "complete" for status in meta.get("statuses", [])))
+    source_ids = {name: set().union(*(ids(x) for x in meta.get("items", []) if isinstance(x, dict))) for name, meta in sources.items()}
     union = set().union(*source_ids.values())
     if not union:
         return {"status": "not_assessable", "note": "Candidate snapshots contain no stable identifiers."}
     overlaps = {"|".join(pair): len(source_ids[pair[0]] & source_ids[pair[1]])
                 for pair in __import__('itertools').combinations(sorted(source_ids), 2)}
-    return {"status": "estimated_lower_bound", "deduplicated_candidate_lower_bound": len(union),
+    result = {"status": "estimated_lower_bound" if not incomplete else "partial_snapshot", "deduplicated_candidate_lower_bound": len(union),
             "source_unique_identifier_counts": {k: len(v) for k, v in source_ids.items()}, "pairwise_overlaps": overlaps,
+            "incomplete_sources": incomplete,
             "note": "This is a multi-source identifier lower bound, not Recall or a capture–recapture estimate."}
+    if incomplete: result["note"] = "Source snapshots are incomplete; this provisional count must not support A3 coverage conclusions."
+    return result
 
 
 def health(library):
