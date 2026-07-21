@@ -1234,47 +1234,36 @@ def write(report, out, artifact_paths=None):
     sc = ctx.get("scope", f"{ctx.get('year_start','—')}–{ctx.get('year_end','—')}")
     a3l = report["coverage"]["a3"].get("deduplicated_candidate_lower_bound")
 
-    # ── Input evidence status table (top of report) ──
+    # ── Pre-compute all sections ──
     evidence_table = _input_evidence_table(report)
-    # ── Standards appendix ──
-    standards_appendix = _standards_appendix(report)
+    method_narrative = _method_narrative(report)
 
     md = ["# 文献库评估报告\n"]
-    # Input evidence status + standards appendix before the main content
-    if evidence_table:
-        md.append(evidence_table)
-        md.append("")
-    # ── High-priority actions (top 3) ──
-    top_actions = _top_actions(report)
-    if top_actions:
-        md.append("## 优先级行动\n")
-        md.append(top_actions)
-        md.append("")
-
+    # 1. 基本信息
     md.append("## 基本信息\n"); md.append("| 项目 | 值 |"); md.append("| --- | --- |")
     md.append(f"| 生成时间 | {gt} |"); md.append(f"| 评估对象 | {ln} |")
     md.append(f"| 文献库规模 | {h.get('records','—')} 篇 |"); md.append(f"| 综述类型 | {rt} |")
     md.append(f"| 工程领域 | {pr} |"); md.append(f"| 研究范围 | {sc} |")
     if a3l: md.append(f"| 全域参考 | OpenAlex 候选下界 {a3l} 篇 |")
     md.append("")
-    md.append("## 综合判断\n"); md.append(report["summary"]); md.append("")
-    # ── Search iteration narrative ──
-    search_iter_narrative = _search_iteration_section(report)
-    if search_iter_narrative:
-        md.append(search_iter_narrative)
+    # 2. 本次评估输入与证据状态
+    if evidence_table:
+        md.append(evidence_table)
         md.append("")
-    md.append("## 评估方法与过程\n"); md.append(_method_narrative(report)); md.append("")
+    # 3. 评估方法与过程
+    md.append("## 评估方法与过程\n"); md.append(method_narrative); md.append("")
+    # 4. A–F 六维评估总表
     md.append("## A–F 六维评估总表\n")
     md.append("| 维度 | 编号 | 评估项 | 标准 | 判定 | 当前值 | 证据状态 | 说明与行动 |")
     md.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
     md.append("\n".join("| " + " | ".join(compact(cell) for cell in row) + " |" for row in rows))
     md.append("")
+    # 5. 各维度分析
     md.append("## 各维度分析\n"); md.append(_dimension_narrative(report)); md.append("")
+    # 6. 改进建议
     md.append("## 改进建议\n"); md.append(_priority_actions(report)); md.append("")
+    # 7. 局限与声明
     md.append("## 局限与声明\n"); md.append("\n".join("- " + x for x in report["limitations"])); md.append("")
-    if standards_appendix:
-        md.append(standards_appendix)
-        md.append("")
     (out / "audit.md").write_text("\n".join(md) + "\n", encoding="utf-8")
     (out / "audit.html").write_text("<html><meta charset='utf-8'><body><pre>" + html.escape("\n".join(md)) + "</pre></body></html>", encoding="utf-8")
 
