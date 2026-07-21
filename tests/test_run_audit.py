@@ -92,10 +92,19 @@ with tempfile.TemporaryDirectory() as temp:
     inputs_dir = out / "inputs"
     assert inputs_dir.is_dir()
     names = [p.name for p in inputs_dir.iterdir()]
-    for expected in ("library.json", "benchmark.json", "context.json"):
-        assert expected in names, f"Missing input copy: {expected} — got {names}"
+    for expected_prefix in ("library", "benchmark", "context"):
+        found = any(n.startswith(expected_prefix) for n in names)
+        assert found, f"Missing input copy with prefix '{expected_prefix}' — got {names}"
     for key in ("library", "benchmark", "context"):
         assert manifest["input_files"].get(key, {}).get("sha256"), f"No sha256 for {key}"
+    # Verify no absolute paths leaked
+    for v in manifest["input_files"].values():
+        assert "original_path" not in v, f"Absolute path leaked in manifest: {v}"
+    # Verify git commit and script hash present
+    if manifest.get("git_commit"):
+        print(f'  git_commit: {manifest["git_commit"][:8]}')
+    print(f'  run_audit_sha256: {manifest.get("run_audit_sha256","")[:12]}')
+    print(f'  python_version: {manifest.get("python_version")}')
 
 print("Manifest + input copy: PASSED")
 

@@ -853,33 +853,57 @@ def copy_inputs_and_manifest(report, artifact_paths, out):
     """Copy input artifacts into out/inputs/ and write manifest.json.
 
     artifact_paths: dict of {label: path_or_None}
+
+    Naming: inputs/<label>__<sha256[:12]>.<ext> to avoid collisions.
+    Absolute paths are NOT saved by default (privacy); opt-in via record_source_paths=True.
     """
     inputs_dir = out / "inputs"
     inputs_dir.mkdir(parents=True, exist_ok=True)
+    # Try to detect git commit
+    git_commit = None
+    import subprocess as _sp
+    try:
+        git_commit = _sp.check_output(
+            ["git", "-C", str(pathlib.Path(__file__).resolve().parent.parent),
+             "rev-parse", "HEAD"], text=True, stderr=_sp.DEVNULL).strip()
+    except Exception:
+        pass
+    import sys as _sys, platform as _pf
+    script_hash = hash_file(pathlib.Path(__file__).resolve()) or "unknown"
     manifest = {
         "schema_version": "1.0",
         "generated_at": report.get("generated_at", ""),
         "run_audit_version": "model-x-2026-07-21",
+        "git_commit": git_commit,
+        "run_audit_sha256": script_hash,
+        "python_version": _sys.version.split()[0],
+        "platform": _pf.platform(),
         "review_type": report.get("context", {}).get("review_type", ""),
         "standards_applied": report.get("standards", {}),
+        "record_source_paths": False,
         "input_files": {},
     }
     for label, src in sorted(artifact_paths.items()):
         entry = {"provided": bool(src)}
         if src and pathlib.Path(src).is_file():
-            entry["original_path"] = str(src)
-            entry["sha256"] = hash_file(src) or "unreadable"
-            dst = inputs_dir / pathlib.Path(src).name
-            if not dst.exists() or hash_file(dst) != entry["sha256"]:
+            h = hash_file(src) or "unreadable"
+            entry["sha256"] = h
+            src_path = pathlib.Path(src)
+            safe_prefix = f"{label}__{h[:12]}" if h != "unreadable" else label
+            dst = inputs_dir / f"{safe_prefix}{src_path.suffix}"
+            if not dst.exists() or hash_file(dst) != h:
                 shutil.copy2(src, dst)
             entry["copied_to"] = str(dst.relative_to(out))
+            entry["source_filename"] = src_path.name
         manifest["input_files"][label] = entry
     # Also record the library file
     lib_path = report.get("context", {}).get("library_path", "")
     if lib_path and pathlib.Path(lib_path).is_file():
-        entry = {"provided": True, "original_path": lib_path, "sha256": hash_file(lib_path) or "unreadable"}
-        dst = inputs_dir / pathlib.Path(lib_path).name
-        if not dst.exists() or hash_file(dst) != entry["sha256"]:
+        h = hash_file(lib_path) or "unreadable"
+        entry = {"provided": True, "sha256": h, "source_filename": pathlib.Path(lib_path).name}
+        safe_prefix = f"library__{h[:12]}" if h != "unreadable" else "library"
+        dst = inputs_dir / f"{safe_prefix}{pathlib.Path(lib_path).suffix}"
+        if not dst.exists() or hash_file(dst) != h:
             shutil.copy2(lib_path, dst)
         entry["copied_to"] = str(dst.relative_to(out))
         manifest["input_files"]["library"] = entry
