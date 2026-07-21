@@ -398,14 +398,32 @@ def topic_balance(context):
         if tvd > limits["tvd"]: flags.append("target_distribution")
     cross = context.get("topic_source_counts", {})
     cross_flags = []
+    cross_reconciliation_errors = []
     if cross:
         for topic in topics:
-            counts = cross.get(topic["name"], {})
-            total = sum(counts.values()) if isinstance(counts, dict) else 0
-            if total and (len(counts) < int(standards.get("topic_min_sources", 2))
-                          or max(counts.values()) / total > float(standards.get("topic_source_top_share_warning", .80))):
-                cross_flags.append(topic["name"])
-            elif not total: cross_flags.append(topic["name"])
+            tname = topic["name"]
+            counts = cross.get(tname, {})
+            if not isinstance(counts, dict):
+                cross_flags.append(tname)
+                cross_reconciliation_errors.append(f"{tname}: topic_source_counts 值不是字典")
+                continue
+            total = sum(counts.values())
+            taxonomy_records = int(topic["records"] or 0)
+            if total == 0:
+                cross_flags.append(tname)
+            else:
+                if total != taxonomy_records:
+                    cross_reconciliation_errors.append(
+                        f"{tname}: 来源计数合计 ({total}) ≠ taxonomy records ({taxonomy_records})——"
+                        "交叉表覆盖不完整，C3 判断可能不可靠"
+                    )
+                too_few_sources = len(counts) < int(standards.get("topic_min_sources", 2))
+                high_source_share = max(counts.values()) / total > float(standards.get("topic_source_top_share_warning", .80))
+                if too_few_sources or high_source_share:
+                    cross_flags.append(tname)
+        # When most topics have reconciliation errors, C3 is not assessable
+        if cross_reconciliation_errors and len(cross_reconciliation_errors) >= len(topics) * 0.5:
+            cross_flags = [t["name"] for t in topics]  # all flagged
 
     # ── Contrasting viewpoints diagnostic ──
     opposing_warning = None
@@ -422,6 +440,7 @@ def topic_balance(context):
             "top_topic_share": round(max(values) / n, 3), "cv": round(cv, 3), "gini": round(gini, 3),
             "normalized_shannon": round(hn, 3), "target_tvd": round(tvd, 3) if tvd is not None else None,
             "flags": flags, "cross_source_flags": cross_flags,
+            "cross_reconciliation_errors": cross_reconciliation_errors,
             "opposing_viewpoint_warning": opposing_warning,
             "checks": {"C1_topic_balance": "fail" if "empty_topic" in flags else "warning" if flags else "pass",
                        "C3_topic_source_balance": "warning" if cross_flags else "pass" if cross else "not_assessable"}}
@@ -1223,6 +1242,9 @@ def _validate_run_config(rc):
     if not isinstance(proj, dict):
         errors.append("project must be an object")
     else:
+        rq = proj.get("research_question")
+        if not rq or not isinstance(rq, str) or not rq.strip():
+            errors.append("project.research_question is required (non-empty string)")
         rt = proj.get("review_type")
         VALID_RT = {"narrative", "systematic", "scoping", "rapid", "umbrella",
                     "叙事综述", "系统综述", "范围综述", "快速综述", "伞式综述"}

@@ -8,6 +8,22 @@ Usage:
 Exits 0 on pass, 1 on any inconsistency.
 """
 import argparse, json, sys, pathlib
+sys.stdout.reconfigure(encoding="utf-8")
+
+def _load_registry_indicators(reg_path):
+    """Load indicator-registry.json and return (base_ids, umbrella_ids, dim_names, id_map).
+    This is the single source of truth for indicator order, names, and dimensions."""
+    reg = json.loads(pathlib.Path(reg_path).read_text(encoding="utf-8"))
+    indicators = reg.get("indicators", [])
+    dim_names = {}
+    for dim_key, dim_info in reg.get("dimensions", {}).items():
+        dim_names[dim_key] = dim_info.get("name", dim_key)
+    all_ids = [ind["id"] for ind in indicators]
+    umbrella_only = {ind["id"] for ind in indicators if ind.get("umbrella_only")}
+    base_ids = [iid for iid in all_ids if iid not in umbrella_only]
+    umbrella_ids = [iid for iid in all_ids if iid in umbrella_only]
+    id_map = {ind["id"]: ind for ind in indicators}
+    return base_ids, umbrella_ids, dim_names, id_map
 
 # Expected indicator IDs from the registry (in order)
 EXPECTED_BASE = ["A1","A2","A3","B1","B2","B3","C1","C2","C3","D1","D2","D3","D4","E1","E2","F1","F2","F3","F4","F5","F6"]
@@ -24,16 +40,29 @@ def load_registry(path):
         return json.load(f)
 
 def validate_audit(audit, registry):
+    """Validate audit.json.indicator_register against indicator-registry.json.
+    Uses the registry as the single source of truth for indicator IDs, order,
+    dimension affiliation, and display names."""
     errors = []
     rows = audit.get("indicator_register", [])
     if not rows:
         errors.append("audit.indicator_register is empty or missing")
         return errors
 
-    # 1. Check indicator count
     ctx = audit.get("context", {})
     is_umbrella = ctx.get("review_type") == "伞式综述"
-    expected_ids = EXPECTED_UMBRELLA if is_umbrella else EXPECTED_BASE
+    indicators = registry.get("indicators", [])
+    # Auto-derive expected IDs from registry order rather than hardcoded constants
+    all_reg_ids = [ind["id"] for ind in indicators]
+    umbrella_only_reg = {ind["id"] for ind in indicators if ind.get("umbrella_only")}
+    expected_ids = [iid for iid in all_reg_ids
+                    if not is_umbrella or iid not in (umbrella_only_reg - umbrella_only_reg)
+                    if is_umbrella or iid not in umbrella_only_reg]
+    # For non-umbrella: filter out umbrella_only. For umbrella: include all.
+    # Simpler: base = ids without umbrella_only, umbrella_extra = umbrella_only ids
+    base_from_reg = [iid for iid in all_reg_ids if iid not in umbrella_only_reg]
+    umbrella_from_reg = [iid for iid in all_reg_ids if iid in umbrella_only_reg]
+    expected_ids = base_from_reg + (umbrella_from_reg if is_umbrella else [])
     actual_ids = [r.get("subproject") for r in rows]
     if len(rows) != len(expected_ids):
         errors.append(f"Expected {len(expected_ids)} indicators ({'umbrella' if is_umbrella else 'non-umbrella'}), got {len(rows)}")
