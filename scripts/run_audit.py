@@ -970,7 +970,7 @@ def indicator_rows(report):
 
     a1r = c["a1"].get("recall"); a1h = c["a1"].get("matched"); a1t = c["a1"].get("total")
     a2r = c["a2"].get("recall"); a3l = c["a3"].get("deduplicated_candidate_lower_bound")
-    a3s = c["a3"].get("status"); br = p.get("high_confidence_new_rates", [])
+    a3s = c["a3"].get("status") or ""; br = p.get("high_confidence_new_rates", [])
     bv = p.get("verdict", "—"); tc = t.get("topic_counts", {}); tf = t.get("flags", [])
     bs = b.get("top_source_share"); bcv = b.get("cv"); bg = b.get("gini"); bsh = b.get("normalized_shannon")
     ds = d.get("recent_share"); dy = d.get("window_years"); dsrc = report.get("currency", {}).get("sources", {})

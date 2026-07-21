@@ -55,6 +55,7 @@ def ids_for_gold(g):
         if g.get(key): found.add(prefix + ":" + str(g[key]).casefold())
     raw = str(g.get("id") or "").casefold()
     if raw.startswith(("pmid:", "pmcid:", "arxiv:", "openalex:")): found.add(raw)
+    if g.get("source") == "arxiv" and raw: found.add("arxiv:" + raw)
     return found
 
 def entry_ids(entry):
