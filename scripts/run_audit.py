@@ -443,7 +443,10 @@ def topic_balance(context):
             "cross_reconciliation_errors": cross_reconciliation_errors,
             "opposing_viewpoint_warning": opposing_warning,
             "checks": {"C1_topic_balance": "fail" if "empty_topic" in flags else "warning" if flags else "pass",
-                       "C3_topic_source_balance": "warning" if cross_flags else "pass" if cross else "not_assessable"}}
+                       "C3_topic_source_balance": ("not_assessable" if cross_reconciliation_errors
+                                                    else "warning" if cross_flags
+                                                    else "pass" if cross
+                                                    else "not_assessable")}}
 
 # Controlled profile IDs → (recency_years, min_share, freshness_days)
 PROFILES = {
