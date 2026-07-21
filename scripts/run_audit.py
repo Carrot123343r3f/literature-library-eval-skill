@@ -1071,6 +1071,7 @@ def main():
 
     # ── run-config mode: auto-resolve all inputs from run-config.json ──
     rc_base_dir = None
+    rc_ctx_overrides = {}  # scope override flags, carried into final ctx
     if a.run_config:
         rc_path = pathlib.Path(a.run_config).resolve()
         if not rc_path.is_file():
@@ -1099,7 +1100,7 @@ def main():
                 p.exit(1)
             else:
                 print("WARNING: scope_status=out_of_scope but --allow-out-of-scope active — continuing with permanent caveats in report.")
-                ctx.setdefault("_scope_override_active", True)
+                rc_ctx_overrides["_scope_override_active"] = True
 
         # Resolve relative paths against the run-config directory
         rc_base = rc_base_dir
@@ -1147,6 +1148,9 @@ def main():
     if not a.library:
         p.error("--library is required (or provide --run-config with library.path)")
     ctx = json.load(open(a.context, encoding="utf-8")) if a.context else {}
+    # Carry forward scope override flag from run-config parsing
+    for k, v in rc_ctx_overrides.items():
+        ctx.setdefault(k, v)
     ctx.setdefault("library_path", a.library)
     ctx = resolve_thresholds(ctx)
     # Propagate scope_status
