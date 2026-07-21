@@ -96,15 +96,23 @@ def benchmark(library, base):
             "note": "Only stable identifiers contribute to measured recall."}
 
 def a2(gold, hits):
+    """A2 recall at the item level — same logic as A1 benchmark().
+
+    Each gold item that shares any stable ID with any hit => matched.
+    This avoids double-counting when one item has multiple identifiers.
+    """
     if gold is None or hits is None:
         return {"status": "not_assessable", "recall": None, "note": "Supply both gold set and executed query-hit snapshot."}
-    gold_ids = set().union(*(ids(x) for x in gold if isinstance(x, dict)))
     hit_ids = set().union(*(ids(x) for x in hits if isinstance(x, dict)))
-    if not gold_ids: return {"status": "not_assessable", "recall": None, "note": "Gold set lacks stable identifiers."}
-    matched = gold_ids & hit_ids
-    return {"status": "measured", "total": len(gold_ids), "matched": len(matched),
-            "recall": round(len(matched) / len(gold_ids), 3), "missing_ids": sorted(gold_ids - hit_ids),
-            "note": "An executed zero-result query is measured recall 0, not unavailable evidence."}
+    gold_items_with_ids = [g for g in gold if isinstance(g, dict) and ids(g)]
+    total = len(gold_items_with_ids)
+    if total == 0:
+        return {"status": "not_assessable", "recall": None, "note": "Gold set lacks stable identifiers."}
+    matched = sum(1 for g in gold_items_with_ids if ids(g) & hit_ids)
+    return {"status": "measured", "total": total, "matched": matched,
+            "recall": round(matched / total, 3),
+            "missing_ids": sorted(set().union(*(ids(g) for g in gold_items_with_ids if not (ids(g) & hit_ids)))),
+            "note": "Item-level match (any shared stable ID → matched). Consistent with A1 method. An executed zero-result query is measured recall 0, not unavailable evidence."}
 
 def a3(sources):
     if not sources or len(sources) < 2:
@@ -125,7 +133,7 @@ def a3(sources):
     if incomplete: result["note"] = "Source snapshots incomplete; provisional count must not support A3 conclusions."
     return result
 
-def health(library, standards=None, dedup_log_provided=False, dedup_log_depth="missing"):
+def health(library, standards=None, dedup_log_provided=False, dedup_log_depth="missing", decision_log_provided=False):
     standards = standards or {}
     n = len(library)
     fields = {k: round(sum(bool(str(x.get(k) or "").strip()) for x in library) / n, 3) if n else None
@@ -137,6 +145,7 @@ def health(library, standards=None, dedup_log_provided=False, dedup_log_depth="m
     has_oa = sum(bool(x.get("open_access_url") or x.get("fulltext_url")) for x in library)
     access_union = sum(bool(x.get("attachments") or x.get("open_access_url") or x.get("fulltext_url")) for x in library)
     provenance = sum(bool(x.get("source") or x.get("source_database") or x.get("collection")) for x in library)
+    decision_links = sum(bool(x.get("decision") or x.get("inclusion_reason") or x.get("screening_status")) for x in library)
     flags = sum(bool(x.get("retracted") or x.get("corrected") or x.get("expression_of_concern")) for x in library)
     core_min = float(standards.get("f_core_metadata_rate", 0.95))
     abstract_min = float(standards.get("f_abstract_rate", 0.80))
@@ -144,6 +153,14 @@ def health(library, standards=None, dedup_log_provided=False, dedup_log_depth="m
     provenance_min = float(standards.get("f_provenance_rate", 0.95))
     has_fuzzy_dupes = sum(v > 1 for v in title_year.values()) > 0
     f4_version = "pass" if dedup_log_provided else "not_assessable"
+    # F5: decision-log provides screening trail; without it provenance-rate-only is a lower bound
+    f5_verdict = "pass" if n and provenance / n >= provenance_min else "fail"
+    if decision_log_provided:
+        f5_note = "来源谱系 + 纳入/排除决定均可追溯"
+    else:
+        f5_note = f"仅来源字段可追溯（谱系率 {round(provenance/n,3) if n else '—'}）。未提供 decision-log——纳入/排除理由不可追溯。"
+        if decision_links and n and decision_links / n >= 0.5:
+            f5_note += f" 库内有 {decision_links}/{n} 条含 decision/screening_status 字段——可作为部分证据。"
     checks = {"F_metadata_composite": "pass" if all(fields.get(k) is not None and fields[k] >= core_min
               for k in ("title", "creators", "date", "publicationTitle", "DOI"))
               and (fields.get("abstractNote") is None or fields["abstractNote"] >= abstract_min) else "fail",
@@ -159,43 +176,63 @@ def health(library, standards=None, dedup_log_provided=False, dedup_log_depth="m
             "open_link_rate": round(has_oa / n, 3) if n else None,
             "access_union_rate": round(access_union / n, 3) if n else None,
             "provenance_rate": round(provenance / n, 3) if n else None, "correction_flag_records": flags,
+            "decision_link_rate": round(decision_links / n, 3) if n else None,
+            "decision_log_provided": decision_log_provided,
             "dedup_log_depth": dedup_log_depth,
-            "note": "F3=v 附件或开放链接任一可用的记录比例；两率分列展示以避免重复计数。版本族等价性、访问权限和更正状态需专项来源核验。"}
+            "note": "F3=v 附件或开放链接任一可用的记录比例；两率分列展示以避免重复计数。版本族等价性、访问权限和更正状态需专项来源核验。F5 需 decision-log 以追溯纳入/排除理由。"}
 
 def stability(context):
     rounds = context.get("search_rounds", [])
-    rates = [round(x["included_high"] / x["core_before"], 4) for x in rounds
+    # Only rounds with screened_complete or explicit screening bypass count for convergence.
+    # discovery_only rounds are excluded from GGR/DRR verdicts — candidates != inclusions.
+    screened_rounds = [x for x in rounds if x.get("screening_status") != "discovery_only"]
+    any_discovery_only = any(x.get("screening_status") == "discovery_only" for x in rounds)
+    rates = [round(x["included_high"] / x["core_before"], 4) for x in screened_rounds
              if isinstance(x.get("core_before"), (int, float)) and x["core_before"] > 0
              and isinstance(x.get("included_high"), (int, float))]
+    discovery_candidates_count = sum(x.get("discovery_candidates", 0) for x in rounds
+                                     if x.get("screening_status") == "discovery_only")
     paths = set(context.get("planned_pathways", []))
     done = {x.get("pathway") for x in rounds if x.get("completed")}
     complete = round(len(paths & done) / len(paths), 3) if paths else None
     standards = context.get("standards", {})
     threshold = float(standards.get("b_ggr_threshold", 0.02))
     yield_threshold = float(standards.get("b_drr_threshold", 0.05))
+    # Only count yields from non-discovery_only pathways
     yields = [x.get("yield") for x in context.get("source_marginal_yields", [])
-              if isinstance(x.get("yield"), (int, float))]
+              if isinstance(x.get("yield"), (int, float))
+              and x.get("screening_status") != "discovery_only"]
     iv_passed = context.get("independent_validation_passed")
     run_log = context.get("run_log_complete")
     run_log_depth = context.get("run_log_depth", "missing")
-    converged = (len(rates) >= 2 and all(x < threshold for x in rates[-2:]) and complete == 1.0
+    has_enough_screened = len(screened_rounds) >= 2
+    converged = (has_enough_screened and all(x < threshold for x in rates[-2:]) and complete == 1.0
                  and iv_passed is True
                  and bool(yields) and all(x < yield_threshold for x in yields))
-    checks = {"B1_ggr": "pass" if len(rates) >= 2 and all(x < threshold for x in rates[-2:])
-              else "not_assessable" if len(rates) < 2 else "fail",
+    # B1 / B2: require screened rounds — discovery_only → not_assessable
+    if any_discovery_only and not has_enough_screened:
+        b1_verdict = "not_assessable"
+        b2_verdict = "not_assessable"
+    else:
+        b1_verdict = "pass" if len(rates) >= 2 and all(x < threshold for x in rates[-2:]) else ("not_assessable" if len(rates) < 2 else "fail")
+        b2_verdict = "pass" if yields and all(x < yield_threshold for x in yields) else ("not_assessable" if not yields else "fail")
+    checks = {"B1_ggr": b1_verdict,
               "B3_pathway_completion": "pass" if complete == 1.0 else "not_assessable" if complete is None else "fail",
-              "B2_drr": "pass" if yields and all(x < yield_threshold for x in yields)
-              else "not_assessable" if not yields else "fail",
+              "B2_drr": b2_verdict,
               "F1_query_traceability": "pass" if run_log is True
               else "fail" if run_log is False else "not_assessable",
               "B3_independent_validation": "pass" if iv_passed is True
               else "fail" if iv_passed is False else "not_assessable"}
-    return {"status": "measured" if rounds else "not_assessable", "high_confidence_new_rates": rates,
-            "pathway_completion": complete, "source_marginal_yields": yields,
-            "thresholds": {"new_rate": threshold, "marginal_yield": yield_threshold}, "checks": checks,
-            "independent_validation_passed": iv_passed,
-            "verdict": "趋稳" if converged and all(x == "pass" for x in checks.values())
-            else "不可证明" if "not_assessable" in checks.values() else "未稳定"}
+    result = {"status": "discovery_only" if any_discovery_only and not has_enough_screened else ("measured" if rounds else "not_assessable"),
+              "high_confidence_new_rates": rates, "discovery_candidates_total": discovery_candidates_count,
+              "pathway_completion": complete, "source_marginal_yields": yields,
+              "thresholds": {"new_rate": threshold, "marginal_yield": yield_threshold}, "checks": checks,
+              "independent_validation_passed": iv_passed,
+              "verdict": "趋稳" if converged and all(x == "pass" for x in checks.values())
+              else "不可证明" if "not_assessable" in checks.values() else "未稳定"}
+    if any_discovery_only and not has_enough_screened:
+        result["note"] = "B 维处于候选发现阶段——discovery candidates 不等于纳入项。GGR/DRR 不可评估直至完成筛选。"
+    return result
 
 def currency(context):
     raw = context.get("last_successful_search", {})
@@ -782,11 +819,11 @@ def indicator_rows(report):
         f"{_fmt_pct(qt1)}（{_fmt_num(q.get('tier1_records'))}/{_fmt_num(q.get('tier1_venues_configured'))} venue）", q.get("status"),
         f"已配置 {q.get('tier1_venues_configured','—')} 个 venue。{'未配置 tier1_venues。' if not q.get('tier1_venues_configured') else '当前仅为下界。'}")
 
-    run_log_info = f"run log {'完整' if ctx.get('run_log_complete') else '缺失'}（{ctx.get('run_log_depth','无')}）"
+    run_log_info = f"run log {_fmt_pct(ctx.get('run_log_completeness'))} 完整（{ctx.get('run_log_valid_count','—')}/{ctx.get('run_log_query_count','—')} 条合格）" if ctx.get('run_log_query_count') else f"run log {'完整' if ctx.get('run_log_complete') else '缺失'}"
     add("F 可用性", "F1", "检索可复跑",
         "/" if not ctx.get("run_log_complete") else "查询原文、字段、过滤器、日期、来源齐全",
         chk(p, "F1_query_traceability"), run_log_info, p.get("status"),
-        f"{'建库时查询未保留——唯一过程阻断项。' if not ctx.get('run_log_complete') else '查询日志完整（source+query+fields+date+filters+result_count）。' if ctx.get('run_log_depth') == 'valid_full' else '查询日志包含 source+query+fields+date 字段。建议补充 filters/result_count/completion_status。' if ctx.get('run_log_depth') == 'valid' else 'run log 存在但缺少必要字段（需 source/query/fields/date）。'}")
+        f"{'建库时查询未保留——唯一过程阻断项。' if not ctx.get('run_log_complete') else '全部 ' + str(ctx.get('run_log_query_count','')) + ' 条查询均含必要字段。' if ctx.get('run_log_depth') in ('valid','valid_full') else ctx.get('run_log_valid_count','') + '/' + str(ctx.get('run_log_query_count','')) + ' 条查询完整，其余缺必要字段（需 source/query/fields/date）。'}")
 
     add("F 可用性", "F2", "摘要覆盖率", f"≥ {report['standards'].get('f_abstract_rate', .80)}",
         "pass" if fc.get("abstractNote") is not None and fc["abstractNote"] >= report["standards"].get("f_abstract_rate", .80) else "fail",
@@ -803,9 +840,10 @@ def indicator_rows(report):
         dedup_verdict, dedup_info, h.get("status"),
         f"DOI 重复 {_fmt_num(hdoi)} 组。{'存在未处理重复。' if hdoi > 0 else '无精确重复。'}题名相似候选 {_fmt_num(hty)} 组（{'版本决定已保存（' + dedup_log_depth + '）。' if chk(h,'F4_version_decisions')=='pass' else '未提供结构化 dedup-log，版本候选待核验。'}）")
 
+    f5_note = h.get("note", "")
     add("F 可用性", "F5", "来源可追溯", f"≥ {report['standards'].get('f_provenance_rate', .95)}",
         chk(h, "F5_provenance"), _fmt_pct(hpr), h.get("status"),
-        f"来源谱系率 {_fmt_pct(hpr)}。{'达标。' if hpr and hpr >= report['standards'].get('f_provenance_rate',.95) else '低于阈值。'}")
+        f"来源谱系率 {_fmt_pct(hpr)}。{'纳入/排除决定可追溯。' if h.get('decision_log_provided') else '仅来源字段可追溯——未提供 decision-log，纳入/排除理由不可追溯。'}达标。{'达标。' if hpr and hpr >= report['standards'].get('f_provenance_rate',.95) else '低于阈值。'}")
 
     add("F 可用性", "F6", "撤稿更正核查",
         "/" if hcr == 0 else "关键记录有更正检查",
@@ -992,6 +1030,7 @@ def main():
     # dedup_log_ok only True when: structured sections exist AND all fuzzy/version candidates
     # have actual decisions (merge/retain_both/exclude/manual_review_required).
     # "No pending candidates" is a valid conclusion (scan completed, nothing ambiguous) → pass.
+    # "manual_review_required" is a PENDING state — not a resolved decision.
     # Without decisions → F4_version_decisions remains not_assessable or warning.
     dedup_log_ok = False
     dedup_log_depth = "missing"
@@ -1008,12 +1047,14 @@ def main():
                     version_fams = data.get("possible_version_families", [])
                     pending = uncertain + version_fams
                     if pending:
-                        all_decided = all(
-                            c.get("decision") in ("merge", "retain_both", "exclude", "manual_review_required")
+                        # manual_review_required is NOT a resolved decision
+                        RESOLVED = {"merge", "retain_both", "exclude"}
+                        all_resolved = all(
+                            c.get("decision") in RESOLVED
                             for c in pending
                         )
-                        dedup_log_depth = "structured_decisions" if all_decided else "structured_no_decisions"
-                        dedup_log_ok = all_decided  # only when all pending have decisions
+                        dedup_log_depth = "structured_decisions" if all_resolved else "structured_no_decisions"
+                        dedup_log_ok = all_resolved  # only when all pending have resolved decisions
                     else:
                         # Scan completed, zero ambiguous candidates → pass
                         dedup_log_depth = "structured_decisions"
@@ -1022,10 +1063,26 @@ def main():
                     dedup_log_depth = "parseable_but_shallow"
             except (json.JSONDecodeError, OSError):
                 dedup_log_depth = "unparseable"
-    libh = health(lib, ctx.get("standards", {}), dedup_log_provided=dedup_log_ok, dedup_log_depth=dedup_log_depth)
+    # F5: check decision-log for screening trail
+    decision_log_ok = False
+    if a.decision_log:
+        dp = pathlib.Path(a.decision_log)
+        if dp.is_file():
+            try:
+                data = json.loads(dp.read_text(encoding="utf-8"))
+                # decision-log should have decisions array with inclusion/exclusion/reason entries
+                decisions = data.get("decisions", data.get("screening_log", []))
+                if isinstance(decisions, list) and len(decisions) > 0:
+                    has_reasons = any(isinstance(d, dict) and d.get("reason") for d in decisions)
+                    decision_log_ok = has_reasons
+            except (json.JSONDecodeError, OSError):
+                pass
+    libh = health(lib, ctx.get("standards", {}), dedup_log_provided=dedup_log_ok,
+                  dedup_log_depth=dedup_log_depth, decision_log_provided=decision_log_ok)
     libh["dedup_log_depth"] = dedup_log_depth
     qual = quality(lib, ctx)
-    # F1: verify run-log structure — requires query text, source, fields, date at minimum
+    # F1: verify run-log structure — requires query text, source, fields, date at minimum.
+    # ALL queries must satisfy the minimal schema (not just any one).
     if a.run_log:
         rp = pathlib.Path(a.run_log)
         if rp.is_file():
@@ -1034,20 +1091,26 @@ def main():
                 if content.strip():
                     data = json.loads(content)
                     queries = data.get("queries", data.get("query_log", []))
-                    # Minimal schema: source, query, fields, date
-                    # Preferred: filters, result_count, completion_status (check separately for depth)
-                    REQUIRED = {"source", "query", "fields", "date"}
-                    PREFERRED = {"filters", "result_count", "completion_status"}
-                    has_valid = any(
-                        isinstance(q, dict) and REQUIRED <= set(q.keys())
-                        for q in (queries if isinstance(queries, list) else [])
-                    ) if queries else False
-                    has_preferred = any(
-                        isinstance(q, dict) and PREFERRED <= set(q.keys())
-                        for q in (queries if isinstance(queries, list) else [])
-                    ) if queries else False
-                    ctx["run_log_complete"] = has_valid
-                    ctx["run_log_depth"] = "valid_full" if has_preferred else "valid" if has_valid else "shallow"
+                    if queries and isinstance(queries, list):
+                        # Minimal schema: source, query, fields, date
+                        REQUIRED = {"source", "query", "fields", "date"}
+                        PREFERRED = {"filters", "result_count", "completion_status"}
+                        valid_count = sum(1 for q in queries if isinstance(q, dict) and REQUIRED <= set(q.keys()))
+                        preferred_count = sum(1 for q in queries if isinstance(q, dict) and PREFERRED <= set(q.keys()))
+                        total_count = len(queries)
+                        completeness = round(valid_count / total_count, 3) if total_count else None
+                        ctx["run_log_query_count"] = total_count
+                        ctx["run_log_valid_count"] = valid_count
+                        ctx["run_log_completeness"] = completeness
+                        # F1 passes only when ALL queries have minimal fields
+                        ctx["run_log_complete"] = valid_count == total_count and total_count > 0
+                        ctx["run_log_depth"] = ("valid_full" if preferred_count == total_count and total_count > 0
+                                                else "valid" if valid_count == total_count
+                                                else "partial" if valid_count > 0
+                                                else "shallow")
+                    else:
+                        ctx["run_log_complete"] = False
+                        ctx["run_log_depth"] = "shallow"
             except (OSError, json.JSONDecodeError):
                 ctx["run_log_complete"] = False
                 ctx["run_log_depth"] = "unparseable"
