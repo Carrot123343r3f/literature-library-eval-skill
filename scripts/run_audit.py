@@ -911,195 +911,334 @@ def _dimension_narrative(report):
     return "\n\n".join(lines)
 
 def indicator_rows(report):
+    """Generate indicator register rows from indicator-registry.json.
+
+    The registry is the single source of truth for: indicator IDs, order,
+    display names, dimension affiliation, and umbrella-only markers.
+    Each indicator has a compute function that returns (verdict, current_value,
+    evidence_status, description_and_action) from the report data.
+    """
     c, p, b, t, d, q, h = (report["coverage"], report["process"], report["balance"],
                            report["topic_balance"], report["recency"], report["quality"],
                            report["library_health"])
     umb = report.get("umbrella", {})
     s = report.get("standards", {}); ctx = report.get("context", {})
-    a1m = s.get("a1_min_recall"); a2m = s.get("a2_min_recall")
+    artifacts = report.get("artifacts", {})
     chk = lambda g, k: g.get("checks", {}).get(k, "not_assessable")
-    # confirmed_by_user gate: when False, all threshold-based verdicts become "screening"
     user_confirmed = s.get("confirmed_by_user", True)
-    def tv(value, threshold):
-        """Threshold verdict — returns 'screening' unless user confirmed standards."""
-        if not user_confirmed:
-            return "screening"
-        return threshold_verdict(value, threshold)
-    rows = []
-    def add(dim, code, name, std, v, cur, ev, note):
-        rows.append((dim, code, name, std, v, compact(cur), ev, note))
-
-    a1r = c["a1"].get("recall"); a1h = c["a1"].get("matched"); a1t = c["a1"].get("total")
-    a2r = c["a2"].get("recall"); a3l = c["a3"].get("deduplicated_candidate_lower_bound")
-    a3s = c["a3"].get("status") or ""; br = p.get("high_confidence_new_rates", [])
-    bv = p.get("verdict", "—"); tc = t.get("topic_counts", {}); tf = t.get("flags", [])
-    bs = b.get("top_source_share"); bcv = b.get("cv"); bg = b.get("gini"); bsh = b.get("normalized_shannon")
-    ds = d.get("recent_share"); dy = d.get("window_years"); dsrc = report.get("currency", {}).get("sources", {})
-    qh = q.get("h_core"); qt1 = q.get("tier1_rate")
-    fc = h.get("field_completeness", {}); hdoi = h.get("duplicate_doi_groups", 0)
-    hty = h.get("duplicate_title_year_groups", 0)
-    hacc = h.get("access_union_rate")
-    hpr = h.get("provenance_rate"); hcr = h.get("correction_flag_records", 0)
-    ha_r = h.get("attachment_rate"); ho_r = h.get("open_link_rate")
-    mids = c["a1"].get("missing_ids", [])
-
-    add("A 覆盖", "A1", "基准集召回率", f"阈值 ≥ {a1m}" if a1m else "需配置 a1_min_recall",
-        tv(a1r, a1m), f"{_fmt_pct(a1r)}（{_fmt_num(a1h)}/{_fmt_num(a1t)}）",
-        c["a1"].get("status"),
-        f"A1 高只说明找回了锚点，不等于主题无遗漏。实测 {a1h}/{a1t}（{_fmt_pct(a1r)}）。{'漏项：' + ', '.join(mids[:5]) if mids else '无稳定 ID 漏项。'}")
-
-    # A2 independence note
-    a1_path = report.get("artifacts", {}).get("benchmark", {}).get("path", "")
-    a2_path = report.get("artifacts", {}).get("gold", {}).get("path", "")
-    a2_dep = "⚠ A2 非独立——Gold 与 A1 基准集复用；A1 和 A2 不能相互增强证据强度。" if (a2_path and a2_path == a1_path) else ""
-    add("A 覆盖", "A2", "检索式灵敏度", f"阈值 ≥ {a2m}" if a2m else "需配置 a2_min_recall",
-        tv(a2r, a2m), f"{_fmt_pct(a2r)}（{_fmt_num(c['a2'].get('matched'))}/{_fmt_num(c['a2'].get('total'))}）",
-        c["a2"].get("status"),
-        f"A2 高只说明检索式能找回 Gold，不等于 Gold 足够代表问题。{a2_dep}实测 {_fmt_pct(a2r)}。{'零命中=实测 0。' if a2r == 0 and c['a2'].get('status') == 'measured' else ''}")
-
-    add("A 覆盖", "A3", "多源候选下界",
-        "至少两完整来源去重后的不重复候选数；只报告下界",
-        "screening" if a3l is not None else "not_assessable",
-        f"至少 {_fmt_num(a3l)} 篇不重复候选（{', '.join(c['a3'].get('source_unique_identifier_counts',{}).keys()) or '—'}）",
-        "estimated" if a3s.startswith("estimated") else a3s,
-        f"至少 {_fmt_num(a3l)} 篇——'至少有多少篇相关文献存在于这些来源中'。不是 Recall，也不是'漏了多少'。{'来源不完整。' if a3s == 'partial_snapshot' else '来源完整。'}")
-
-    b1_cur = (', '.join(f'{r:.4f}' for r in br[-2:]) if len(br) >= 2
-              else (f'首轮 {br[-1]:.4f}（需第2轮确认趋稳）' if len(br) == 1 else '—'))
-    add("B 饱和度", "B1", "核心库增长率 (GGR)",
-        f"最后两轮均 < {p.get('thresholds',{}).get('new_rate','—')}" if len(br) >= 2 else "/",
-        chk(p, "B1_ggr"),
-        b1_cur, p.get("status"),
-        f"B 趋稳仅在筛选决策真实、路径独立且多轮完成时才成立。GGR={', '.join(f'{r:.4f}' for r in br[-2:]) if len(br)>=2 else ('首轮 '+f'{br[-1]:.4f}'+'，需第2轮确认' if len(br)==1 else '需要至少两轮 search round')}。高置信新增/核心库。")
-
-    add("B 饱和度", "B2", "新增路径发现率 (DRR)",
-        f"各路径均 < {p.get('thresholds',{}).get('marginal_yield','—')}" if len(p.get('source_marginal_yields',[])) >= 2 else "/",
-        chk(p, "B2_drr"),
-        f"{_fmt_num(len(p.get('source_marginal_yields',[])))} 条路径", p.get("status"),
-        f"DRR 只有在筛选确认后才有意义——发现候选不等于纳入项。边际收益：{p.get('source_marginal_yields','—')}。新路径高置信文献/候选量。")
-
-    add("B 饱和度", "B3", "饱和过程证据",
-        "路径完成且独立验证通过" if p.get('independent_validation_passed') is not None else '/',
-        "pass" if chk(p, "B3_pathway_completion") == "pass" and chk(p, "B3_independent_validation") == "pass"
-        else "fail" if chk(p, "B3_pathway_completion") == "fail" or chk(p, "B3_independent_validation") == "fail"
-        else "not_assessable",
-        f"路径 {_fmt_pct(p.get('pathway_completion'))} | 独立验证 {'通过' if p.get('independent_validation_passed') is True else ('未通过' if p.get('independent_validation_passed') is False else '—')}",
-        p.get("status"), f"结论：**{bv}**。仅低 GGR/DRR 不够——需路径完成+独立验证+筛选真实同时成立。")
-
-    c1_desc = f"{'、'.join(f'{k}={v}篇' for k,v in (sorted(tc.items(), key=lambda x:-x[1]) if tc else []))}。{'需补：' + ', '.join(k for k,v in tc.items() if v==0) if 'empty_topic' in tf else '各主题均有文献。'}"
-    # Author concentration note for C2
-    author_conc = b.get("author_concentration", {})
-    c1_opp_note = t.get("opposing_viewpoint_warning")
-    if c1_opp_note:
-        c1_desc += " （" + c1_opp_note + "）"
-    add("C 平衡", "C1", "主题覆盖与偏斜",
-        "无空主题；Top≤0.70；CV≤0.80；Gini≤0.50；Shannon≥0.55", chk(t, "C1_topic_balance"),
-        f"{_fmt_num(len(tc))} 主题 | {'含空主题' if 'empty_topic' in tf else '无空主题'}", t.get("status"),
-        c1_desc)
-
-    c2_desc = f"最大来源占比 {_fmt_pct(bs)}。{'单一来源依赖——非质量问题但需说明索引偏差。' if bs and bs > b.get('limits',{}).get('top_share',0.80) else '来源分布合理。'}{' ' + b.get('high_shannon_note','') if b.get('high_shannon_note') else ''}"
-    if author_conc and author_conc.get("note"):
-        c2_desc += " " + author_conc["note"]
-    add("C 平衡", "C2", "来源集中度", "Top≤0.80；CV≤1.00；Gini≤0.60；Shannon≥0.45",
-        chk(b, "C2_source_balance"),
-        f"Top={_fmt_pct(bs)} | CV={_fmt_num(bcv)} | Gini={_fmt_num(bg)} | Hn={_fmt_num(bsh)}", b.get("status"),
-        c2_desc)
-
-    add("C 平衡", "C3", "主题-来源交叉", "每主题 ≥2 来源；单一来源 ≤0.80",
-        chk(t, "C3_topic_source_balance"),
-        f"{'⚠ ' + str(len(t.get('cross_source_flags',[]))) + ' 主题来源不足' if t.get('cross_source_flags') else '—'}",
-        t.get("status"),
-        f"{'需补来源：' + ', '.join(t.get('cross_source_flags',[])) if t.get('cross_source_flags') else '未提供 topic_source_counts。' if not ctx.get('topic_source_counts') else '各主题有独立来源。'}")
-
-    add("D 时效", "D1", "来源新鲜度",
-        f"各来源距检索 ≤ {report.get('currency',{}).get('freshness_threshold_days','—')} 天",
-        chk(d, "D1_search_freshness"),
-        "; ".join(f"{k}:{v['days_since']}天" for k,v in dsrc.items()) if dsrc else "—",
-        report.get("currency", {}).get("status", "not_assessable"),
-        f"{len(dsrc)} 个来源有日期。{'存在过期来源。' if chk(d,'D1_search_freshness')=='warning' else '来源在新鲜度窗口内。'}")
-
-    add("D 时效", "D2", "近年文献比例",
-        f"近 {dy or '—'} 年占比 ≥ {d.get('minimum_share','—')}", chk(d, "D2_recent_share"),
-        f"{_fmt_pct(ds)}（{_fmt_num(d.get('recent_records'))}/{_fmt_num(d.get('dated_records'))} 有日期）", d.get("status"),
-        f"近 {dy} 年占比 {_fmt_pct(ds)}。阈值按 profile：AI/通信 3年40%、常规 5年35%、基础设施 7年30%。{'低于阈值。' if chk(d,'D2_recent_share')=='warning' else '达标。'}年份字段完整率 {_fmt_pct(d.get('year_completeness'))}；<50% 时 D2 自动降级为 warning。")
-
-    add("D 时效", "D3", "前沿覆盖",
-        "/" if not ctx.get("frontier_coverage_verdict") else "前沿窗口有独立检索/Gold set",
-        chk(d, "D3_frontier"), ctx.get("frontier_coverage_verdict", "—"), d.get("status"),
-        "前沿覆盖需 context.frontier_coverage_verdict。近期发表不等于前沿覆盖。")
-
-    add("D 时效", "D4", "版本区分",
-        "/" if not ctx.get("version_currency_verdict") else "预印本-正式版关系已核验",
-        chk(d, "D4_versions_preprints"), f"预印本 {d.get('preprint_records','—')} 条", d.get("status"),
-        f"{d.get('preprint_records','—')} 条预印本。{'未核验版本关系。' if chk(d,'D4_versions_preprints')=='not_assessable' else ''}")
-
-    e1n = f"h-core={_fmt_num(qh)}。仅背景信号——高被引不等于高质量，新论文拉低 h-core。真正的研究质量评估应使用与研究设计匹配的批判性评价工具。"
-    if q.get('citation_records') and h.get('records') and q['citation_records'] < h['records'] * 0.5:
-        e1n += f" 注意仅 {_fmt_pct(q['citation_records']/h['records'])} 条目有引用数据。"
-    add("E 学术影响", "E1", "h-core", "报告 h-index；仅背景信号", chk(q, "E1_h_core"),
-        f"h={_fmt_num(qh)}（{q.get('citation_records','—')} 条引用）", q.get("status"), e1n)
-
-    add("E 学术影响", "E2", "Tier-1 覆盖", "按 profile 配置 venue 映射", chk(q, "E2_tier1"),
-        f"{_fmt_pct(qt1)}（{_fmt_num(q.get('tier1_records'))}/{_fmt_num(q.get('tier1_venues_configured'))} venue）", q.get("status"),
-        f"已配置 {q.get('tier1_venues_configured','—')} 个 venue。{'未配置 tier1_venues。' if not q.get('tier1_venues_configured') else '当前仅为下界。'}")
-
-    run_log_info = f"run log {_fmt_pct(ctx.get('run_log_completeness'))} 完整（{ctx.get('run_log_valid_count','—')}/{ctx.get('run_log_query_count','—')} 条合格）" if ctx.get('run_log_query_count') else f"run log {'完整' if ctx.get('run_log_complete') else '缺失'}"
-    add("F 可用性", "F1", "检索可复跑",
-        "/" if not ctx.get("run_log_complete") else "查询原文、字段、过滤器、日期、来源齐全",
-        chk(p, "F1_query_traceability"), run_log_info, p.get("status"),
-        f"{'建库时查询未保留——唯一过程阻断项。' if not ctx.get('run_log_complete') else '全部 ' + str(ctx.get('run_log_query_count','')) + ' 条查询均含必要字段。' if ctx.get('run_log_depth') in ('valid','valid_full') else ctx.get('run_log_valid_count','') + '/' + str(ctx.get('run_log_query_count','')) + ' 条查询完整，其余缺必要字段（需 source/query/fields/date）。'}")
-
-    add("F 可用性", "F2", "摘要覆盖率", f"≥ {report['standards'].get('f_abstract_rate', .80)}",
-        "pass" if fc.get("abstractNote") is not None and fc["abstractNote"] >= report["standards"].get("f_abstract_rate", .80) else "fail",
-        _fmt_pct(fc.get("abstractNote")), h.get("status"),
-        f"摘要率 {_fmt_pct(fc.get('abstractNote'))}。{'达标。' if (fc.get('abstractNote') or 0) >= report['standards'].get('f_abstract_rate',.80) else '低于阈值。'}")
-
-    add("F 可用性", "F3", "全文获取率", f"≥ {report['standards'].get('f_access_rate', .80)}",
-        chk(h, "F3_access"), _fmt_pct(hacc), h.get("status"),
-        f"附件 {_fmt_pct(ha_r)} | 开放链接 {_fmt_pct(ho_r)} | 联合 {_fmt_pct(hacc)}。{'达标。' if hacc and hacc >= report['standards'].get('f_access_rate',.80) else '低于阈值。'}联合=v 附件或开放链接任一可用的记录比例，避免同一记录双渠道重复计数。")
-
-    dedup_info = f"DOI 重复 {_fmt_num(hdoi)} 组 | 题名候选 {_fmt_num(hty)} 组 | 深度 {h.get('dedup_log_depth','—')}"
-    dedup_verdict = "pass" if chk(h, "F4_exact_duplicates") == "pass" and chk(h, "F4_version_decisions") == "pass" else "fail" if chk(h, "F4_exact_duplicates") == "fail" else "not_assessable"
-    add("F 可用性", "F4", "去重与版本", "DOI 精确重复=0；版本候选有决定",
-        dedup_verdict, dedup_info, h.get("status"),
-        f"DOI 重复 {_fmt_num(hdoi)} 组。{'存在未处理重复。' if hdoi > 0 else '无精确重复。'}题名相似候选 {_fmt_num(hty)} 组（{'版本决定已保存（' + h.get('dedup_log_depth','—') + '）。' if chk(h,'F4_version_decisions')=='pass' else '未提供结构化 dedup-log，版本候选待核验。'}）")
-
-    f5_note = h.get("f5_note", "")
-    add("F 可用性", "F5", "来源可追溯", f"≥ {report['standards'].get('f_provenance_rate', .95)}",
-        chk(h, "F5_provenance"), _fmt_pct(hpr), h.get("status"),
-        f5_note if f5_note else f"来源谱系率 {_fmt_pct(hpr)}。{'达标。' if hpr and hpr >= report['standards'].get('f_provenance_rate',.95) else '低于阈值。'}")
-
-    add("F 可用性", "F6", "撤稿更正核查",
-        "/" if hcr == 0 else "关键记录有更正检查",
-        chk(h, "F6_corrections"), f"标记 {_fmt_num(hcr)} 条", h.get("status"),
-        f"{_fmt_num(hcr)} 条标记。{'未经专门来源核验。' if chk(h,'F6_corrections')=='not_assessable' else '已核验。'}")
-
-    # ── Umbrella-only A4 / C4 / F7 rows ──
     is_umbrella = ctx.get("review_type") == "伞式综述"
 
-    a4 = umb.get("a4") if umb else None
-    if is_umbrella and a4:
-        add("A 覆盖", "A4", "综述类型确认",
-            f"综述论文占比 ≥ {a4.get('threshold','—')}",
-            a4.get("verdict"), f"{_fmt_pct(a4.get('purity'))}（{_fmt_num(a4.get('survey_literature_count'))}/{_fmt_num(a4.get('total_library_size'))}）",
-            a4.get("status"), a4.get("note", ""))
+    def tv(value, threshold):
+        if not user_confirmed: return "screening"
+        return threshold_verdict(value, threshold)
 
-    c4 = umb.get("c4") if umb else None
-    if is_umbrella and c4:
-        mtd = c4.get("method_type_distribution", {})
+    # ── Shared data snapshots computed once ──
+    data = {
+        "a1r": c["a1"].get("recall"), "a1h": c["a1"].get("matched"), "a1t": c["a1"].get("total"),
+        "a2r": c["a2"].get("recall"), "a3l": c["a3"].get("deduplicated_candidate_lower_bound"),
+        "a3s": c["a3"].get("status") or "",
+        "a1m": s.get("a1_min_recall"), "a2m": s.get("a2_min_recall"),
+        "br": p.get("high_confidence_new_rates", []),
+        "bv": p.get("verdict", "—"),
+        "tc": t.get("topic_counts", {}), "tf": t.get("flags", []),
+        "bs": b.get("top_source_share"), "bcv": b.get("cv"), "bg": b.get("gini"), "bsh": b.get("normalized_shannon"),
+        "ds": d.get("recent_share"), "dy": d.get("window_years"),
+        "d_status": d.get("status"), "d_rec": d.get("recent_records"),
+        "d_dated": d.get("dated_records"), "d_comp": d.get("year_completeness"),
+        "d_pre": d.get("preprint_records"),
+        "dsrc": report.get("currency", {}).get("sources", {}),
+        "qh": q.get("h_core"), "qt1": q.get("tier1_rate"),
+        "fc": h.get("field_completeness", {}),
+        "hdoi": h.get("duplicate_doi_groups", 0), "hty": h.get("duplicate_title_year_groups", 0),
+        "hacc": h.get("access_union_rate"), "hpr": h.get("provenance_rate"),
+        "hcr": h.get("correction_flag_records", 0),
+        "ha_r": h.get("attachment_rate"), "ho_r": h.get("open_link_rate"),
+        "mids": c["a1"].get("missing_ids", []),
+        "a1_path": artifacts.get("benchmark", {}).get("path", ""),
+        "a2_path": artifacts.get("gold", {}).get("path", ""),
+        "author_conc": b.get("author_concentration", {}),
+        "umbrella": umb,
+    }
+
+    # ── Indicator compute functions — one per indicator ID ──
+    def _a1(d):
+        a1m = d["a1m"]; a1r = d["a1r"]; mids = d["mids"]
+        return (tv(a1r, a1m),
+                f"{_fmt_pct(a1r)}（{_fmt_num(d['a1h'])}/{_fmt_num(d['a1t'])}）",
+                c["a1"].get("status"),
+                f"A1 高只说明找回了锚点，不等于主题无遗漏。实测 {d['a1h']}/{d['a1t']}（{_fmt_pct(a1r)}）。"
+                f"{'漏项：' + ', '.join(mids[:5]) if mids else '无稳定 ID 漏项。'}")
+
+    def _a2(d):
+        a2m = d["a2m"]; a2r = d["a2r"]
+        a2_dep = ("⚠ A2 非独立——Gold 与 A1 基准集复用；A1 和 A2 不能相互增强证据强度。"
+                  if (d["a2_path"] and d["a2_path"] == d["a1_path"]) else "")
+        zero_hit_note = "零命中=实测 0。" if a2r == 0 and c["a2"].get("status") == "measured" else ""
+        return (tv(a2r, a2m),
+                f"{_fmt_pct(a2r)}（{_fmt_num(c['a2'].get('matched'))}/{_fmt_num(c['a2'].get('total'))}）",
+                c["a2"].get("status"),
+                f"A2 高只说明检索式能找回 Gold，不等于 Gold 足够代表问题。{a2_dep}实测 {_fmt_pct(a2r)}。{zero_hit_note}")
+
+    def _a3(d):
+        a3l = d["a3l"]; a3s = d["a3s"]
+        src_names = ', '.join(c['a3'].get('source_unique_identifier_counts', {}).keys()) or '—'
+        return ("screening" if a3l is not None else "not_assessable",
+                f"至少 {_fmt_num(a3l)} 篇不重复候选（{src_names}）",
+                "estimated" if a3s.startswith("estimated") else a3s,
+                f"至少 {_fmt_num(a3l)} 篇——'至少有多少篇相关文献存在于这些来源中'。不是 Recall，也不是'漏了多少'。"
+                f"{'来源不完整。' if a3s == 'partial_snapshot' else '来源完整。'}")
+
+    def _b1(d):
+        br = d["br"]
+        cur = (', '.join(f'{r:.4f}' for r in br[-2:]) if len(br) >= 2
+               else (f'首轮 {br[-1]:.4f}（需第2轮确认趋稳）' if len(br) == 1 else '—'))
+        return (chk(p, "B1_ggr"), cur, p.get("status"),
+                f"B 趋稳仅在筛选决策真实、路径独立且多轮完成时才成立。"
+                f"GGR={', '.join(f'{r:.4f}' for r in br[-2:]) if len(br)>=2 else ('首轮 '+f'{br[-1]:.4f}'+'，需第2轮确认' if len(br)==1 else '需要至少两轮 search round')}。"
+                f"高置信新增/核心库。")
+
+    def _b2(d):
+        my = p.get('source_marginal_yields', [])
+        return (chk(p, "B2_drr"),
+                f"{_fmt_num(len(my))} 条路径", p.get("status"),
+                f"DRR 只有在筛选确认后才有意义——发现候选不等于纳入项。边际收益：{my}。"
+                f"新路径高置信文献/候选量。")
+
+    def _b3(d):
+        bv = d["bv"]
+        verdict = ("pass" if chk(p, "B3_pathway_completion") == "pass" and chk(p, "B3_independent_validation") == "pass"
+                   else "fail" if chk(p, "B3_pathway_completion") == "fail" or chk(p, "B3_independent_validation") == "fail"
+                   else "not_assessable")
+        iv_label = ('通过' if p.get('independent_validation_passed') is True
+                    else ('未通过' if p.get('independent_validation_passed') is False else '—'))
+        return (verdict,
+                f"路径 {_fmt_pct(p.get('pathway_completion'))} | 独立验证 {iv_label}",
+                p.get("status"),
+                f"结论：**{bv}**。仅低 GGR/DRR 不够——需路径完成+独立验证+筛选真实同时成立。")
+
+    def _c1(d):
+        tc = d["tc"]; tf = d["tf"]
+        desc = (f"{'、'.join(f'{k}={v}篇' for k,v in (sorted(tc.items(), key=lambda x:-x[1]) if tc else []))}。"
+                f"{'需补：' + ', '.join(k for k,v in tc.items() if v==0) if 'empty_topic' in tf else '各主题均有文献。'}")
+        opp = t.get("opposing_viewpoint_warning")
+        if opp: desc += " （" + opp + "）"
+        return (chk(t, "C1_topic_balance"),
+                f"{_fmt_num(len(tc))} 主题 | {'含空主题' if 'empty_topic' in tf else '无空主题'}",
+                t.get("status"), desc)
+
+    def _c2(d):
+        bs = d["bs"]; author_conc = d["author_conc"]
+        desc = (f"最大来源占比 {_fmt_pct(bs)}。"
+                f"{'单一来源依赖——非质量问题但需说明索引偏差。' if bs and bs > b.get('limits',{}).get('top_share',0.80) else '来源分布合理。'}"
+                f"{' ' + b.get('high_shannon_note','') if b.get('high_shannon_note') else ''}")
+        if author_conc and author_conc.get("note"):
+            desc += " " + author_conc["note"]
+        return (chk(b, "C2_source_balance"),
+                f"Top={_fmt_pct(bs)} | CV={_fmt_num(d['bcv'])} | Gini={_fmt_num(d['bg'])} | Hn={_fmt_num(d['bsh'])}",
+                b.get("status"), desc)
+
+    def _c3(d):
+        cf = t.get('cross_source_flags')
+        return (chk(t, "C3_topic_source_balance"),
+                f"{'⚠ ' + str(len(cf)) + ' 主题来源不足' if cf else '—'}",
+                t.get("status"),
+                f"{'需补来源：' + ', '.join(cf) if cf else '未提供 topic_source_counts。' if not ctx.get('topic_source_counts') else '各主题有独立来源。'}")
+
+    def _d1(d):
+        dsrc = d["dsrc"]
+        fdays = report.get('currency', {}).get('freshness_threshold_days', '—')
+        return (chk(d, "D1_search_freshness"),
+                "; ".join(f"{k}:{v['days_since']}天" for k,v in dsrc.items()) if dsrc else "—",
+                report.get("currency", {}).get("status", "not_assessable"),
+                f"{len(dsrc)} 个来源有日期。"
+                f"{'存在过期来源。' if chk(d,'D1_search_freshness')=='warning' else '来源在新鲜度窗口内。'}")
+
+    def _d2(d):
+        return (chk(d, "D2_recent_share"),
+                f"{_fmt_pct(d['ds'])}（{_fmt_num(d.get('d_rec'))}/{_fmt_num(d.get('d_dated'))} 有日期）",
+                d["d_status"],
+                f"近 {d['dy']} 年占比 {_fmt_pct(d['ds'])}。阈值按 profile：AI/通信 3年40%、常规 5年35%、基础设施 7年30%。"
+                f"{'低于阈值。' if chk(d,'D2_recent_share')=='warning' else '达标。'}"
+                f"年份字段完整率 {_fmt_pct(d.get('d_comp'))}；<50% 时 D2 自动降级为 warning。")
+
+    def _d3(d):
+        return (chk(d, "D3_frontier"),
+                ctx.get("frontier_coverage_verdict", "—"), d["d_status"],
+                "前沿覆盖需 context.frontier_coverage_verdict。近期发表不等于前沿覆盖。")
+
+    def _d4(d):
+        pre = d.get('d_pre', '—')
+        return (chk(d, "D4_versions_preprints"),
+                f"预印本 {_fmt_num(pre)} 条", d["d_status"],
+                f"{_fmt_num(pre)} 条预印本。"
+                f"{'未核验版本关系。' if chk(d,'D4_versions_preprints')=='not_assessable' else ''}")
+
+    def _e1(d):
+        qh = d["qh"]
+        note = (f"h-core={_fmt_num(qh)}。仅背景信号——高被引不等于高质量，新论文拉低 h-core。"
+                f"真正的研究质量评估应使用与研究设计匹配的批判性评价工具。")
+        if q.get('citation_records') and h.get('records') and q['citation_records'] < h['records'] * 0.5:
+            note += f" 注意仅 {_fmt_pct(q['citation_records']/h['records'])} 条目有引用数据。"
+        return (chk(q, "E1_h_core"),
+                f"h={_fmt_num(qh)}（{q.get('citation_records','—')} 条引用）",
+                q.get("status"), note)
+
+    def _e2(d):
+        qt1 = d["qt1"]
+        return (chk(q, "E2_tier1"),
+                f"{_fmt_pct(qt1)}（{_fmt_num(q.get('tier1_records'))}/{_fmt_num(q.get('tier1_venues_configured'))} venue）",
+                q.get("status"),
+                f"已配置 {q.get('tier1_venues_configured','—')} 个 venue。"
+                f"{'未配置 tier1_venues。' if not q.get('tier1_venues_configured') else '当前仅为下界。'}")
+
+    def _f1(d):
+        if ctx.get('run_log_query_count'):
+            info = f"run log {_fmt_pct(ctx.get('run_log_completeness'))} 完整（{ctx.get('run_log_valid_count','—')}/{ctx.get('run_log_query_count','—')} 条合格）"
+        else:
+            info = f"run log {'完整' if ctx.get('run_log_complete') else '缺失'}"
+        return (chk(p, "F1_query_traceability"), info, p.get("status"),
+                f"{'建库时查询未保留——唯一过程阻断项。' if not ctx.get('run_log_complete') else '全部 ' + str(ctx.get('run_log_query_count','')) + ' 条查询均含必要字段。' if ctx.get('run_log_depth') in ('valid','valid_full') else ctx.get('run_log_valid_count','') + '/' + str(ctx.get('run_log_query_count','')) + ' 条查询完整，其余缺必要字段（需 source/query/fields/date）。'}")
+
+    def _f2(d):
+        fc_abs = d["fc"].get("abstractNote")
+        abs_threshold = report['standards'].get('f_abstract_rate', .80)
+        return ("pass" if fc_abs is not None and fc_abs >= abs_threshold else "fail",
+                _fmt_pct(fc_abs), h.get("status"),
+                f"摘要率 {_fmt_pct(fc_abs)}。"
+                f"{'达标。' if (fc_abs or 0) >= abs_threshold else '低于阈值。'}")
+
+    def _f3(d):
+        hacc = d["hacc"]; access_threshold = report['standards'].get('f_access_rate', .80)
+        return (chk(h, "F3_access"), _fmt_pct(hacc), h.get("status"),
+                f"附件 {_fmt_pct(d['ha_r'])} | 开放链接 {_fmt_pct(d['ho_r'])} | 联合 {_fmt_pct(hacc)}。"
+                f"{'达标。' if hacc and hacc >= access_threshold else '低于阈值。'}"
+                f"联合=v 附件或开放链接任一可用的记录比例，避免同一记录双渠道重复计数。")
+
+    def _f4(d):
+        hdoi = d["hdoi"]; hty = d["hty"]
+        info = f"DOI 重复 {_fmt_num(hdoi)} 组 | 题名候选 {_fmt_num(hty)} 组 | 深度 {h.get('dedup_log_depth','—')}"
+        verdict = ("pass" if chk(h, "F4_exact_duplicates") == "pass" and chk(h, "F4_version_decisions") == "pass"
+                   else "fail" if chk(h, "F4_exact_duplicates") == "fail" else "not_assessable")
+        ver_note = (f"版本决定已保存（{h.get('dedup_log_depth','—')}）。" if chk(h, 'F4_version_decisions') == 'pass'
+                    else "未提供结构化 dedup-log，版本候选待核验。")
+        return (verdict, info, h.get("status"),
+                f"DOI 重复 {_fmt_num(hdoi)} 组。{'存在未处理重复。' if hdoi > 0 else '无精确重复。'}"
+                f"题名相似候选 {_fmt_num(hty)} 组（{ver_note}）")
+
+    def _f5(d):
+        hpr = d["hpr"]; f5n = h.get("f5_note", "")
+        prov_threshold = report['standards'].get('f_provenance_rate', .95)
+        return (chk(h, "F5_provenance"), _fmt_pct(hpr), h.get("status"),
+                f5n if f5n else f"来源谱系率 {_fmt_pct(hpr)}。"
+                f"{'达标。' if hpr and hpr >= prov_threshold else '低于阈值。'}")
+
+    def _f6(d):
+        hcr = d["hcr"]
+        return (chk(h, "F6_corrections"), f"标记 {_fmt_num(hcr)} 条", h.get("status"),
+                f"{_fmt_num(hcr)} 条标记。"
+                f"{'未经专门来源核验。' if chk(h,'F6_corrections')=='not_assessable' else '已核验。'}")
+
+    # ── Umbrella-only compute functions ──
+    def _a4(d):
+        a4_info = d["umbrella"].get("a4", {}) if d["umbrella"] else {}
+        if not a4_info: return ("not_assessable", "—", "not_assessable", "伞式综述 A4 数据不可得")
+        return (a4_info.get("verdict"),
+                f"{_fmt_pct(a4_info.get('purity'))}（{_fmt_num(a4_info.get('survey_literature_count'))}/{_fmt_num(a4_info.get('total_library_size'))}）",
+                a4_info.get("status"), a4_info.get("note", ""))
+
+    def _c4(d):
+        c4_info = d["umbrella"].get("c4", {}) if d["umbrella"] else {}
+        if not c4_info: return ("not_assessable", "—", "not_assessable", "伞式综述 C4 数据不可得")
+        mtd = c4_info.get("method_type_distribution", {})
         mtd_str = json.dumps(mtd, ensure_ascii=False) if mtd else "—"
-        add("C 平衡", "C4", "综述间覆盖分布",
-            "/" if c4.get("verdict") == "not_assessable" else "CCA ≤ 0.15 且子主题/方法类型无断层",
-            c4.get("verdict"), f"CCA={_fmt_num(c4.get('cca'))} | 方法类型: {mtd_str}",
-            c4.get("status"), c4.get("note", ""))
+        return (c4_info.get("verdict"),
+                f"CCA={_fmt_num(c4_info.get('cca'))} | 方法类型: {mtd_str}",
+                c4_info.get("status"), c4_info.get("note", ""))
 
-    f7 = umb.get("f7") if umb else None
-    if is_umbrella and f7:
-        add("F 可用性", "F7", "综述质量评估就绪度",
-            f"全文就绪 ≥ {f7.get('threshold','—')}; 工具: {f7.get('quality_assessment_tool','—')}",
-            f7.get("verdict"), f"全文 {_fmt_pct(f7.get('fulltext_readiness'))} | 工具 {f7.get('quality_assessment_tool','—')}",
-            f7.get("status"), f7.get("note", ""))
-    # ── end umbrella-only rows ──
+    def _f7(d):
+        f7_info = d["umbrella"].get("f7", {}) if d["umbrella"] else {}
+        if not f7_info: return ("not_assessable", "—", "not_assessable", "伞式综述 F7 数据不可得")
+        tool = f7_info.get("quality_assessment_tool", "—")
+        return (f7_info.get("verdict"),
+                f"全文 {_fmt_pct(f7_info.get('fulltext_readiness'))} | 工具 {tool}",
+                f7_info.get("status"), f7_info.get("note", ""))
+
+    # ── COMPUTE_FUNCTIONS: register each indicator ID to its compute func ──
+    COMPUTE = {
+        "A1": _a1, "A2": _a2, "A3": _a3,
+        "B1": _b1, "B2": _b2, "B3": _b3,
+        "C1": _c1, "C2": _c2, "C3": _c3,
+        "D1": _d1, "D2": _d2, "D3": _d3, "D4": _d4,
+        "E1": _e1, "E2": _e2,
+        "F1": _f1, "F2": _f2, "F3": _f3, "F4": _f4, "F5": _f5, "F6": _f6,
+        "A4": _a4, "C4": _c4, "F7": _f7,
+    }
+
+    # Standard texts (threshold descriptions) — also from registry when registry
+    # defines display thresholds, but for now these are the human-readable
+    # summaries that vary by indicator semantics.
+    STANDARDS = {
+        "A1": lambda d: f"阈值 ≥ {d['a1m']}" if d['a1m'] else "需配置 a1_min_recall",
+        "A2": lambda d: f"阈值 ≥ {d['a2m']}" if d['a2m'] else "需配置 a2_min_recall",
+        "A3": "至少两完整来源去重后的不重复候选数；只报告下界",
+        "B1": lambda d: f"最后两轮均 < {p.get('thresholds',{}).get('new_rate','—')}" if len(d['br']) >= 2 else "/",
+        "B2": lambda d: f"各路径均 < {p.get('thresholds',{}).get('marginal_yield','—')}" if len(p.get('source_marginal_yields',[])) >= 2 else "/",
+        "B3": lambda d: "路径完成且独立验证通过" if p.get('independent_validation_passed') is not None else '/',
+        "C1": "无空主题；Top≤0.70；CV≤0.80；Gini≤0.50；Shannon≥0.55",
+        "C2": "Top≤0.80；CV≤1.00；Gini≤0.60；Shannon≥0.45",
+        "C3": "每主题 ≥2 来源；单一来源 ≤0.80",
+        "D1": lambda d: f"各来源距检索 ≤ {report.get('currency',{}).get('freshness_threshold_days','—')} 天",
+        "D2": lambda d: f"近 {d['dy'] or '—'} 年占比 ≥ {d.get('minimum_share','—')}",
+        "D3": lambda d: "/" if not ctx.get("frontier_coverage_verdict") else "前沿窗口有独立检索/Gold set",
+        "D4": lambda d: "/" if not ctx.get("version_currency_verdict") else "预印本-正式版关系已核验",
+        "E1": "报告 h-index；仅背景信号",
+        "E2": "按 profile 配置 venue 映射",
+        "F1": lambda d: "/" if not ctx.get("run_log_complete") else "查询原文、字段、过滤器、日期、来源齐全",
+        "F2": lambda d: f"≥ {report['standards'].get('f_abstract_rate', .80)}",
+        "F3": lambda d: f"≥ {report['standards'].get('f_access_rate', .80)}",
+        "F4": "DOI 精确重复=0；版本候选有决定",
+        "F5": lambda d: f"≥ {report['standards'].get('f_provenance_rate', .95)}",
+        "F6": lambda d: "/" if d["hcr"] == 0 else "关键记录有更正检查",
+        "A4": lambda d: f"综述论文占比 ≥ {d['umbrella'].get('a4',{}).get('threshold','—')}" if d['umbrella'] else "/",
+        "C4": lambda d: "/" if (not d['umbrella'] or d['umbrella'].get('c4',{}).get('verdict') == 'not_assessable') else "CCA ≤ 0.15 且子主题/方法类型无断层",
+        "F7": lambda d: f"全文就绪 ≥ {d['umbrella'].get('f7',{}).get('threshold','—')}; 工具: {d['umbrella'].get('f7',{}).get('quality_assessment_tool','—')}" if d['umbrella'] else "/",
+    }
+
+    # ── Load registry and build rows in registry order ──
+    script_dir = pathlib.Path(__file__).resolve().parent
+    reg_path = script_dir.parent / "schemas" / "indicator-registry.json"
+    try:
+        registry = json.loads(reg_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        registry = {"indicators": [], "dimensions": {}}
+
+    dim_names = {k: v.get("name", k) for k, v in registry.get("dimensions", {}).items()}
+
+    rows = []
+    for ind in registry.get("indicators", []):
+        iid = ind["id"]
+        # Skip umbrella-only indicators for non-umbrella reviews
+        if ind.get("umbrella_only") and not is_umbrella:
+            continue
+
+        compute = COMPUTE.get(iid)
+        if not compute:
+            rows.append((dim_names.get(ind["dimension"], ind["dimension"]),
+                         iid, ind["display_name"]["zh"],
+                         "—", "not_assessable", "—", "not_assessable",
+                         f"计算函数缺失——请在 COMPUTE 注册表中添加 '{iid}'"))
+            continue
+
+        # Resolve standard text
+        std_entry = STANDARDS.get(iid, "")
+        if callable(std_entry):
+            std = std_entry(data)
+        else:
+            std = std_entry
+
+        v, cur, ev, note = compute(data)
+        dim_label = dim_names.get(ind["dimension"], ind["dimension"])
+        rows.append((dim_label, iid, ind["display_name"]["zh"], std, v, compact(cur), ev, note))
 
     return rows
 
