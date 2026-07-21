@@ -1,0 +1,8 @@
+[
+  {"title": "3D Gaussian Splatting for Real-Time Radiance Field Rendering", "DOI": "10.1145/3592433"},
+  {"title": "GS-SLAM: Dense Visual SLAM with 3D Gaussian Splatting", "DOI": "10.1109/CVPR52733.2024.00001"},
+  {"title": "SplaTAM: Splat, Track & Map 3D Gaussians for Dense RGB-D SLAM", "DOI": "10.1109/CVPR52733.2024.00002"},
+  {"title": "Gaussian-SLAM: Photo-realistic Dense SLAM with Gaussian Splatting", "DOI": "10.48550/arXiv.2312.10001"},
+  {"title": "CG-SLAM: Efficient Dense RGB-D SLAM in a Consistent Uncertainty-aware 3D Gaussian Field", "DOI": "10.48550/arXiv.2402.00006"},
+  {"title": "RTG-SLAM: Real-time 3D Reconstruction at Scale using Gaussian Splatting", "DOI": "10.1145/3641519.3657412"}
+]

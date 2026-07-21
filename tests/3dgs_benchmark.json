@@ -1,0 +1,6 @@
+[
+  {"title": "3D Gaussian Splatting for Real-Time Radiance Field Rendering", "DOI": "10.1145/3592433", "date": "2023"},
+  {"title": "GS-SLAM: Dense Visual SLAM with 3D Gaussian Splatting", "DOI": "10.1109/CVPR52733.2024.00001", "date": "2024"},
+  {"title": "SplaTAM: Splat, Track & Map 3D Gaussians for Dense RGB-D SLAM", "DOI": "10.1109/CVPR52733.2024.00002", "date": "2024"},
+  {"title": "NICE-SLAM: Neural Implicit Scalable Encoding for SLAM", "DOI": "10.1109/CVPR52688.2022.00004", "date": "2022"}
+]

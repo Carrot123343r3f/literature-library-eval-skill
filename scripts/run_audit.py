@@ -18,11 +18,34 @@ REVIEW_THRESHOLDS = {
                  "f_provenance_rate": 0.90, "f_core_metadata_rate": 0.90, "f_abstract_rate": 0.80},
 }
 
+# English → Chinese review type normalization
+REVIEW_TYPE_MAP = {
+    "narrative": "叙事综述",
+    "systematic": "系统综述",
+    "scoping": "范围综述",
+    "rapid": "快速综述",
+    "umbrella": "伞式综述",
+}
+
+def normalize_review_type(rt):
+    """Normalize review type to Chinese enum. Returns Chinese value if already Chinese,
+    maps English canonical names, or returns as-is with a warning for unknown values."""
+    if not rt:
+        return rt
+    if rt in REVIEW_THRESHOLDS:
+        return rt
+    mapped = REVIEW_TYPE_MAP.get(rt.lower() if isinstance(rt, str) else rt)
+    if mapped:
+        return mapped
+    # Unknown value — return as-is (schema validation catches these at config load)
+    return rt
+
 def resolve_thresholds(context):
     """Merge review-type defaults into context.standards (user overrides win)."""
     ctx = dict(context) if context else {}
     s = dict(ctx.get("standards", {}))
-    rt = ctx.get("review_type", "")
+    rt = normalize_review_type(ctx.get("review_type", ""))
+    ctx["review_type"] = rt  # normalize in-place so umbrella detection works
     defaults = REVIEW_THRESHOLDS.get(rt, {})
     for k, v in defaults.items():
         if k not in s: s[k] = v
@@ -154,27 +177,28 @@ def health(library, standards=None, dedup_log_provided=False, dedup_log_depth="m
     has_fuzzy_dupes = sum(v > 1 for v in title_year.values()) > 0
     f4_version = "pass" if dedup_log_provided else "not_assessable"
     # F5: decision-log provides screening trail; without it provenance-rate-only is a lower bound
-    f5_verdict = "pass" if n and provenance / n >= provenance_min else "fail"
+    provenance_rate = provenance / n if n else None
     if decision_log_provided:
+        f5_verdict = "pass" if n and provenance_rate and provenance_rate >= provenance_min else "fail"
         f5_note = "来源谱系 + 纳入/排除决定均可追溯"
         # ── Descriptive listing risk diagnostic ──
-        # If inclusion decisions exist but lack topic/synthesis labels,
-        # the resulting review risks being a `descriptive listing` rather than thematic synthesis.
-        # This is not a hard signal, just a caution.
-        # Check from context — if no taxonomy or topic labels are attached to decisions
         if not taxonomy:
             f5_note += '。未提供主题分类（taxonomy）——库的纳入决定未按主题分组，后续综述存在"逐篇流水账"风险（descriptive listing），建议引入主题框架以支撑批判性综合'
     else:
-        f5_note = f"仅来源字段可追溯（谱系率 {round(provenance/n,3) if n else '—'}）。未提供 decision-log——纳入/排除理由不可追溯。"
+        # provenance-only → not enough for "pass"
+        f5_verdict = "warning" if n and provenance_rate and provenance_rate >= provenance_min else "fail"
+        f5_note = f"仅来源字段可追溯（谱系率 {round(provenance_rate,3) if provenance_rate else '—'}）。未提供 decision-log——纳入/排除理由不可追溯。"
         if decision_links and n and decision_links / n >= 0.5:
             f5_note += f" 库内有 {decision_links}/{n} 条含 decision/screening_status 字段——可作为部分证据。"
+        if not taxonomy:
+            f5_note += '。未提供主题分类（taxonomy）——库的纳入决定未按主题分组，后续综述存在"逐篇流水账"风险（descriptive listing），建议引入主题框架以支撑批判性综合'
     checks = {"F_metadata_composite": "pass" if all(fields.get(k) is not None and fields[k] >= core_min
               for k in ("title", "creators", "date", "publicationTitle", "DOI"))
               and (fields.get("abstractNote") is None or fields["abstractNote"] >= abstract_min) else "fail",
               "F4_exact_duplicates": "pass" if not sum(v > 1 for v in dois.values()) else "fail",
               "F4_version_decisions": f4_version,
               "F3_access": "pass" if n and access_union / n >= access_min else "warning",
-              "F5_provenance": "pass" if n and provenance / n >= provenance_min else "fail",
+              "F5_provenance": f5_verdict if n and provenance_rate and provenance_rate >= provenance_min else ("fail" if n else "not_assessable"),
               "F6_corrections": "not_assessable"}
     return {"status": "measured" if n else "not_assessable", "records": n, "field_completeness": fields, "checks": checks,
             "duplicate_doi_groups": sum(v > 1 for v in dois.values()),
@@ -703,7 +727,160 @@ def _method_narrative(report):
         if cls_method: parts.append(cls_method)
         if cls_sample is not None: parts.append(f"抽查校验 {cls_sample} 条")
         lines.append(f"**C1 分类方法**：{'；'.join(parts)}（注：C1 数值从外部分类计数计算，未经脚本独立分类）")
+    # ── Search iteration summary ──
+    iterations = ctx.get("search_iterations", [])
+    if iterations:
+        lines.append(f'\n**检索式迭代**：共 {len(iterations)} 轮（详见下方"检索迭代过程"节）。')
+        best_dev = max((it.get("results", {}).get("dev_recall", 0) or 0) for it in iterations)
+        best_val = max((it.get("results", {}).get("validation_recall", 0) or 0) for it in iterations)
+        lines.append(f"最佳 dev_recall={best_dev:.3f}，最佳 validation_recall={best_val:.3f}。")
+        indep_pathways = ctx.get("independent_pathways", [])
+        if indep_pathways:
+            pw_names = [p.get("pathway_id", p.get("type", "?")) for p in indep_pathways]
+            lines.append(f"独立检索路径：{'、'.join(pw_names)}（宽/中/窄检索式不计入独立路径）。")
     lines.append(f"\n**证据状态**：实测=可复跑记录；估计=基于假设的区间或抽样；自动初筛=规则判定未人工核验；不可评估=缺少必要输入。")
+    return "\n".join(lines)
+
+def _search_iteration_section(report):
+    """Generate the search iteration process section — narrative + detailed comparison table.
+
+    Renders when context.search_iterations is present (from search-strategy-protocol).
+    Shows PICO decomposition, dev/val set status, iteration summary, comparison table,
+    per-round query details, pathway contribution matrix, and A2-vs-B stop explanation.
+    """
+    ctx = report.get("context", {})
+    iterations = ctx.get("search_iterations", [])
+    if not iterations:
+        return ""
+
+    lines = ["## 检索迭代过程\n"]
+
+    # ── PICO decomposition ──
+    pico = ctx.get("search_decomposition", {})
+    if pico:
+        obj = pico.get("object", {}).get("term", "—")
+        tech = pico.get("technology", {}).get("term", "—")
+        perf = pico.get("performance", {}).get("term", "—")
+        ctxt = pico.get("context", {}).get("term", "—")
+        lines.append("### 工程 PICO 分解\n")
+        lines.append("| 要素 | 提取 |")
+        lines.append("| --- | --- |")
+        lines.append(f"| 对象/系统 | {obj} |")
+        lines.append(f"| 技术/方法 | {tech} |")
+        lines.append(f"| 性能/指标 | {perf} |")
+        lines.append(f"| 工况/场景 | {ctxt} |")
+        supps = pico.get("supplements", [])
+        if supps:
+            for s in supps:
+                lines.append(f"| 补充：{s.get('category','')} | {s.get('term','')} |")
+        lines.append("")
+
+    # ── Evidence sets ──
+    gold_meta = ctx.get("gold_set_metadata", {})
+    dev_size = len(ctx.get("dev_set", [])) or gold_meta.get("dev_set_size", 0)
+    val_size = len(ctx.get("validation_set", [])) or gold_meta.get("validation_set_size", 0)
+    has_indep_val = bool(val_size)
+    if dev_size or val_size:
+        lines.append("### 证据集\n")
+        lines.append(f"- **开发集**（用于迭代反馈）：{dev_size} 篇")
+        if has_indep_val:
+            lines.append(f"- **独立验证集**（仅用于最终 A2 判定）：{val_size} 篇")
+            overlap_ok = gold_meta.get("dev_validation_overlap_check")
+            lines.append(f"- 开发集与验证集无重叠：{'✅ 已校验' if overlap_ok else '⚠ 未校验'}")
+        else:
+            lines.append("- **独立验证集**：未提供——A2 证据状态降级为 `estimated`（开发集=验证集复用）")
+        lines.append("")
+
+    # ── Iteration overview ──
+    n_iter = len(iterations)
+    last = iterations[-1]
+    change_types = Counter(it.get("change_type", "?") for it in iterations)
+    best_dev = max((it.get("results", {}).get("dev_recall", 0) or 0) for it in iterations)
+    best_val = max((it.get("results", {}).get("validation_recall", 0) or 0) for it in iterations)
+    total_disc = sum(it.get("results", {}).get("discovery_candidates", 0) or 0 for it in iterations)
+
+    ct_labels = {"initial": "初始检索式", "add_synonym": "加同义词", "add_abbreviation": "加缩写",
+                 "modify_field": "改字段限制", "add_source": "新增数据库", "add_exclusion": "加排除条件",
+                 "remove_low_yield": "移除低效词"}
+    changes_desc = [f"{ct_labels.get(ct, ct)}×{count}" for ct, count in sorted(change_types.items())]
+
+    lines.append("### 迭代概览\n")
+    lines.append(f"共 **{n_iter}** 轮检索迭代，改动类型：{'、'.join(changes_desc)}。")
+    lines.append(f"开发集最佳召回：**{best_dev:.3f}**；验证集最佳召回：**{best_val:.3f}**。")
+    lines.append(f"累计发现候选文献：{total_disc} 篇（需筛选确认）。")
+    d_labels = {"a2_stop": "A2 已停止（检索式足够好）", "b_stop": "B 已停止（不再发现新纳入文献）",
+                "continue": "继续迭代", "max_iterations": "达到最大轮数"}
+    lines.append(f"最终决策：**{d_labels.get(last.get('decision',''), last.get('decision','—'))}**。")
+    lines.append("")
+
+    # ── Comparison table ──
+    lines.append("### 迭代比较表\n")
+    lines.append("| 轮次 | 改动类型 | 改动说明 | 来源 | 总命中 | 去重 | dev_recall | val_recall | 候选 | 决策 |")
+    lines.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
+
+    for it in iterations:
+        iid = it.get("iteration_id", "?")
+        ct = it.get("change_type", "?")
+        desc = str(it.get("change_description", "—"))[:55]
+        src = str(it.get("change_source", "—"))[:35]
+        res = it.get("results", {})
+        th = str(res.get("total_hits", "—"))
+        dh = str(res.get("deduplicated_hits", "—"))
+        dr = f"{res['dev_recall']:.3f}" if res.get("dev_recall") is not None else "—"
+        vr = f"{res['validation_recall']:.3f}" if res.get("validation_recall") is not None else "—"
+        dc = str(res.get("discovery_candidates", "—"))
+        decision = it.get("decision", "—")
+        lines.append(f"| {iid} | {ct} | {desc} | {src} | {th} | {dh} | {dr} | {vr} | {dc} | {decision} |")
+
+    lines.append("")
+
+    # ── Per-iteration details ──
+    lines.append("### 各轮检索式详情\n")
+    for it in iterations:
+        iid = it.get("iteration_id", "?")
+        ct = it.get("change_type", "?")
+        desc = it.get("change_description", "—")
+        src = it.get("change_source", "—")
+        parent = it.get("parent_iteration")
+        lines.append(f"#### {iid}（{ct}）\n")
+        if parent:
+            lines.append(f"基于 **{parent}**；来源：{src}")
+        else:
+            lines.append(f"初始检索式；来源：{src}")
+        lines.append(f"\n改动：{desc}\n")
+        queries = it.get("queries", {})
+        for pw_id, pw_queries in queries.items():
+            if isinstance(pw_queries, dict):
+                for ql, qs in pw_queries.items():
+                    lines.append(f"- `{pw_id}` / {ql}: `{qs}`")
+            else:
+                lines.append(f"- `{pw_id}`: `{pw_queries}`")
+        lines.append("")
+
+    # ── Independent pathways ──
+    indep_pw = ctx.get("independent_pathways", [])
+    if indep_pw:
+        lines.append("### 独立路径贡献\n")
+        lines.append("| 路径 ID | 类型 | 候选数 | 筛选确认 | 净新增 | 收益率 | 状态 |")
+        lines.append("| --- | --- | --- | --- | --- | --- | --- |")
+        for pw in indep_pw:
+            pid = pw.get("pathway_id", "?")
+            ptype = pw.get("type", "?")
+            cand = str(pw.get("candidates", "—"))
+            scr = str(pw.get("screened_high_confidence", "—"))
+            new = str(pw.get("new_high_confidence", "—"))
+            yld = f"{pw['yield']:.3f}" if pw.get("yield") is not None else "—"
+            status = pw.get("screening_status", "—")
+            lines.append(f"| {pid} | {ptype} | {cand} | {scr} | {new} | {yld} | {status} |")
+        lines.append("")
+
+    # ── Stop condition note ──
+    lines.append("### 停止条件说明\n")
+    lines.append("- **A2 停止**（检索式已优化到足够好）：独立验证集召回达标 + 连续两轮无实质改善，或无更多可加的术语/来源。")
+    lines.append("- **B 停止**（不再发现新的纳入文献）：GGR 收敛 + DRR 收敛 + 所有计划路径完成 + 独立验证未发现漏项。")
+    lines.append("- **A2 停止 ≠ B 停止**：即使检索式能找回所有已知文献，也不代表结果中不存在新的高相关文献。两者需同时满足才可声称检索充分。")
+    lines.append("")
+
     return "\n".join(lines)
 
 def _priority_actions(report):
@@ -774,13 +951,19 @@ def indicator_rows(report):
     s = report.get("standards", {}); ctx = report.get("context", {})
     a1m = s.get("a1_min_recall"); a2m = s.get("a2_min_recall")
     chk = lambda g, k: g.get("checks", {}).get(k, "not_assessable")
-    # When confirmed_by_user is False, all threshold verdicts become screening
+    # confirmed_by_user gate: when False, all threshold-based verdicts become "screening"
     user_confirmed = s.get("confirmed_by_user", True)
     def tv(value, threshold):
         """Threshold verdict — returns 'screening' unless user confirmed standards."""
         if not user_confirmed:
             return "screening"
         return threshold_verdict(value, threshold)
+    # Also apply to non-A indicators that have thresholds
+    def tv_any(verdict):
+        """Wrap any verdict through the confirmed_by_user gate. Only 'pass'/'fail'/'warning' are affected."""
+        if not user_confirmed and verdict in ("pass", "fail", "warning"):
+            return "screening"
+        return verdict
     rows = []
     def add(dim, code, name, std, v, cur, ev, note):
         rows.append((dim, code, name, std, v, compact(cur), ev, note))
@@ -1075,6 +1258,11 @@ def write(report, out, artifact_paths=None):
     if a3l: md.append(f"| 全域参考 | OpenAlex 候选下界 {a3l} 篇 |")
     md.append("")
     md.append("## 综合判断\n"); md.append(report["summary"]); md.append("")
+    # ── Search iteration narrative ──
+    search_iter_narrative = _search_iteration_section(report)
+    if search_iter_narrative:
+        md.append(search_iter_narrative)
+        md.append("")
     md.append("## 评估方法与过程\n"); md.append(_method_narrative(report)); md.append("")
     md.append("## A–F 六维评估总表\n")
     md.append("| 维度 | 编号 | 评估项 | 标准 | 判定 | 当前值 | 证据状态 | 说明与行动 |")
@@ -1240,10 +1428,45 @@ def main():
         ctx.setdefault(k, v)
     ctx.setdefault("library_path", a.library)
     ctx = resolve_thresholds(ctx)
-    # Propagate scope_status
+    # ── Unified scope guard (covers both run-config and direct CLI paths) ──
     scope_status = ctx.get("scope_status", "")
+    if scope_status == "out_of_scope" and not a.allow_out_of_scope:
+        print(f"ERROR: scope_status=out_of_scope — refusing to run full A-F.")
+        print("  Use --allow-out-of-scope to force (report will carry permanent caveats),")
+        print("  or provide a library within the supported engineering scope.")
+        p.exit(1)
     if scope_status == "out_of_scope":
         print("WARNING: scope_status=out_of_scope — --allow-out-of-scope active. Report will carry permanent caveats.")
+    # ── Consume search_meta.json if present and merge search iterations / evidence status ──
+    search_meta_path = a.search_meta if hasattr(a, 'search_meta') and a.search_meta else None
+    if not search_meta_path:
+        # Try to auto-detect search_meta.json alongside query-hits
+        if a.query_hits:
+            qh_dir = pathlib.Path(a.query_hits).parent
+            sm_candidate = qh_dir / "search_meta.json"
+            if sm_candidate.is_file():
+                search_meta_path = str(sm_candidate)
+    if search_meta_path:
+        try:
+            sm = json.loads(pathlib.Path(search_meta_path).read_bytes())
+            # Merge search_rounds only if not already provided via context
+            if "search_rounds" not in ctx or not ctx["search_rounds"]:
+                ctx["search_rounds"] = sm.get("search_rounds", ctx.get("search_rounds", []))
+            if "source_marginal_yields" not in ctx or not ctx["source_marginal_yields"]:
+                ctx["source_marginal_yields"] = sm.get("source_marginal_yields", [])
+            if "planned_pathways" not in ctx or not ctx["planned_pathways"]:
+                ctx["planned_pathways"] = sm.get("planned_pathways", [])
+            # Consume dev/val recall for A2 evidence status
+            a2_meta = sm.get("a2", {})
+            dev_recall = sm.get("dev_recall")
+            val_recall = sm.get("validation_recall")
+            ctx["_search_meta_a2_evidence"] = sm.get("a2_evidence_status", "")
+            ctx["_search_meta_dev_recall"] = dev_recall
+            ctx["_search_meta_val_recall"] = val_recall
+            ctx["_search_meta_val_total"] = sm.get("validation_recall_total", 0)
+            ctx["_search_meta_dev_total"] = sm.get("dev_recall_total", 0)
+        except (json.JSONDecodeError, OSError):
+            pass
     # Check query_hits for failed sources — downgrade A2 status if any query failed
     a2_query_failed = False
     if a.query_hits:
@@ -1266,10 +1489,16 @@ def main():
     cov = {"a1": benchmark(load_items(a.library), load_items(a.benchmark) if a.benchmark else []),
            "a2": a2(load_items(a.gold) if a.gold else None, load_items(a.query_hits) if a.query_hits else None),
            "a3": a3(load_snapshot(a.candidate_snapshots) if a.candidate_snapshots else {})}
-    # If any source query failed, downgrade A2 — failed retrieval ≠ zero hits
+    # ── Evidence status from search_meta ──
     if a2_query_failed and cov["a2"].get("status") == "measured":
         cov["a2"]["status"] = "partial_snapshot"
         cov["a2"]["note"] = (cov["a2"].get("note", "") + " At least one source query failed — A2 recall may underestimate true sensitivity.").strip()
+    # Downgrade A2 to estimated when no independent validation set
+    search_meta_a2_ev = ctx.get("_search_meta_a2_evidence", "")
+    has_val_set = ctx.get("_search_meta_val_total", 0) > 0
+    if search_meta_a2_ev == "estimated" and cov["a2"].get("status") == "measured":
+        cov["a2"]["status"] = "estimated"
+        cov["a2"]["note"] = (cov["a2"].get("note", "") + " No independent validation set — A2 may be overestimated (dev=val reuse).").strip()
     # F1: parse run-log BEFORE stability() so F1_query_traceability can use the result
     if a.run_log:
         rp = pathlib.Path(a.run_log)
