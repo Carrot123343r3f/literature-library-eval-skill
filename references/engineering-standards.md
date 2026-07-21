@@ -82,7 +82,7 @@
 
 - `balance_*` / `topic_*`：来源与主题分布警戒线，基于 Shapiro 信息论经验值，超限仅示意检索偏倚风险
 - `b_ggr_threshold` / `b_drr_threshold`：饱和度阈值——最后两轮 GGR<2% 且 DRR<5% 时为趋稳
-- E 学术影响/渠道信号（h-core、Tier-1）：**不设硬阈值**，仅作诊断背景
+- E 学术影响（h-core、Tier-1）：**不设硬阈值**，仅作诊断背景
 
 ## 阈值来源与调整原则
 

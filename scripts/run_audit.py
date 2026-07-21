@@ -660,7 +660,7 @@ def _dimension_narrative(report):
     flags = t.get("flags", []); n_topics = len(t.get("topic_counts", {}))
     lines.append(f"**C 平衡**：{n_topics} 个预期主题，{'含空主题' if 'empty_topic' in flags else '全部有文献'}；来源集中度 {b.get('top_source_share','—')}（CV={_fmt_num(b.get('cv'))} Gini={_fmt_num(b.get('gini'))}）。")
     lines.append(f"**D 时效**：近 {d.get('window_years','—')} 年占比 {_fmt_pct(d.get('recent_share'))}（{d.get('recent_records','—')}/{d.get('dated_records','—')} 标有日期）；预印本 {d.get('preprint_records','—')} 条。")
-    lines.append(f"**E 学术影响/渠道信号**：h-core={_fmt_num(q.get('h_core'))}（{q.get('citation_records','—')} 条引用）；Tier-1 {_fmt_pct(q.get('tier1_rate'))}（{q.get('tier1_venues_configured','—')} venue）。仅作背景信号，不等于研究质量——真正的研究质量评估应使用与研究设计匹配的批判性评价工具。")
+    lines.append(f"**E 学术影响**：h-core={_fmt_num(q.get('h_core'))}（{q.get('citation_records','—')} 条引用）；Tier-1 {_fmt_pct(q.get('tier1_rate'))}（{q.get('tier1_venues_configured','—')} venue）。仅作背景信号，不等于研究质量——真正的研究质量评估应使用与研究设计匹配的批判性评价工具。")
     fc = h.get("field_completeness", {})
     lines.append(f"**F 可用性**：核心元数据 {_fmt_pct(fc.get('title'))}；摘要 {_fmt_pct(fc.get('abstractNote'))}；DOI {_fmt_pct(fc.get('DOI'))}；全文获取率 {_fmt_pct(h.get('access_union_rate'))}（附件 {_fmt_pct(h.get('attachment_rate'))} / OA {_fmt_pct(h.get('open_link_rate'))}）；谱系率 {_fmt_pct(h.get('provenance_rate'))}。")
     return "\n\n".join(lines)
@@ -774,10 +774,10 @@ def indicator_rows(report):
     e1n = f"h-core={_fmt_num(qh)}。仅背景信号——高被引不等于高质量，新论文拉低 h-core。真正的研究质量评估应使用与研究设计匹配的批判性评价工具。"
     if q.get('citation_records') and h.get('records') and q['citation_records'] < h['records'] * 0.5:
         e1n += f" 注意仅 {_fmt_pct(q['citation_records']/h['records'])} 条目有引用数据。"
-    add("E 学术影响/渠道信号", "E1", "h-core", "报告 h-index；仅背景信号", chk(q, "E1_h_core"),
+    add("E 学术影响", "E1", "h-core", "报告 h-index；仅背景信号", chk(q, "E1_h_core"),
         f"h={_fmt_num(qh)}（{q.get('citation_records','—')} 条引用）", q.get("status"), e1n)
 
-    add("E 学术影响/渠道信号", "E2", "Tier-1 覆盖", "按 profile 配置 venue 映射", chk(q, "E2_tier1"),
+    add("E 学术影响", "E2", "Tier-1 覆盖", "按 profile 配置 venue 映射", chk(q, "E2_tier1"),
         f"{_fmt_pct(qt1)}（{_fmt_num(q.get('tier1_records'))}/{_fmt_num(q.get('tier1_venues_configured'))} venue）", q.get("status"),
         f"已配置 {q.get('tier1_venues_configured','—')} 个 venue。{'未配置 tier1_venues。' if not q.get('tier1_venues_configured') else '当前仅为下界。'}")
 
