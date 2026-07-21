@@ -31,18 +31,46 @@
 
 ## A2/B 的自主检索
 
-若用户未提供 `--query-hits`（A2）或无两轮 `search_rounds`（B），首次评估时通过 `scripts/search_for_eval.py` 自主执行以下：
+若用户未提供 `--query-hits`（A2）或无两轮 `search_rounds`（B），**首次评估时必须遵循 `references/search-strategy-protocol.md`**，不再使用自由改词策略。
 
-1. 从 context.keywords 构造 3-5 条梯度检索式（宽：核心关键词 / 中：核心+子方向 / 窄：title 限定）
-2. 在线执行（OpenAlex，per-page=50，cited_by_count:desc，仅首屏 top cited——非完整快照），去重
-3. A2：走稳定 ID 匹配（DOI/arXiv/OpenAlex ID）；标题候选另存为人工核验参考，绝不计入 A2 分子。产出 `query-hits.json`
-4. B：检索结果中不在库内但 title 含核心词+cited_by≥阈值的文献为**发现候选**（discovery candidates），不等于纳入项。首轮 `included_high=0` 直至人工完成筛选。B1 显示 discovery GGR 作为参考，B1 判定标 `not_assessable`（需筛选确认）
-5. B2 DRR 需第 2 轮且至少一轮突破 discovery_only 状态才可评；B3 独立验证需用户或人工确认（首轮标 not_assessable）
-6. 潜在新增文献清单写入 `potential_additions.json`，前 20 条 title 写入 context.potential_additions，报告"改进建议"段呈现——建议用户纳入后复评 B 饱和度
+### 检索子技能的执行流程
+
+```
+S3 确认完成 → SRCH-1 工程 PICO 分解 → SRCH-2 构建开发集+验证集
+→ SRCH-3 构建概念矩阵 → SRCH-4 初始检索式(v1) → SRCH-5 原子迭代循环
+→ SRCH-6 独立路径执行 → SRCH-7 汇总
+```
+
+### 关键规则（不可违反）
+
+1. **工程 PICO 分解**：固定拆为 Object/Technology/Performance/Context 四要素，每项必须记录来源（user_provided / seed_papers / profile / standards / gap_diagnosis）。写入 `context.search_decomposition`。
+2. **开发集与验证集分离**：
+   - 开发集：用于迭代检索式、诊断漏项——可以多次使用
+   - 独立验证集：仅用于最终 A2 判定——看过就"烧掉"，不能再用于调整检索式
+   - 若无独立验证集，A2 证据状态标 `estimated` 并说明原因
+3. **原子迭代**：每轮只能做一种改动（加同义词/加缩写/改字段/加来源/加排除条件/移除低效词）。禁止同时大规模重写检索式。每轮必须记录在 `context.search_iterations[i]`。
+4. **五类独立路径**：数据库布尔检索、后向引文追踪、前向引文追踪、相关文献网络、标准/指南——宽/中/窄不可充当独立路径。
+5. **多源异构语法**：不把同一字符串投到不同数据库——先构建概念矩阵，再为每个来源转换字段语法。
+6. **停止条件分离**：A2 停止（验证集 recall 达标+连续两轮无改善）≠ B 停止（GGR/DRR 收敛+路径完成+独立验证）。
+
+### 与现有脚本的关系
+
+- `scripts/search_for_eval.py` — 单轮 OpenAlex 检索，用于首轮初探。支持 `--dev-set`、`--validation-set`、`--pico` 参数
+- `scripts/search_iterator.py` — 多轮原子迭代验证工具。`validate` 命令检查合规性，`table` 命令生成迭代比较表
+- AI 在对话中执行检索 → 比对 → 记录 → 改词 → 再执行的迭代循环
+
+### 首次评估的简化流程
+
+1. 通过 `scripts/search_for_eval.py` 执行首轮检索（带 `--dev-set` 和 `--pico` 参数）
+2. 读取 `search_meta.json` 获取 `dev_recall` 和 `validation_recall`
+3. 诊断漏项：哪些 dev set 中的文献没被命中？原因是什么（同义词缺失/字段限制过严/来源不足）？
+4. 选择一种原子改动 → 手动执行新检索式 → 记录到 `context.search_iterations`
+5. 每轮计算新的 dev_recall 和 validation_recall
+6. 当 A2 停止条件满足时，停止改检索式；当 B 停止条件满足时，停止搜新
+
+**首轮不提供独立验证集时**：`search_for_eval.py` 将 A2 证据状态标为 `estimated`，并在报告中注明。这在首次评估中是可接受的——如果用户认为结果可用，他们可以在后续补充独立的验证文献。A2 recall 是真实的（因为检索结果确实可以被审计），但可能被高估（因为检索式是被调优到 dev set 的）。
 
 > ⚠️ `search_for_eval.py` 仅做候选发现/诊断性检索——top-50 cited 不是完整检索快照，`mailto=` 为占位地址。discovery candidates 不等于饱和度的纳入项；只有经过标题摘要筛选、全文确认和资格审核的新增文献才能填入 B1 GGR 分子和 B2 DRR 分子。
-
-首轮 B1 行显示为"发现阶段（需第 2 轮 + 筛选确认趋稳）"。
 
 先读取 `engineering-standards.md` 和 `indicator-dictionary.md`，把默认值与 profile、综述类型和用户协议合并后写入 `context.standards`。逐项执行 A1–A3、B1–B3、C1–C3、D1–D4、E1–E2、F1–F6（伞式额外 A4/C4/F7）；每项必须同时输出采用阈值、证据状态、verdict、定位原因和行动。不可自动验证的子项写 `not_assessable`，不得省略或默认为通过。
 

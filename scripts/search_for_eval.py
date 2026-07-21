@@ -6,9 +6,19 @@
 A2 只做稳定 ID 匹配（DOI/arXiv/OpenAlex ID），标题候选另存为人工核验参考。
 B 的 included_high=0 直至人工筛选确认——discovery candidates ≠ 纳入项。
 
+Dev/validation set separation（v2）：
+  --dev-set 指定开发集（用于迭代反馈），--validation-set 指定独立验证集（用于最终 A2 判定）。
+  两个集合不应有重叠。若只提供 --benchmark，整套作为 dev_set 使用，validation_set 为空，
+  A2 将标注为 estimated 证据状态。
+  独立验证集不参与检索式迭代——一旦用于调整检索式，就"烧掉"了独立性。
+
 DRR 可复算性：source_marginal_yields 中每条路径附带 candidates（候选数）、
 screened_high_confidence（高置信筛选数）、new_high_confidence（此前未发现的）和
 dedup_rule（去重规则），供第三方从 query-hits.json 独立复算 yield。
+
+工程 PICO 分解（v2）：
+  接受 --pico 参数（JSON 文件），内含 object/technology/performance/context 四要素分解。
+  用于指导多源异构语法映射——每个来源选择其支持的字段语法，不把同一字符串原样投到不同数据库。
 """
 import argparse, json, urllib.request, urllib.parse, re, time, sys, pathlib
 sys.stdout.reconfigure(encoding='utf-8')
@@ -46,9 +56,53 @@ def ids_for_gold(g):
     if raw.startswith(("pmid:", "pmcid:", "arxiv:", "openalex:")): found.add(raw)
     return found
 
+def entry_ids(entry):
+    """Extract stable IDs from a query hit entry."""
+    found = set()
+    doi = (entry.get('doi') or '').replace('https://doi.org/', '').lower()
+    if doi: found.add('doi:' + doi)
+    ax = arxiv_from_doi(entry.get('doi'))
+    if ax: found.add('arxiv:' + ax)
+    oaid = entry.get('id') or entry.get('openalex_id') or ''
+    if oaid: found.add(oaid.lower())
+    return found
 
-def build_queries(keywords):
-    """从关键词构造宽/中/窄梯度检索式。"""
+def compute_recall(gold_set, hit_ids_set):
+    """Compute recall at item level. Each gold item matched if any stable ID overlaps."""
+    gold_with_ids = [g for g in gold_set if isinstance(g, dict) and ids_for_gold(g)]
+    if not gold_with_ids:
+        return None, 0
+    matched = sum(1 for g in gold_with_ids if ids_for_gold(g) & hit_ids_set)
+    return round(matched / len(gold_with_ids), 3), len(gold_with_ids)
+
+def build_queries(keywords, pico=None):
+    """从关键词构造宽/中/窄梯度检索式。若提供 PICO 分解，多源异构语法映射。
+
+    PICO 格式：{"object": {...}, "technology": {...},
+                "performance": {...}, "context": {...},
+                "supplements": [...]}
+    若 pico 不为空：使用 PICO 要素构建检索式而非原始 keywords。
+    """
+    if pico and isinstance(pico, dict):
+        # Build from PICO decomposition
+        core = [pico.get("object", {}).get("term", ""), pico.get("technology", {}).get("term", "")]
+        core = [c for c in core if c]
+        if not core:
+            return build_queries(keywords)  # fallback to keywords
+        primary = core[0].split(";")[0].strip()
+        queries = [('宽', f'"{primary}"')]
+        for term in core:
+            for t in term.split(";"):
+                t = t.strip()
+                if t and norm(t) not in {norm(q[1].replace('"','')) for q in queries}:
+                    queries.append(('中', f'"{primary}" {t}'))
+                    break
+            if len(queries) >= 4:
+                break
+        queries.append(('窄(title)', f'title:"{primary}"'))
+        return queries[:5]
+
+    # Original keyword-based building
     if not keywords:
         return []
     core = keywords[0]
@@ -67,8 +121,11 @@ def main():
     p = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     p.add_argument('--library', required=True, help='题录 JSON（判断在库内）')
     p.add_argument('--context', required=True, help='context.json（读 keywords/profile）')
-    p.add_argument('--benchmark', help='A1 基准集 JSON；当 --gold 未提供时复用为 A2 gold set（需在 context 中标注 A1/A2 非独立，不能相互增强证据强度）')
-    p.add_argument('--gold', help='A2 gold set JSON（独立于 A1 benchmark；若仅一组文献，应传给 --benchmark，并在 context 中标明 non-independent）')
+    p.add_argument('--benchmark', help='A1 基准集 JSON；当 --dev-set 和 --gold 均未提供时复用为 dev_set')
+    p.add_argument('--gold', help='A2 gold set JSON（若需要独立于 benchmark；v2 建议使用 --dev-set + --validation-set）')
+    p.add_argument('--dev-set', help='[v2] 开发集 JSON — 用于迭代检索式（多次使用）')
+    p.add_argument('--validation-set', help='[v2] 独立验证集 JSON — 仅用于最终 A2 判定（看过即"烧掉"，不用于调检索式）')
+    p.add_argument('--pico', help='[v2] 工程 PICO 分解 JSON — object/technology/performance/context')
     p.add_argument('--out', required=True)
     p.add_argument('--min-cited', type=int, default=10, help='潜在新增的 cited_by 下限')
     p.add_argument('--max-per-query', type=int, default=50,
@@ -77,8 +134,50 @@ def main():
 
     library = json.load(open(a.library, encoding='utf-8'))
     ctx = json.load(open(a.context, encoding='utf-8'))
-    gold = json.load(open(a.gold, encoding='utf-8')) if a.gold else (json.load(open(a.benchmark, encoding='utf-8')) if a.benchmark else [])
-    gold_source = "gold独立" if a.gold else ("benchmark复用" if a.benchmark else "空")
+
+    # ── Dev/validation set resolution (v2) ──
+    dev_set = validation_set = None
+    dev_source = val_source = ""
+
+    if a.dev_set:
+        dev_set = json.load(open(a.dev_set, encoding='utf-8'))
+        dev_set = dev_set if isinstance(dev_set, list) else dev_set.get("items", [])
+        dev_source = "独立 dev-set 文件"
+    elif a.gold:
+        dev_set = json.load(open(a.gold, encoding='utf-8'))
+        dev_set = dev_set if isinstance(dev_set, list) else dev_set.get("items", [])
+        dev_source = "gold set (无独立验证集)"
+    elif a.benchmark:
+        dev_set = json.load(open(a.benchmark, encoding='utf-8'))
+        dev_set = dev_set if isinstance(dev_set, list) else dev_set.get("items", [])
+        dev_source = "benchmark (无独立验证集)"
+
+    if a.validation_set:
+        validation_set = json.load(open(a.validation_set, encoding='utf-8'))
+        validation_set = validation_set if isinstance(validation_set, list) else validation_set.get("items", [])
+        val_source = "独立验证集"
+        if not dev_set:
+            dev_set = validation_set
+            dev_source = "validation_set 复用（不推荐——将被 A2 标记为 estimated）"
+
+    # Check dev/val overlap
+    if dev_set and validation_set:
+        dev_dois = set()
+        for e in dev_set:
+            for did in ids_for_gold(e):
+                dev_dois.add(did)
+        val_dois = set()
+        for e in validation_set:
+            for did in ids_for_gold(e):
+                val_dois.add(did)
+        overlap = dev_dois & val_dois
+        if overlap:
+            print(f"WARNING: Dev/validation sets overlap on {len(overlap)} identifier(s). A2 independence is compromised.")
+
+    # ── PICO decomposition ──
+    pico = None
+    if a.pico:
+        pico = json.load(open(a.pico, encoding='utf-8'))
 
     lib_dois = {(r.get('DOI') or '').lower() for r in library if r.get('DOI')}
     lib_arxivs = {r.get('arxiv') for r in library if r.get('arxiv')}
@@ -86,7 +185,16 @@ def main():
 
     keywords = ctx.get('keywords', [])
     core_terms = [k.lower() for k in keywords[:3]]
-    queries = build_queries(keywords)
+    queries = build_queries(keywords, pico)
+    if pico:
+        # Use PICO terms for core terms when available
+        pico_core = []
+        for key in ("object", "technology"):
+            t = pico.get(key, {}).get("term", "")
+            if t:
+                pico_core.extend(t.split(";"))
+        if pico_core:
+            core_terms = [t.strip().lower() for t in pico_core[:3]]
     print(f'构造 {len(queries)} 条检索式，核心词: {core_terms[:3]}')
 
     all_hits, seen, queries_record, potential_add = [], set(), [], []
@@ -125,62 +233,38 @@ def main():
         print(f'  [{label}] {q[:45]:45s} -> {q_count} 命中')
         time.sleep(0.3)
 
-    # title 对齐：记录 gold 标题到命中记录的映射——仅作 A2 标题候选，
-    # 绝不在命中的原始稳定 ID 上注入/改写任何 ID。
-    # run_audit.a2() 只接受检索源原生返回的稳定 ID。
-    gold_title_to_ids = {}
-    for g in gold:
-        nt = norm(g.get('title'))
-        if nt:
-            gids = set()
-            for f in ('DOI', 'doi', 'arxiv', 'arXiv', 'pmid', 'PMID', 'openalex_id'):
-                v = g.get(f) or ''
-                if v: gids.add(v)
-            if gids: gold_title_to_ids[nt] = gids
+    # ── Build hit ID set for recall computation ──
+    hit_ids_set = set()
+    for h in all_hits:
+        hit_ids_set |= entry_ids(h)
 
-    # 标题候选匹配：gold-命中 title 交集（仅作跨体系人工核验参考，不计入 A2 分子）
+    # ── Compute dev_recall + validation_recall ──
+    dev_recall, dev_total = compute_recall(dev_set, hit_ids_set) if dev_set else (None, 0)
+    val_recall, val_total = compute_recall(validation_set, hit_ids_set) if validation_set else (None, 0)
+
+    # ── A2: evaluate against gold/dev_set for backward compat ──
+    gold = dev_set or []  # default gold = dev_set
+    gold_ids = set()
+    for g in gold:
+        gold_ids |= ids_for_gold(g)
+    id_matched = gold_ids & hit_ids_set
+    gold_with_ids = [g for g in gold if isinstance(g, dict) and ids_for_gold(g)]
+    a2_total_with_id = len(gold_with_ids)
+    a2_matched_id = len(id_matched)
+    a2_total_all = len(gold)
+    a2_recall_id = round(a2_matched_id / a2_total_with_id, 3) if a2_total_with_id else None
+
+    # Title candidate matching for cross-system manual verification
     gold_titles = {norm(g.get('title')) for g in gold if g.get('title')}
     hit_titles = {norm(h.get('title')) for h in all_hits if h.get('title')}
     title_candidate_matches = gold_titles & hit_titles
-
-    # 稳定 ID 匹配：仅用检索源原生返回的 DOI/arXiv 等已可追溯标识
-    # （search_for_eval 不注入 ID——run_audit.a2 负责纯 ID 匹配）
-    hit_ids = set()
-    for h in all_hits:
-        for f in ('DOI', 'doi', 'arxiv', 'arXiv', 'openalex_id'):
-            v = h.get(f) or ''
-            if v: hit_ids.add(v.lower())
-    gold_ids = set()
-    for g in gold:
-        for f in ('DOI', 'doi', 'arxiv', 'arXiv', 'pmid', 'PMID', 'openalex_id'):
-            v = g.get(f) or ''
-            if v: gold_ids.add(v.lower())
-    id_matched = gold_ids & hit_ids
-
-    # A2 分母：仅计算有稳定 ID 的 gold 条目（与 run_audit.py 的 a2() 一致）
-    # ——run_audit.a2() 用 ids() 函数提取 DOI/arXiv/PMID/PMCID/openalex_id 前缀
-    gold_with_ids = [g for g in gold if isinstance(g, dict) and ids_for_gold(g)]
-    a2_total_with_id = len(gold_with_ids)
-
-    # A2 总分子 = 稳定 ID 匹配（不可混入标题候选）
-    a2_matched_id = len(id_matched)
-    a2_total_all = len(gold)  # 含无稳定 ID 的条目——用于信息完整性，不用于 Recall 分母
     a2_title_candidates = len(title_candidate_matches)
-    a2_recall_id = round(a2_matched_id / a2_total_with_id, 3) if a2_total_with_id else None
-
-    # 缺失——标题候选中有但 ID 未能匹配的
     a2_missing_titles = [g.get('title', '') for g in gold
                          if norm(g.get('title')) and norm(g.get('title')) not in hit_titles]
 
-    # B 饱和度：发现候选（discovery candidates）与纳入项（included_high）的区分
-    # 当前流程处于"候选发现"阶段，尚未完成筛选。发现候选不等于纳入——引用次数不能替代纳入决策。
-    # GGR 分两个字段报告：
-    #   discovery_ggr = 发现候选/库规模（当前已知可计算）
-    #   included_high = 0（需全文/资格确认后才能填入，不能由自动检索器推定）
+    # ── B saturation ──
     lib_size = len(library)
     discovery_candidate_count = len(potential_add)
-    # B1 的 included_high 在自动检索阶段设为 0——标记为 discovery_only
-    # 只有经过筛选（标题摘要 → 全文 → 资格确认）后的新增纳入文献才能进入 GGR 分子。
     search_rounds = [{'pathway': 'openalex-first-round', 'completed': True,
                       'core_before': lib_size, 'included_high': 0,
                       'discovery_candidates': discovery_candidate_count,
@@ -188,10 +272,7 @@ def main():
                       'note': '自动检索器产出的是发现候选（标题含核心词+cited_by≥阈值且不在库中），未经筛选不能计入 GGR 分子。GGR 分子=0 直至人工筛选确认。'}]
     discovery_ggr = round(discovery_candidate_count / lib_size, 4) if lib_size else None
 
-    # 各检索式（路径）的边际收益 → DRR 原始输入（含候选数、初筛通过数、去重规则引用，
-    # 供第三方从 query-hits.json 独立复算每个 yield）
-    # 注意：当前阶段所有候选均为 screened_high_confidence=False（未做标题摘要筛选），
-    # new_high_confidence 也是候选发现而非纳入——这会影响 DRR 的实际含义。
+    # Marginal yields per query
     covered = set(); marginal = []
     for qr in queries_record:
         label = qr['label']
@@ -201,8 +282,8 @@ def main():
         if ph: marginal.append({
             'pathway': label,
             'candidates': len(ph),
-            'screened_high_confidence': 0,  # discovery-only: screening not yet performed
-            'new_high_confidence': 0,       # same — only screening yields real new_high_conf
+            'screened_high_confidence': 0,
+            'new_high_confidence': 0,
             'new_discovery_candidates': new_c,
             'dedup_rule': 'title-normalized across all queries in this round',
             'screening_status': 'discovery_only',
@@ -218,6 +299,16 @@ def main():
                'ggr_status': 'not_assessable_until_screened',
                'additions': potential_add[:50]},
               open(out / 'potential_additions.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
+
+    # ── Build search_meta.json with v2 fields ──
+    a2_evidence = "measured"
+    a2_note = 'A2 只有稳定 ID 匹配计入分子；分母=有稳定 ID 的 gold 条目（与 run_audit.a2 对齐）。'
+    if validation_set:
+        a2_note += f' 独立验证集: {val_total} 篇（{val_source}），dev/val 独立。'
+    else:
+        a2_evidence = "estimated"
+        a2_note += f' 无独立验证集——A2 使用 {dev_source}，可能被高估（dev=val 复用）。建议补充独立验证集。'
+
     json.dump({'queries': queries_record, 'search_rounds': search_rounds,
                'planned_pathways': ['openalex-first-round'],
                'source_marginal_yields': marginal,
@@ -228,13 +319,25 @@ def main():
                       'recall_by_id': a2_recall_id,
                       'id_matched_per_id_total': f'{a2_matched_id}/{a2_total_with_id}',
                       'missing_titles': a2_missing_titles[:15],
-                      'note': 'A2 只有稳定 ID 匹配计入分子；分母=有稳定 ID 的 gold 条目（与 run_audit.a2 对齐）。title_candidates 是跨体系人工核验参考，不属于 A2 实测召回。'},
+                      'note': a2_note},
+               # v2 fields
+               'dev_recall': dev_recall,
+               'dev_recall_total': dev_total,
+               'dev_source': dev_source,
+               'validation_recall': val_recall,
+               'validation_recall_total': val_total,
+               'validation_source': val_source or '无独立验证集',
+               'a2_evidence_status': a2_evidence,
                'potential_additions_titles': [x['title'] for x in potential_add[:20]],
                'potential_additions_count': len(potential_add),
                'first_round_discovery_ggr': discovery_ggr,
                'note': 'B 饱和度处于候选发现阶段——included_high=0 直至筛选确认。GGR 分子需人工完成纳入后方可填入。'},
               open(out / 'search_meta.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
     print(f'\n检索命中去重: {len(all_hits)} | A2 稳定ID: {a2_matched_id}/{a2_total_with_id}={a2_recall_id} | A2 标题候选: {a2_title_candidates}')
+    if validation_set:
+        print(f'Dev recall: {dev_recall} ({dev_total} 篇) | Validation recall: {val_recall} ({val_total} 篇) — {val_source}')
+    else:
+        print(f'Dev recall: {dev_recall} ({dev_total} 篇) — A2 证据状态: {a2_evidence}（无独立验证集）')
     print(f'Discovery 候选: {len(potential_add)} | included_high=0（待筛选确认）')
 
 

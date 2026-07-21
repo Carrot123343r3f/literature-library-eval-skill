@@ -1,0 +1,393 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://claude.skills/literature-library-eval/indicator-registry-v1",
+  "title": "Indicator Registry — Single Source of Truth",
+  "description": "Every indicator is defined once here. indicator-dictionary.md, user-standards-guide.md, audit.json.indicator_register, the report summary table, and automated tests all derive from or validate against this registry.",
+  "version": "1.0",
+  "dimensions": {
+    "A": {"name": "覆盖 (Coverage)", "question": "已知文献是否找得回来？"},
+    "B": {"name": "饱和度 (Saturation)", "question": "检索是否还在增长？"},
+    "C": {"name": "平衡 (Balance)", "question": "主题与来源分布是否失衡？"},
+    "D": {"name": "时效 (Recency)", "question": "库是否反映当前研究状态？"},
+    "E": {"name": "学术影响 (Impact Signals)", "question": "核心引用与领域渠道是否被覆盖？"},
+    "F": {"name": "可用性 (Usability)", "question": "文献能否实际用来写综述？"}
+  },
+  "indicators": [
+    {
+      "id": "A1",
+      "dimension": "A",
+      "display_name": {"zh": "基准集召回率", "en": "Benchmark Recall"},
+      "formula": "|library ∩ benchmark| / |benchmark|",
+      "match_rule": "stable_identifiers_only",
+      "required_inputs": ["library", "benchmark"],
+      "default_threshold": {"narrative": 0.75, "scoping": 0.75, "systematic": 0.90, "rapid": 0.60, "umbrella": 0.90},
+      "umbrella_only": false,
+      "evidence_states": ["measured", "estimated", "not_assessable"],
+      "limitations": [
+        "稳定 ID 匹配仅计算有 DOI/arXiv/PMID/OpenAlex ID 的条目——无 ID 条目进入人工核验队列",
+        "基准集必须独立于文献库构建",
+        "高 A1 不等于主题无遗漏"
+      ]
+    },
+    {
+      "id": "A2",
+      "dimension": "A",
+      "display_name": {"zh": "检索式灵敏度", "en": "Search Sensitivity"},
+      "formula": "|query_hits ∩ gold_set| / |gold_set|",
+      "match_rule": "stable_identifiers_only",
+      "required_inputs": ["gold_set", "query_hits"],
+      "default_threshold": {"narrative": 0.70, "scoping": 0.70, "systematic": 0.85, "rapid": 0.60, "umbrella": 0.80},
+      "umbrella_only": false,
+      "evidence_states": ["measured", "estimated", "partial_snapshot", "not_assessable"],
+      "limitations": [
+        "Gold set 不得完全由被测检索结果反向构建（开发集 ≠ 验证集）",
+        "无独立验证集时 A2 降级为 estimated",
+        "标题候选不计入分子——仅作人工核验参考",
+        "零命中是实测 0；未执行检索才是不可评估",
+        "高 A2 不等于 Gold set 足够代表问题"
+      ]
+    },
+    {
+      "id": "A3",
+      "dimension": "A",
+      "display_name": {"zh": "多源候选下界", "en": "Multi-Source Lower Bound"},
+      "formula": "|∪ sources| after dedup",
+      "match_rule": "stable_identifiers_union",
+      "required_inputs": ["source_snapshot (≥2 sources)"],
+      "default_threshold": {"_note": "description-only indicator, no pass/fail threshold"},
+      "umbrella_only": false,
+      "evidence_states": ["estimated_lower_bound", "partial_snapshot", "not_assessable"],
+      "limitations": [
+        "下界不是 Recall——不能直接回答'漏了多少'",
+        "单源 count 不得称为覆盖率",
+        "Capture-recapture 仅在来源近似独立时有效",
+        "所有来源完成分页、边界一致、去重规则明确时才能给出 estimated_lower_bound"
+      ]
+    },
+    {
+      "id": "A4",
+      "dimension": "A",
+      "display_name": {"zh": "综述类型确认", "en": "Review Type Purity"},
+      "formula": "|survey_items| / |library|",
+      "match_rule": "title_keyword + itemType field",
+      "required_inputs": ["library"],
+      "default_threshold": {"umbrella": 0.90},
+      "umbrella_only": true,
+      "evidence_states": ["measured", "automated-screening", "not_assessable"],
+      "limitations": [
+        "自动分类基于 title 关键词匹配——需人工抽样核验",
+        "仅伞式综述启用"
+      ]
+    },
+    {
+      "id": "B1",
+      "dimension": "B",
+      "display_name": {"zh": "核心库增长率 (GGR)", "en": "Core Growth Rate"},
+      "formula": "included_high_{round} / core_before_{round}",
+      "required_inputs": ["search_rounds (≥2 screened rounds)"],
+      "default_threshold": {"_ggr": 0.02},
+      "umbrella_only": false,
+      "evidence_states": ["measured", "discovery_only", "not_assessable"],
+      "limitations": [
+        "discovery candidates ≠ 纳入项",
+        "仅低 GGR 不够——需 B2+B3 同时成立",
+        "included_high 必须来自筛选确认，不能由引用次数替代"
+      ]
+    },
+    {
+      "id": "B2",
+      "dimension": "B",
+      "display_name": {"zh": "新增路径发现率 (DRR)", "en": "Discovery Rate by Pathway"},
+      "formula": "new_high_confidence_{pathway} / candidates_{pathway}",
+      "required_inputs": ["source_marginal_yields (≥2 independent pathways)"],
+      "default_threshold": {"_drr": 0.05},
+      "umbrella_only": false,
+      "evidence_states": ["measured", "discovery_only", "not_assessable"],
+      "limitations": [
+        "宽/中/窄检索式不是独立路径",
+        "五类独立路径：db_boolean, backward_citation, forward_citation, related_articles, standards_guidelines",
+        "new_high_confidence 按路径声明顺序去重"
+      ]
+    },
+    {
+      "id": "B3",
+      "dimension": "B",
+      "display_name": {"zh": "饱和过程证据", "en": "Saturation Process Evidence"},
+      "formula": "planned_pathways_completed AND independent_validation_passed",
+      "required_inputs": ["planned_pathways", "independent_validation_record"],
+      "default_threshold": {"_pathway_completion": 1.0, "_independent_validation": true},
+      "umbrella_only": false,
+      "evidence_states": ["measured", "not_assessable"],
+      "limitations": [
+        "仅低 GGR/DRR 不等于饱和——可能存在策略共谋盲区",
+        "独立验证形式因领域而异：外部专家评审/引用跟踪抽查/非检索来源比照",
+        "首轮 B3 标 not_assessable"
+      ]
+    },
+    {
+      "id": "C1",
+      "dimension": "C",
+      "display_name": {"zh": "主题覆盖与偏斜", "en": "Topic Balance"},
+      "formula": "top-share, CV, Gini, Shannon Hn, TVD (optional)",
+      "required_inputs": ["taxonomy"],
+      "default_threshold": {"top": 0.70, "cv": 0.80, "gini": 0.50, "shannon": 0.55, "tvd": 0.25},
+      "umbrella_only": false,
+      "evidence_states": ["measured", "automated-screening", "not_assessable"],
+      "limitations": [
+        "数量均衡 ≠ 内容均衡——需结合对立观点检测",
+        "AI 自动分类未经人工核验时标 automated-screening",
+        "空主题 = fail（完全遗漏某子方向）"
+      ]
+    },
+    {
+      "id": "C2",
+      "dimension": "C",
+      "display_name": {"zh": "来源集中度", "en": "Source Concentration"},
+      "formula": "top-share, CV, Gini, Shannon Hn + author concentration",
+      "required_inputs": ["library (with source field)"],
+      "default_threshold": {"top": 0.80, "cv": 1.00, "gini": 0.60, "shannon_low": 0.45, "shannon_high": 0.95, "author_top_share": 0.25},
+      "umbrella_only": false,
+      "evidence_states": ["measured", "not_assessable"],
+      "limitations": [
+        "来源集中 ≠ 质量缺陷——可能是策略后果",
+        "作者集中度 >25% 提示课题组偏倚——仅诊断信号",
+        "高 Shannon 碎片化仅作说明性信号"
+      ]
+    },
+    {
+      "id": "C3",
+      "dimension": "C",
+      "display_name": {"zh": "主题-来源交叉", "en": "Topic-Source Cross"},
+      "formula": "per-topic: |sources| ≥ 2 AND max_source_share ≤ 0.80",
+      "required_inputs": ["topic_source_counts"],
+      "default_threshold": {"min_sources": 2, "max_source_share": 0.80},
+      "umbrella_only": false,
+      "evidence_states": ["measured", "not_assessable"],
+      "limitations": [
+        "极窄主题可能确实只有单一来源——此时设 warning 而非 fail",
+        "无 topic_source_counts 输入则不可评估"
+      ]
+    },
+    {
+      "id": "C4",
+      "dimension": "C",
+      "display_name": {"zh": "综述间覆盖分布", "en": "Review Coverage Distribution"},
+      "formula": "CCA, method_type_distribution, search_window_overlap",
+      "required_inputs": ["included_reviews_metadata"],
+      "default_threshold": {"cca": 0.15},
+      "umbrella_only": true,
+      "evidence_states": ["estimated", "automated-screening", "not_assessable"],
+      "limitations": [
+        "CCA 计算需纳入综述的原始研究列表——超出自动范围",
+        "方法类型分布为标题 keyword 推断——需人工核验",
+        "仅伞式综述启用"
+      ]
+    },
+    {
+      "id": "D1",
+      "dimension": "D",
+      "display_name": {"zh": "来源新鲜度", "en": "Source Freshness"},
+      "formula": "days_since_last_successful_search per source",
+      "required_inputs": ["last_successful_search"],
+      "default_threshold": {"computer_ai": 30, "electronics_communications": 30, "mechanical_manufacturing": 90, "materials_chemical": 90, "biomedical_engineering": 90, "civil_infrastructure": 180, "energy_environment": 180, "aerospace_transportation": 180},
+      "umbrella_only": false,
+      "evidence_states": ["measured", "not_assessable"],
+      "limitations": [
+        "新鲜度阈值由 profile 决定——快变领域 30 天，基础设施 180 天",
+        "无任何检索日期记录 → not_assessable"
+      ]
+    },
+    {
+      "id": "D2",
+      "dimension": "D",
+      "display_name": {"zh": "近年文献比例", "en": "Recent Publication Share"},
+      "formula": "|records with year ≥ current_year - N + 1| / |records with year|",
+      "required_inputs": ["library (with year field)"],
+      "default_threshold": {"computer_ai": {"years": 3, "share": 0.40}, "electronics_communications": {"years": 3, "share": 0.40}, "mechanical_manufacturing": {"years": 5, "share": 0.35}, "materials_chemical": {"years": 5, "share": 0.35}, "biomedical_engineering": {"years": 5, "share": 0.35}, "civil_infrastructure": {"years": 7, "share": 0.30}, "energy_environment": {"years": 7, "share": 0.30}, "aerospace_transportation": {"years": 7, "share": 0.30}},
+      "umbrella_only": false,
+      "evidence_states": ["measured", "warning (year_completeness < 50%)", "not_assessable"],
+      "limitations": [
+        "年份字段完整率 <50% 时自动降级为 warning",
+        "近期发表 ≠ 前沿覆盖——需 D3 配合",
+        "阈值按 profile 动态调整"
+      ]
+    },
+    {
+      "id": "D3",
+      "dimension": "D",
+      "display_name": {"zh": "前沿覆盖", "en": "Frontier Coverage"},
+      "formula": "independent_search_evidence for emerging terms",
+      "required_inputs": ["frontier_search_records"],
+      "default_threshold": {"_note": "frontier window requires independent search evidence"},
+      "umbrella_only": false,
+      "evidence_states": ["measured", "not_assessable"],
+      "limitations": [
+        "近期发表文献多 ≠ 前沿覆盖——可能只是常规检索式碰巧命中",
+        "默认 not_assessable 不是失败"
+      ]
+    },
+    {
+      "id": "D4",
+      "dimension": "D",
+      "display_name": {"zh": "版本区分", "en": "Version Disambiguation"},
+      "formula": "preprint–published / conference–journal / epub–print links verified",
+      "required_inputs": ["deduplication_log (version families)"],
+      "default_threshold": {"_note": "版本关系已核验——不重复计数"},
+      "umbrella_only": false,
+      "evidence_states": ["measured", "automated-screening (DOI-only)", "not_assessable"],
+      "limitations": [
+        "工程领域 arXiv 预印本普遍——版本合并是去重基本步骤",
+        "仅 DOI 去重不区分版本 → automated-screening"
+      ]
+    },
+    {
+      "id": "E1",
+      "dimension": "E",
+      "display_name": {"zh": "h-core", "en": "h-core"},
+      "formula": "max h s.t. at least h items have ≥h citations",
+      "required_inputs": ["library (with cited_by_count field)"],
+      "default_threshold": {"_note": "no hard threshold — background signal only"},
+      "umbrella_only": false,
+      "evidence_states": ["screening", "not_assessable"],
+      "limitations": [
+        "仅背景信号——高被引 ≠ 高质量；新论文拉低 h-core",
+        "对库规模、学科引用习惯、发表年限极敏感",
+        "真正的研究质量评估应使用 AMSTAR-2 / ROBIS / 与研究设计匹配的批判性评价工具",
+        "引用数据覆盖率 <50% 时应在报告中标注"
+      ]
+    },
+    {
+      "id": "E2",
+      "dimension": "E",
+      "display_name": {"zh": "Tier-1 覆盖", "en": "Tier-1 Coverage"},
+      "formula": "|items in tier-1 venues| / |library|",
+      "required_inputs": ["library (with publicationTitle/venue field)", "tier1_venues"],
+      "default_threshold": {"_note": "no hard threshold — background signal only"},
+      "umbrella_only": false,
+      "evidence_states": ["screening", "not_assessable"],
+      "limitations": [
+        "仅背景信号——不等于质量裁决",
+        "依赖期刊/会议名称精确匹配——可能低估",
+        "未配置 tier1_venues → not_assessable"
+      ]
+    },
+    {
+      "id": "F1",
+      "dimension": "F",
+      "display_name": {"zh": "检索可复跑", "en": "Query Reproducibility"},
+      "formula": "|queries with source+query+fields+date| / |total queries| (target: 1.0)",
+      "required_inputs": ["run_log (with query records)"],
+      "default_threshold": {"_note": "all queries must have source, query, fields, date; filters, result_count, completion_status recommended"},
+      "umbrella_only": false,
+      "evidence_states": ["measured", "not_assessable"],
+      "limitations": [
+        "查询原文缺失 = 唯一过程阻断项",
+        "缺返回信息 → 不完整但不阻断",
+        "所有综述类型均需检索可复跑"
+      ]
+    },
+    {
+      "id": "F2",
+      "dimension": "F",
+      "display_name": {"zh": "摘要覆盖率", "en": "Abstract Coverage"},
+      "formula": "|items with abstract| / |library|",
+      "required_inputs": ["library (with abstract field)"],
+      "default_threshold": {"narrative": 0.80, "scoping": 0.80, "systematic": 0.85, "rapid": 0.70, "umbrella": 0.80},
+      "umbrella_only": false,
+      "evidence_states": ["measured", "not_assessable"],
+      "limitations": [
+        "低于阈值 → C/E 维自动评估可靠性下降",
+        "全部人工筛选可放宽要求"
+      ]
+    },
+    {
+      "id": "F3",
+      "dimension": "F",
+      "display_name": {"zh": "全文获取率", "en": "Fulltext Access Rate"},
+      "formula": "|items with attachment OR open_link| / |library| (union, NOT sum)",
+      "required_inputs": ["library (with attachment/open_access fields)"],
+      "default_threshold": {"narrative": 0.60, "scoping": 0.60, "systematic": 0.80, "rapid": 0.50, "umbrella": 0.85},
+      "umbrella_only": false,
+      "evidence_states": ["measured", "estimated (open links only)", "not_assessable"],
+      "limitations": [
+        "联合比例 ≠ 相加——避免同一记录双渠道重复计数",
+        "图书馆订阅访问未反映在条目中 → 实际可能更好",
+        "不影响覆盖充分性——影响能实际用到多少文献"
+      ]
+    },
+    {
+      "id": "F4",
+      "dimension": "F",
+      "display_name": {"zh": "去重与版本", "en": "Deduplication"},
+      "formula": "DOI exact duplicates = 0 AND version candidates have decisions",
+      "required_inputs": ["library", "deduplication_log"],
+      "default_threshold": {"_note": "no DOI exact duplicates; all version candidates resolved"},
+      "umbrella_only": false,
+      "evidence_states": ["measured", "structured_no_decisions", "not_assessable"],
+      "limitations": [
+        "DOI 精确重复 = 0；版本候选必须有决定 (merge/retain_both/exclude)",
+        "manual_review_required 是待定状态——不能算通过",
+        "仅查库内重复——不查 DOI 外部有效性（需人工抽查）"
+      ]
+    },
+    {
+      "id": "F5",
+      "dimension": "F",
+      "display_name": {"zh": "来源可追溯", "en": "Provenance Traceability"},
+      "formula": "|items with provenance field| / |library|",
+      "required_inputs": ["library (with source field)", "decision_log (for inclusion/exclusion trail)"],
+      "default_threshold": {"narrative": 0.85, "scoping": 0.85, "systematic": 0.95, "rapid": 0.70, "umbrella": 0.90},
+      "umbrella_only": false,
+      "evidence_states": ["measured", "provenance_only (no decision log)", "not_assessable"],
+      "limitations": [
+        "无 decision-log → 纳入/排除理由不可追溯",
+        "无 taxonomy → 提示 descriptive listing 风险",
+        "历史积累的库 → 部分记录可无法追溯"
+      ]
+    },
+    {
+      "id": "F6",
+      "dimension": "F",
+      "display_name": {"zh": "撤稿更正核查", "en": "Retraction Check"},
+      "formula": "retraction/correction status verified via dedicated source",
+      "required_inputs": ["retraction_watch / crossref retraction data"],
+      "default_threshold": {"_note": "requires dedicated source verification"},
+      "umbrella_only": false,
+      "evidence_states": ["manual-verification-required", "not_assessable"],
+      "limitations": [
+        "自动检测不完备——撤稿信息通常不在文献数据库中完整更新",
+        "默认 not_assessable 是常态",
+        "需专门来源核验（Retraction Watch / Crossref retraction API）"
+      ]
+    },
+    {
+      "id": "F7",
+      "dimension": "F",
+      "display_name": {"zh": "综述质量评估就绪度", "en": "Quality Assessment Readiness"},
+      "formula": "|reviews with fulltext| / |included_reviews|; AMSTAR-2/ROBIS tool selected",
+      "required_inputs": ["included_reviews_fulltext_status", "quality_assessment_tool"],
+      "default_threshold": {"umbrella": 0.85},
+      "umbrella_only": true,
+      "evidence_states": ["automated-screening", "not_assessable"],
+      "limitations": [
+        "仅报告就绪度——不代替 AMSTAR-2/ROBIS 评分",
+        "AMSTAR-2 16 项评分需人工或专用工具完成",
+        "仅伞式综述启用"
+      ]
+    }
+  ],
+  "evidence_statuses": {
+    "measured": {"label": "实测", "definition": "保留可复跑输入与逐条匹配记录；A2 需有独立验证集"},
+    "estimated": {"label": "估计", "definition": "基于明确假设下的多源或抽样方法获得；必须给区间和假设"},
+    "automated-screening": {"label": "自动初筛", "definition": "按规则判定——未人工核验"},
+    "manual-verification-required": {"label": "待人工核验", "definition": "存在候选匹配或缺少版本确认"},
+    "not_assessable": {"label": "不可评估", "definition": "没有满足定义所需的输入——不是失败，而是'下一步该补什么'"}
+  },
+  "verdicts": {
+    "pass": {"label": "通过", "meaning": "当前证据下满足标准"},
+    "warning": {"label": "警示", "meaning": "存在风险信号——需关注但不阻断"},
+    "fail": {"label": "不通过", "meaning": "明确未满足标准——需在写综述前解决"},
+    "screening": {"label": "初筛待确认", "meaning": "标准未确认时的临时状态"},
+    "not_assessable": {"label": "不可评估", "meaning": "缺少必要输入——补输入后可复评"}
+  }
+}

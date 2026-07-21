@@ -133,7 +133,7 @@ def a3(sources):
     if incomplete: result["note"] = "Source snapshots incomplete; provisional count must not support A3 conclusions."
     return result
 
-def health(library, standards=None, dedup_log_provided=False, dedup_log_depth="missing", decision_log_provided=False):
+def health(library, standards=None, dedup_log_provided=False, dedup_log_depth="missing", decision_log_provided=False, taxonomy=None):
     standards = standards or {}
     n = len(library)
     fields = {k: round(sum(bool(str(x.get(k) or "").strip()) for x in library) / n, 3) if n else None
@@ -157,6 +157,13 @@ def health(library, standards=None, dedup_log_provided=False, dedup_log_depth="m
     f5_verdict = "pass" if n and provenance / n >= provenance_min else "fail"
     if decision_log_provided:
         f5_note = "来源谱系 + 纳入/排除决定均可追溯"
+        # ── Descriptive listing risk diagnostic ──
+        # If inclusion decisions exist but lack topic/synthesis labels,
+        # the resulting review risks being a `descriptive listing` rather than thematic synthesis.
+        # This is not a hard signal, just a caution.
+        # Check from context — if no taxonomy or topic labels are attached to decisions
+        if not taxonomy:
+            f5_note += '。未提供主题分类（taxonomy）——库的纳入决定未按主题分组，后续综述存在"逐篇流水账"风险（descriptive listing），建议引入主题框架以支撑批判性综合'
     else:
         f5_note = f"仅来源字段可追溯（谱系率 {round(provenance/n,3) if n else '—'}）。未提供 decision-log——纳入/排除理由不可追溯。"
         if decision_links and n and decision_links / n >= 0.5:
@@ -284,17 +291,56 @@ def balance(library, standards=None):
     high_shannon_note = None
     if k >= 3 and normalized_entropy > limits["shannon_high"]:
         high_shannon_note = f"Hn={normalized_entropy:.3f}>{limits['shannon_high']}，来源高度碎片化——建议检查是否混入异质数据库或非相关来源，不代表平衡性不合格"
+
+    # ── Author concentration (diagnostic only, not a separate indicator) ──
+    author_counts = Counter()
+    for item in library:
+        creators = item.get("creators", [])
+        if isinstance(creators, list):
+            for c in creators:
+                if isinstance(c, dict):
+                    name = (c.get("name") or f"{c.get('firstName','')} {c.get('lastName','')}").strip()
+                elif isinstance(c, str):
+                    name = c.strip()
+                else:
+                    continue
+                if name:
+                    author_counts[name] += 1
+    author_values = [v for v in author_counts.values() if v >= 2]  # 只统计出现≥2次的作者
+    author_n = sum(author_values); author_k = len(author_values)
+    author_concentration = None
+    if author_n and author_k >= 3:
+        top_author_share = max(author_values) / author_n if author_n else None
+        # Author Gini
+        author_gini = sum(abs(a - b) for a in author_values for b in author_values) / (2 * author_k * author_n)
+        author_concentration = {
+            "unique_authors": len(author_counts),
+            "authors_with_2plus": author_k,
+            "top_author": author_counts.most_common(1)[0][0] if author_counts else "",
+            "top_author_count": author_counts.most_common(1)[0][1] if author_counts else 0,
+            "top_author_share": round(top_author_share, 3) if top_author_share else None,
+            "author_gini": round(author_gini, 3),
+        }
+        # 单一作者/课题组统治：top author share > 0.25 时提示
+        if top_author_share and top_author_share > 0.25:
+            author_concentration["note"] = (
+                f"单一作者 '{author_counts.most_common(1)[0][0]}' 占文献库 {top_author_share*100:.1f}%——"
+                "可能存在课题组偏倚，建议检查是否过度依赖单一研究群体的视角。"
+            )
+
     return {"status": "measured", "counts": dict(counts), "top_source_share": round(max(values) / n, 3),
             "cv": round(cv, 3), "gini": round(gini, 3), "shannon": round(entropy, 3),
             "normalized_shannon": round(normalized_entropy, 3), "limits": limits, "flags": flags,
             "high_shannon_note": high_shannon_note,
+            "author_concentration": author_concentration,
             "checks": {"C2_source_balance": "warning" if flags else "pass"}}
 
 def topic_balance(context):
     standards = context.get("standards", {})
     raw = context.get("taxonomy", [])
     topics = [{"name": r.get("name", "unnamed"), "expected": r.get("expected", True),
-               "records": r.get("high_confidence_records"), "target_share": r.get("target_share")}
+               "records": r.get("high_confidence_records"), "target_share": r.get("target_share"),
+               "opposing_viewpoint": r.get("opposing_viewpoint")}   # 对立观点标记——用于诊断 cherry-picking 风险
               for r in raw if isinstance(r, dict) and r.get("expected", True)]
     values = [int(x["records"] or 0) for x in topics]
     if not topics:
@@ -336,10 +382,23 @@ def topic_balance(context):
                           or max(counts.values()) / total > float(standards.get("topic_source_top_share_warning", .80))):
                 cross_flags.append(topic["name"])
             elif not total: cross_flags.append(topic["name"])
+
+    # ── Contrasting viewpoints diagnostic ──
+    opposing_warning = None
+    has_opposing = [t for t in topics if t.get("opposing_viewpoint")]
+    if has_opposing:
+        opposing_names = [t["name"] for t in has_opposing]
+        opposing_warning = (
+            f"已标记 {len(opposing_names)} 个含对立/竞争观点的主题：{'、'.join(opposing_names)}。"
+            "以下 C1 平衡仅反映数量分布——即使数值均衡，也应检查是否同时覆盖了议题的正反证据，"
+            "避免 cherry-picking（只收录支持假设的文献）。这是对 C1 均衡判定的定性补充。"
+        )
+
     return {"status": "measured", "topic_counts": {x["name"]: v for x, v in zip(topics, values)},
             "top_topic_share": round(max(values) / n, 3), "cv": round(cv, 3), "gini": round(gini, 3),
             "normalized_shannon": round(hn, 3), "target_tvd": round(tvd, 3) if tvd is not None else None,
             "flags": flags, "cross_source_flags": cross_flags,
+            "opposing_viewpoint_warning": opposing_warning,
             "checks": {"C1_topic_balance": "fail" if "empty_topic" in flags else "warning" if flags else "pass",
                        "C3_topic_source_balance": "warning" if cross_flags else "pass" if cross else "not_assessable"}}
 
@@ -696,7 +755,11 @@ def _dimension_narrative(report):
     ggr = ", ".join(f"{r:.3f}" for r in rates[-2:]) if len(rates) >= 2 else "缺数据"
     lines.append(f"**B 饱和度**：最后两轮 GGR={ggr}（阈值<{p.get('thresholds',{}).get('new_rate','—')}）；{p.get('verdict','—')}。")
     flags = t.get("flags", []); n_topics = len(t.get("topic_counts", {}))
-    lines.append(f"**C 平衡**：{n_topics} 个预期主题，{'含空主题' if 'empty_topic' in flags else '全部有文献'}；来源集中度 {b.get('top_source_share','—')}（CV={_fmt_num(b.get('cv'))} Gini={_fmt_num(b.get('gini'))}）。")
+    auth_note = ""
+    author_conc = b.get("author_concentration", {})
+    if author_conc and author_conc.get("note"):
+        auth_note = f" 作者集中度：top-author {author_conc.get('top_author_share','—')}（{'、'.join(f'{k}={v}篇' for k,v in author_conc.get('top_authors',{}).items())}）。"
+    lines.append(f"**C 平衡**：{n_topics} 个预期主题，{'含空主题' if 'empty_topic' in flags else '全部有文献'}；来源集中度 {b.get('top_source_share','—')}（CV={_fmt_num(b.get('cv'))} Gini={_fmt_num(b.get('gini'))}）。{auth_note}")
     lines.append(f"**D 时效**：近 {d.get('window_years','—')} 年占比 {_fmt_pct(d.get('recent_share'))}（{d.get('recent_records','—')}/{d.get('dated_records','—')} 标有日期）；预印本 {d.get('preprint_records','—')} 条。")
     lines.append(f"**E 学术影响**：h-core={_fmt_num(q.get('h_core'))}（{q.get('citation_records','—')} 条引用）；Tier-1 {_fmt_pct(q.get('tier1_rate'))}（{q.get('tier1_venues_configured','—')} venue）。仅作背景信号，不等于研究质量——真正的研究质量评估应使用与研究设计匹配的批判性评价工具。")
     fc = h.get("field_completeness", {})
@@ -779,15 +842,24 @@ def indicator_rows(report):
         f"路径 {_fmt_pct(p.get('pathway_completion'))} | 独立验证 {'通过' if p.get('independent_validation_passed') is True else ('未通过' if p.get('independent_validation_passed') is False else '—')}",
         p.get("status"), f"结论：**{bv}**。仅低 GGR/DRR 不够——需路径完成+独立验证+筛选真实同时成立。")
 
+    c1_desc = f"{'、'.join(f'{k}={v}篇' for k,v in (sorted(tc.items(), key=lambda x:-x[1]) if tc else []))}。{'需补：' + ', '.join(k for k,v in tc.items() if v==0) if 'empty_topic' in tf else '各主题均有文献。'}"
+    # Author concentration note for C2
+    author_conc = b.get("author_concentration", {})
+    c1_opp_note = t.get("opposing_viewpoint_warning")
+    if c1_opp_note:
+        c1_desc += " （" + c1_opp_note + "）"
     add("C 平衡", "C1", "主题覆盖与偏斜",
         "无空主题；Top≤0.70；CV≤0.80；Gini≤0.50；Shannon≥0.55", chk(t, "C1_topic_balance"),
         f"{_fmt_num(len(tc))} 主题 | {'含空主题' if 'empty_topic' in tf else '无空主题'}", t.get("status"),
-        f"{'、'.join(f'{k}={v}篇' for k,v in (sorted(tc.items(), key=lambda x:-x[1]) if tc else []))}。{'需补：' + ', '.join(k for k,v in tc.items() if v==0) if 'empty_topic' in tf else '各主题均有文献。'}")
+        c1_desc)
 
+    c2_desc = f"最大来源占比 {_fmt_pct(bs)}。{'单一来源依赖——非质量问题但需说明索引偏差。' if bs and bs > b.get('limits',{}).get('top_share',0.80) else '来源分布合理。'}{' ' + b.get('high_shannon_note','') if b.get('high_shannon_note') else ''}"
+    if author_conc and author_conc.get("note"):
+        c2_desc += " " + author_conc["note"]
     add("C 平衡", "C2", "来源集中度", "Top≤0.80；CV≤1.00；Gini≤0.60；Shannon≥0.45",
         chk(b, "C2_source_balance"),
         f"Top={_fmt_pct(bs)} | CV={_fmt_num(bcv)} | Gini={_fmt_num(bg)} | Hn={_fmt_num(bsh)}", b.get("status"),
-        f"最大来源占比 {_fmt_pct(bs)}。{'单一来源依赖——非质量问题但需说明索引偏差。' if bs and bs > b.get('limits',{}).get('top_share',0.80) else '来源分布合理。'}{' ' + b.get('high_shannon_note','') if b.get('high_shannon_note') else ''}")
+        c2_desc)
 
     add("C 平衡", "C3", "主题-来源交叉", "每主题 ≥2 来源；单一来源 ≤0.80",
         chk(t, "C3_topic_source_balance"),
@@ -1282,7 +1354,8 @@ def main():
             except (json.JSONDecodeError, OSError):
                 pass
     libh = health(lib, ctx.get("standards", {}), dedup_log_provided=dedup_log_ok,
-                  dedup_log_depth=dedup_log_depth, decision_log_provided=decision_log_ok)
+                  dedup_log_depth=dedup_log_depth, decision_log_provided=decision_log_ok,
+                  taxonomy=ctx.get("taxonomy"))
     libh["dedup_log_depth"] = dedup_log_depth
     qual = quality(lib, ctx)
     # umbrella-specific A4/C4/F7 (requires libh to exist first)
