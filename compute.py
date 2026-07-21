@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
-"""Compatibility helper for stable-identifier A1 checks.
+"""DEPRECATED — lightweight compatibility wrapper for A1 + library health only.
 
-For full engineering audits use scripts/run_audit.py. This helper intentionally
-does not compute legacy quality, saturation, venue or PDF scores.
+WARNING: This script does NOT compute A2–F6. For full engineering audits, use:
+    python scripts/run_audit.py --run-config <path> --out <outdir>
+This helper exists only for backwards compatibility with simple A1 recall
+checks and will not be extended. Legacy fixed scores for quality, saturation,
+venue, and PDF scores are permanently retired.
+
+For full documentation, see README.md and AI_GUIDE.md.
 """
 import argparse
 import json
@@ -14,7 +19,10 @@ from run_audit import benchmark, health, load_items  # noqa: E402
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Compatibility helper: A1 and library health only")
+    parser = argparse.ArgumentParser(
+        description="DEPRECATED: compatibility helper for A1 + library health. Use scripts/run_audit.py for full A–F audits.",
+        epilog="WARNING: A2, A3, B–F dimensions are NOT computed by this script. Use scripts/run_audit.py --run-config <path> --out <outdir> for a complete evaluation."
+    )
     parser.add_argument("--jsonfile", required=True, help="normalized library JSON")
     parser.add_argument("--benchmark", help="stable-identifier benchmark JSON")
     args = parser.parse_args()

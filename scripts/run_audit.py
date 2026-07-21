@@ -912,7 +912,7 @@ def _top_actions(report):
     lines = []
     # Blocking items first
     for r in blocking[:2]:
-        lines.append(f"1. **🔴 {r['subproject']} {r['project_name']}**：{r.get('description_and_action','')}")
+        lines.append(f"{len(lines)+1}. **🔴 {r['subproject']} {r['project_name']}**：{r.get('description_and_action','')}")
     # Top warning if fewer than 3 blocking
     for r in rec[:3 - len(blocking)]:
         lines.append(f"{len(lines)+1}. **🟡 {r['subproject']} {r['project_name']}**：{r.get('description_and_action','')}")
@@ -1101,7 +1101,7 @@ def indicator_rows(report):
     dedup_verdict = "pass" if chk(h, "F4_exact_duplicates") == "pass" and chk(h, "F4_version_decisions") == "pass" else "fail" if chk(h, "F4_exact_duplicates") == "fail" else "not_assessable"
     add("F 可用性", "F4", "去重与版本", "DOI 精确重复=0；版本候选有决定",
         dedup_verdict, dedup_info, h.get("status"),
-        f"DOI 重复 {_fmt_num(hdoi)} 组。{'存在未处理重复。' if hdoi > 0 else '无精确重复。'}题名相似候选 {_fmt_num(hty)} 组（{'版本决定已保存（' + dedup_log_depth + '）。' if chk(h,'F4_version_decisions')=='pass' else '未提供结构化 dedup-log，版本候选待核验。'}）")
+        f"DOI 重复 {_fmt_num(hdoi)} 组。{'存在未处理重复。' if hdoi > 0 else '无精确重复。'}题名相似候选 {_fmt_num(hty)} 组（{'版本决定已保存（' + h.get('dedup_log_depth','—') + '）。' if chk(h,'F4_version_decisions')=='pass' else '未提供结构化 dedup-log，版本候选待核验。'}）")
 
     f5_note = h.get("f5_note", "")
     add("F 可用性", "F5", "来源可追溯", f"≥ {report['standards'].get('f_provenance_rate', .95)}",
@@ -1339,7 +1339,9 @@ def main():
     p.add_argument("--library"); p.add_argument("--benchmark"); p.add_argument("--gold")
     p.add_argument("--query-hits"); p.add_argument("--candidate-snapshots"); p.add_argument("--context")
     p.add_argument("--query-plan"); p.add_argument("--source-snapshot"); p.add_argument("--decision-log")
-    p.add_argument("--deduplication-log"); p.add_argument("--run-log"); p.add_argument("--out", required=True)
+    p.add_argument("--deduplication-log"); p.add_argument("--run-log"); p.add_argument("--search-meta",
+                   help="search_meta.json from search_for_eval.py — auto-detected alongside --query-hits if omitted")
+    p.add_argument("--out", required=True)
     p.add_argument("--allow-out-of-scope", action="store_true",
                    help="Force full A-F even when scope_status=out_of_scope (report will carry permanent caveats)")
     a = p.parse_args()
@@ -1438,7 +1440,7 @@ def main():
     if scope_status == "out_of_scope":
         print("WARNING: scope_status=out_of_scope — --allow-out-of-scope active. Report will carry permanent caveats.")
     # ── Consume search_meta.json if present and merge search iterations / evidence status ──
-    search_meta_path = a.search_meta if hasattr(a, 'search_meta') and a.search_meta else None
+    search_meta_path = a.search_meta
     if not search_meta_path:
         # Try to auto-detect search_meta.json alongside query-hits
         if a.query_hits:

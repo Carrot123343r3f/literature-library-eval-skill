@@ -174,6 +174,33 @@ with tempfile.TemporaryDirectory() as temp:
 
 print("F4 manual_review_required guard: PASSED")
 
+# Test: F4 PASSES on fully-resolved dedup log (all decisions resolved, no pending)
+with tempfile.TemporaryDirectory() as temp:
+    dedup_ok = pathlib.Path(temp) / "dedup_resolved.json"
+    dedup_ok.write_text(json.dumps({
+        "exact_identifier_groups": [{"stable_id": "doi:10.1000/1", "records": 1}],
+        "possible_version_families": [
+            {"title_year": ("test", "2025"), "stable_ids": ["arxiv:1234.5678", "doi:10.1000/2"],
+             "decision": "merge"}
+        ]
+    }), encoding="utf-8")
+    out = pathlib.Path(temp) / "out"
+    audit = run_audit(str(root / "tests" / "context.json"), str(out),
+                      extra_args=["--deduplication-log", str(dedup_ok)])
+    h = audit["library_health"]
+    # merge is a RESOLVED decision → structured_decisions, dedup_log_ok=True
+    assert h.get("dedup_log_depth") == "structured_decisions", \
+        f"Expected structured_decisions for resolved merge, got {h.get('dedup_log_depth')}"
+    # F4_version_decisions should be "pass"
+    assert h["checks"]["F4_version_decisions"] == "pass", \
+        f"Expected F4_version_decisions=pass, got {h['checks']['F4_version_decisions']}"
+    f4_row = [r for r in audit["indicator_register"] if r["subproject"] == "F4"][0]
+    # F4 overall should be pass (both exact dups clean and version decisions resolved)
+    assert f4_row["meets_standard"] == "pass", \
+        f"F4 should pass with fully resolved decisions, got {f4_row['meets_standard']}"
+
+print("F4 resolved-decisions pass guard: PASSED")
+
 # Test: B discovery_only rounds → not_assessable, never 趋稳
 with tempfile.TemporaryDirectory() as temp:
     # context with discovery_only rounds

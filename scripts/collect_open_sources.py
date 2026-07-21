@@ -68,7 +68,7 @@ def arxiv(query, limit):
         if len(entries) < size: break
         start += len(entries); time.sleep(0.5)
     return {"query": query, "reported_total": None, "items": rows[:limit], "retrieved": min(len(rows), limit),
-            "complete": len(rows) < limit, "completion_reason": "short_final_page" if len(rows) < limit else "limit_reached", "note": "arXiv total is not supplied by this API response."}
+            "complete": len(rows) < limit, "completion_reason": "exhausted" if len(rows) < limit else "at_limit_boundary", "note": "arXiv API does not report total results. When retrieved == limit, unknown whether results are exhausted or truncated."}
 
 
 COLLECTORS = {"openalex": openalex, "crossref": crossref, "europepmc": europepmc, "arxiv": arxiv}

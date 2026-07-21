@@ -42,7 +42,8 @@ def arxiv_from_doi(doi):
 
 
 def norm(t):
-    return re.sub(r'[^a-z0-9]', '', str(t or '').lower())
+    """Normalize title for comparison — consistent with run_audit.title()."""
+    return re.sub(r'[^\w]', '', str(t or '').casefold())
 
 def ids_for_gold(g):
     """Extract stable IDs from a gold entry — same logic as run_audit.ids()."""
@@ -57,12 +58,14 @@ def ids_for_gold(g):
     return found
 
 def entry_ids(entry):
-    """Extract stable IDs from a query hit entry."""
+    """Extract stable IDs from a query hit entry — same field coverage as run_audit.ids()."""
     found = set()
     doi = (entry.get('doi') or '').replace('https://doi.org/', '').lower()
     if doi: found.add('doi:' + doi)
-    ax = arxiv_from_doi(entry.get('doi'))
-    if ax: found.add('arxiv:' + ax)
+    ax = arxiv_from_doi(entry.get('doi')) or entry.get('arxiv') or entry.get('arXiv')
+    if ax: found.add('arxiv:' + str(ax).casefold())
+    for key, prefix in (("PMID", "pmid"), ("pmid", "pmid"), ("PMCID", "pmcid")):
+        if entry.get(key): found.add(prefix + ":" + str(entry[key]).casefold())
     oaid = entry.get('id') or entry.get('openalex_id') or ''
     if oaid: found.add(oaid.lower())
     return found
