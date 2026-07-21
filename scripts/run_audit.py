@@ -621,44 +621,6 @@ def _input_evidence_table(report):
     lines.append(f"| 版本核验记录 | {yn(d4_has)} | — | D4 | D4 不可评估（默认） |")
     return "\n".join(lines)
 
-def _standards_appendix(report):
-    """Generate an appendix showing which standards were actually applied and their source."""
-    ctx = report.get("context", {})
-    s = report.get("standards", {})
-    rt = ctx.get("review_type", "未指定")
-    pr = ctx.get("profile", "未指定")
-    user_overrides = ctx.get("standards", {}).get("user_overrides", {})
-
-    def src(k, default_val):
-        ov = user_overrides.get(k) if isinstance(user_overrides, dict) else None
-        if ov is not None: return ("user_override", True)
-        return ("review_type_default" if k in ("a1_min_recall", "a2_min_recall", "f_access_rate", "f_provenance_rate", "f_core_metadata_rate", "f_abstract_rate") else "profile_default", False)
-
-    def row(code, label, default_val, override_val):
-        sr, over = src(code, default_val)
-        applied = override_val if override_val is not None else default_val
-        return f"| {label} | {code} | {default_val} | {applied} | {sr} | {'是' if over else '否'} |"
-
-    lines = ["## 本次采用标准\n"]
-    lines.append("| 评估项 | 编号 | 默认值 | 本次采用值 | 来源 | 用户覆盖？ |")
-    lines.append("| --- | --- | --- | --- | --- | --- |")
-    lines.append(row("a1_min_recall", "基准集召回率", _fmt_pct(s.get("a1_min_recall")), _fmt_pct(s.get("a1_min_recall"))))
-    lines.append(row("a2_min_recall", "检索式灵敏度", _fmt_pct(s.get("a2_min_recall")), _fmt_pct(s.get("a2_min_recall"))))
-    lines.append(row("b_ggr_threshold", "GGR 阈值", _fmt_num(s.get("b_ggr_threshold")), _fmt_num(s.get("b_ggr_threshold"))))
-    lines.append(row("b_drr_threshold", "DRR 阈值", _fmt_num(s.get("b_drr_threshold")), _fmt_num(s.get("b_drr_threshold"))))
-    lines.append(row("topic_top_share_warning", "主题 Top-share", _fmt_num(s.get("topic_top_share_warning")), _fmt_num(s.get("topic_top_share_warning"))))
-    lines.append(row("balance_top_share_warning", "来源 Top-share", _fmt_num(s.get("balance_top_share_warning")), _fmt_num(s.get("balance_top_share_warning"))))
-    lines.append(row("recency_years", "D2 近年窗口", f"{s.get('recency_years','—')} 年 / ≥ {_fmt_pct(s.get('recency_min_share'))}", f"{s.get('recency_years','—')} 年 / ≥ {_fmt_pct(s.get('recency_min_share'))}"))
-    lines.append(row("d_freshness_days", "来源新鲜度", f"{s.get('d_freshness_days','—')} 天", f"{s.get('d_freshness_days','—')} 天"))
-    lines.append(row("f_abstract_rate", "摘要覆盖率", _fmt_pct(s.get("f_abstract_rate")), _fmt_pct(s.get("f_abstract_rate"))))
-    lines.append(row("f_access_rate", "全文获取率", _fmt_pct(s.get("f_access_rate")), _fmt_pct(s.get("f_access_rate"))))
-    lines.append(row("f_provenance_rate", "来源可追溯", _fmt_pct(s.get("f_provenance_rate")), _fmt_pct(s.get("f_provenance_rate"))))
-    lines.append(row("f_core_metadata_rate", "核心元数据率", _fmt_pct(s.get("f_core_metadata_rate")), _fmt_pct(s.get("f_core_metadata_rate"))))
-    lines.append("")
-    lines.append("> 来源说明：`profile_default` = 工程领域默认值；`review_type_default` = 综述类型默认值；`user_override` = 用户指定值。")
-    lines.append("> 完整标准说明书见 `references/user-standards-guide.md`。")
-    return "\n".join(lines)
-
 def threshold_verdict(value, threshold):
     if value is None or threshold is None: return "not_assessable"
     return "pass" if value >= threshold else "fail"
@@ -901,25 +863,6 @@ def _priority_actions(report):
         parts.append(head + lines + (f"\n\n（共 {len(pa)} 篇候选，完整列表见 potential_additions.json）" if len(pa) > 15 else ""))
     return "\n\n".join(parts) if parts else "未检测到阻断或警示项。"
 
-def _top_actions(report):
-    """Extract the top 3 highest-priority actions for the report header."""
-    blocking, rec = [], []
-    for row in report.get("indicator_register", []):
-        v = row.get("meets_standard", "")
-        if v == "fail": blocking.append(row)
-        elif v == "warning": rec.append(row)
-
-    lines = []
-    # Blocking items first
-    for r in blocking[:2]:
-        lines.append(f"{len(lines)+1}. **🔴 {r['subproject']} {r['project_name']}**：{r.get('description_and_action','')}")
-    # Top warning if fewer than 3 blocking
-    for r in rec[:3 - len(blocking)]:
-        lines.append(f"{len(lines)+1}. **🟡 {r['subproject']} {r['project_name']}**：{r.get('description_and_action','')}")
-    if not lines:
-        lines.append("1. 未检测到阻断或警示项。查看完整总表确认是否有需人工核验的 `not_assessable` 项。")
-    return "\n".join(lines)
-
 def _dimension_narrative(report):
     c, p, b, t, d, q, h = (report["coverage"], report["process"], report["balance"],
                            report["topic_balance"], report["recency"], report["quality"],
@@ -935,7 +878,9 @@ def _dimension_narrative(report):
     auth_note = ""
     author_conc = b.get("author_concentration", {})
     if author_conc and author_conc.get("note"):
-        auth_note = f" 作者集中度：top-author {author_conc.get('top_author_share','—')}（{'、'.join(f'{k}={v}篇' for k,v in author_conc.get('top_authors',{}).items())}）。"
+        auth_note = f" 作者集中度：top-author {author_conc.get('top_author_share','—')}（{author_conc.get('top_author','')}: {author_conc.get('top_author_count','')}篇）。"
+    elif author_conc and author_conc.get("top_author_share") is not None:
+        auth_note = f" 作者集中度：top-author {author_conc.get('top_author_share','—')}（{author_conc.get('top_author','')}: {author_conc.get('top_author_count','')}篇）。"
     lines.append(f"**C 平衡**：{n_topics} 个预期主题，{'含空主题' if 'empty_topic' in flags else '全部有文献'}；来源集中度 {b.get('top_source_share','—')}（CV={_fmt_num(b.get('cv'))} Gini={_fmt_num(b.get('gini'))}）。{auth_note}")
     lines.append(f"**D 时效**：近 {d.get('window_years','—')} 年占比 {_fmt_pct(d.get('recent_share'))}（{d.get('recent_records','—')}/{d.get('dated_records','—')} 标有日期）；预印本 {d.get('preprint_records','—')} 条。")
     lines.append(f"**E 学术影响**：h-core={_fmt_num(q.get('h_core'))}（{q.get('citation_records','—')} 条引用）；Tier-1 {_fmt_pct(q.get('tier1_rate'))}（{q.get('tier1_venues_configured','—')} venue）。仅作背景信号，不等于研究质量——真正的研究质量评估应使用与研究设计匹配的批判性评价工具。")
@@ -958,12 +903,6 @@ def indicator_rows(report):
         if not user_confirmed:
             return "screening"
         return threshold_verdict(value, threshold)
-    # Also apply to non-A indicators that have thresholds
-    def tv_any(verdict):
-        """Wrap any verdict through the confirmed_by_user gate. Only 'pass'/'fail'/'warning' are affected."""
-        if not user_confirmed and verdict in ("pass", "fail", "warning"):
-            return "screening"
-        return verdict
     rows = []
     def add(dim, code, name, std, v, cur, ev, note):
         rows.append((dim, code, name, std, v, compact(cur), ev, note))
@@ -1237,6 +1176,7 @@ def write(report, out, artifact_paths=None):
     # ── Pre-compute all sections ──
     evidence_table = _input_evidence_table(report)
     method_narrative = _method_narrative(report)
+    search_iteration_section = _search_iteration_section(report)
 
     md = ["# 文献库评估报告\n"]
     # 1. 基本信息
@@ -1252,6 +1192,10 @@ def write(report, out, artifact_paths=None):
         md.append("")
     # 3. 评估方法与过程
     md.append("## 评估方法与过程\n"); md.append(method_narrative); md.append("")
+    # 3b. 检索迭代过程（有 search_iterations 时渲染）
+    if search_iteration_section:
+        md.append(search_iteration_section)
+        md.append("")
     # 4. A–F 六维评估总表
     md.append("## A–F 六维评估总表\n")
     md.append("| 维度 | 编号 | 评估项 | 标准 | 判定 | 当前值 | 证据状态 | 说明与行动 |")
