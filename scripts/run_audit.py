@@ -711,6 +711,13 @@ def indicator_rows(report):
     s = report.get("standards", {}); ctx = report.get("context", {})
     a1m = s.get("a1_min_recall"); a2m = s.get("a2_min_recall")
     chk = lambda g, k: g.get("checks", {}).get(k, "not_assessable")
+    # When confirmed_by_user is False, all threshold verdicts become screening
+    user_confirmed = s.get("confirmed_by_user", True)
+    def tv(value, threshold):
+        """Threshold verdict — returns 'screening' unless user confirmed standards."""
+        if not user_confirmed:
+            return "screening"
+        return threshold_verdict(value, threshold)
     rows = []
     def add(dim, code, name, std, v, cur, ev, note):
         rows.append((dim, code, name, std, v, compact(cur), ev, note))
@@ -730,7 +737,7 @@ def indicator_rows(report):
     mids = c["a1"].get("missing_ids", [])
 
     add("A 覆盖", "A1", "基准集召回率", f"阈值 ≥ {a1m}" if a1m else "需配置 a1_min_recall",
-        threshold_verdict(a1r, a1m), f"{_fmt_pct(a1r)}（{_fmt_num(a1h)}/{_fmt_num(a1t)}）",
+        tv(a1r, a1m), f"{_fmt_pct(a1r)}（{_fmt_num(a1h)}/{_fmt_num(a1t)}）",
         c["a1"].get("status"),
         f"A1 高只说明找回了锚点，不等于主题无遗漏。实测 {a1h}/{a1t}（{_fmt_pct(a1r)}）。{'漏项：' + ', '.join(mids[:5]) if mids else '无稳定 ID 漏项。'}")
 
@@ -739,7 +746,7 @@ def indicator_rows(report):
     a2_path = report.get("artifacts", {}).get("gold", {}).get("path", "")
     a2_dep = "⚠ A2 非独立——Gold 与 A1 基准集复用；A1 和 A2 不能相互增强证据强度。" if (a2_path and a2_path == a1_path) else ""
     add("A 覆盖", "A2", "检索式灵敏度", f"阈值 ≥ {a2m}" if a2m else "需配置 a2_min_recall",
-        threshold_verdict(a2r, a2m), f"{_fmt_pct(a2r)}（{_fmt_num(c['a2'].get('matched'))}/{_fmt_num(c['a2'].get('total'))}）",
+        tv(a2r, a2m), f"{_fmt_pct(a2r)}（{_fmt_num(c['a2'].get('matched'))}/{_fmt_num(c['a2'].get('total'))}）",
         c["a2"].get("status"),
         f"A2 高只说明检索式能找回 Gold，不等于 Gold 足够代表问题。{a2_dep}实测 {_fmt_pct(a2r)}。{'零命中=实测 0。' if a2r == 0 and c['a2'].get('status') == 'measured' else ''}")
 
@@ -1088,10 +1095,11 @@ def main():
             if not a.allow_out_of_scope:
                 print(f"ERROR: scope_status={scope_status}, allowed_assessment_level={allowed_level} — refusing to run full A-F.")
                 print("  Use --allow-out-of-scope to force (report will carry permanent caveats),")
-                print("  or limit to metadata-health/search-design mode.")
+                print("  or use --mode metadata-health / --mode search-design for downgraded service.")
                 p.exit(1)
             else:
                 print("WARNING: scope_status=out_of_scope but --allow-out-of-scope active — continuing with permanent caveats in report.")
+                ctx.setdefault("_scope_override_active", True)
 
         # Resolve relative paths against the run-config directory
         rc_base = rc_base_dir
@@ -1127,9 +1135,8 @@ def main():
             user_stds = rc.get("standards", {}).get("user_overrides", {})
             confirmed = rc.get("standards", {}).get("confirmed_by_user", False)
             if user_stds:
-                ctx_from_rc["standards"] = user_stds
-            if not confirmed:
-                ctx_from_rc.setdefault("standards", {})["confirmed_by_user"] = False
+                ctx_from_rc["standards"] = dict(user_stds)
+            ctx_from_rc.setdefault("standards", {})["confirmed_by_user"] = confirmed
             # write as resolved-config for manifest
             resolved_dir = pathlib.Path(a.out) / ".tmp"
             resolved_dir.mkdir(parents=True, exist_ok=True)
@@ -1145,11 +1152,33 @@ def main():
     # Propagate scope_status
     scope_status = ctx.get("scope_status", "")
     if scope_status == "out_of_scope":
-        print("WARNING: scope_status=out_of_scope — run-config indicates out of scope, but --scope-stop-ok was passed. Continuing with caveats.")
+        print("WARNING: scope_status=out_of_scope — --allow-out-of-scope active. Report will carry permanent caveats.")
+    # Check query_hits for failed sources — downgrade A2 status if any query failed
+    a2_query_failed = False
+    if a.query_hits:
+        qh_path = pathlib.Path(a.query_hits)
+        if qh_path.is_file():
+            try:
+                qh_data = json.loads(qh_path.read_text(encoding="utf-8"))
+                if isinstance(qh_data, list):
+                    # query-hits.json is a flat list of hit records
+                    pass
+                elif isinstance(qh_data, dict):
+                    queries_info = qh_data.get("queries", qh_data.get("query_log", []))
+                    a2_query_failed = any(
+                        isinstance(q, dict) and q.get("status") == "failed"
+                        for q in queries_info
+                    )
+            except (json.JSONDecodeError, OSError):
+                pass
     lib = load_items(a.library)
     cov = {"a1": benchmark(load_items(a.library), load_items(a.benchmark) if a.benchmark else []),
            "a2": a2(load_items(a.gold) if a.gold else None, load_items(a.query_hits) if a.query_hits else None),
            "a3": a3(load_snapshot(a.candidate_snapshots) if a.candidate_snapshots else {})}
+    # If any source query failed, downgrade A2 — failed retrieval ≠ zero hits
+    if a2_query_failed and cov["a2"].get("status") == "measured":
+        cov["a2"]["status"] = "partial_snapshot"
+        cov["a2"]["note"] = (cov["a2"].get("note", "") + " At least one source query failed — A2 recall may underestimate true sensitivity.").strip()
     # F1: parse run-log BEFORE stability() so F1_query_traceability can use the result
     if a.run_log:
         rp = pathlib.Path(a.run_log)

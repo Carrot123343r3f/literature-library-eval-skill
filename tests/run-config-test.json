@@ -19,7 +19,7 @@
   },
   "library": {
     "provided": true,
-    "path": "tests/library.json",
+    "path": "library.json",
     "format": "json",
     "record_count": 2,
     "normalization_required": false
@@ -33,10 +33,10 @@
     "stop_conditions": []
   },
   "evidence_inputs": {
-    "benchmark": "tests/benchmark.json",
+    "benchmark": "benchmark.json",
     "gold": null,
     "query_log": null,
-    "source_snapshot": "tests/snapshot.json",
+    "source_snapshot": "snapshot.json",
     "screening_decisions": null,
     "deduplication_log": null
   },

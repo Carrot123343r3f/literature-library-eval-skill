@@ -12,7 +12,7 @@
       "required": ["research_question", "review_type", "scope_status"],
       "properties": {
         "research_question": {"type": "string", "minLength": 1},
-        "review_type": {"type": "string", "enum": ["叙事综述", "系统综述", "范围综述", "快速综述", "伞式综述"]},
+        "review_type": {"type": "string", "enum": ["narrative", "systematic", "scoping", "rapid", "umbrella", "叙事综述", "系统综述", "范围综述", "快速综述", "伞式综述"]},
         "engineering_profile": {"type": "array", "items": {"type": "string"}},
         "scope_status": {"type": "string", "enum": ["in_scope", "cross_domain", "out_of_scope", "scope_uncertain"]},
         "scope_rationale": {"type": "string"},
@@ -32,8 +32,8 @@
       "required": ["provided"],
       "properties": {
         "provided": {"type": "boolean"},
-        "path": {"type": ["string", "null"]},
-        "format": {"type": ["string", "null"], "enum": ["zotero_mcp", "zotero_api", "bibtex", "csv", "json", "ris", "pdf_directory", null]},
+        "path": {"type": ["string", "null"], "description": "Path to library file. Relative paths are resolved against the directory containing run-config.json."},
+        "format": {"type": ["string", "null"], "enum": ["json", null], "description": "v1.0: only json is fully supported. bibtex/csv/ris/zotero_mcp/zotero_api are declared for forward compatibility."},
         "record_count": {"type": ["integer", "null"]},
         "normalization_required": {"type": "boolean", "default": true}
       }
@@ -51,13 +51,16 @@
     "evidence_inputs": {
       "type": "object",
       "properties": {
-        "benchmark": {"type": ["string", "null"], "description": "A1 baseline file path"},
-        "gold": {"type": ["string", "null"], "description": "A2 gold set file path"},
-        "query_log": {"type": ["string", "null"], "description": "Run-log for F1/A2"},
-        "source_snapshot": {"type": ["string", "null"], "description": "Collector snapshot for A3"},
-        "screening_decisions": {"type": ["string", "null"], "description": "Screening decisions for B"},
-        "deduplication_log": {"type": ["string", "null"], "description": "Dedup/version log for F4"},
-        "failed_sources": {"type": "array", "items": {"type": "string"}}
+        "benchmark": {"type": ["string", "null"], "description": "A1 baseline file path. Produced by: manual/agent. Supports: A1."},
+        "gold": {"type": ["string", "null"], "description": "A2 gold set file path. Produced by: manual/agent. Supports: A2."},
+        "query_log": {"type": ["string", "null"], "description": "Run-log file. Produced by: user or search_for_eval.py. Supports: F1. Missing → F1 not_assessable."},
+        "query_hits": {"type": ["string", "null"], "description": "query-hits.json from search_for_eval.py. Produced by: search_for_eval.py. Supports: A2. Missing → A2 not_assessable."},
+        "query_plan": {"type": ["string", "null"], "description": "query-plan.json. Produced by: manual/agent. Supports: F1 traceability."},
+        "source_snapshot": {"type": ["string", "null"], "description": "Collector snapshot for A3. Produced by: collect_open_sources.py. Supports: A3. Missing → A3 not_assessable."},
+        "screening_decisions": {"type": ["string", "null"], "description": "Screening decisions for B/F5. Produced by: manual/agent. Supports: B GGR/DRR, F5 traceability. Missing → B discovery_only, F5 provenance-only."},
+        "deduplication_log": {"type": ["string", "null"], "description": "Dedup/version log. Produced by: normalize_candidates.py. Supports: F4. Missing → F4 not_assessable (version candidates)."},
+        "search_meta": {"type": ["string", "null"], "description": "search_meta.json from search_for_eval.py. Produced by: search_for_eval.py. Supports: A2 sensitivity, B discovery candidates."},
+        "failed_sources": {"type": "array", "items": {"type": "string"}, "description": "Names of sources that failed during collection. Produced by: all collectors. Supports: A2/A3 partial_snapshot downgrade."}
       }
     },
     "standards": {
