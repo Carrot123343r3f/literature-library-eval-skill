@@ -146,7 +146,7 @@
 | `search_sources` / `planned_sources` | 2.2 | 数据来源列表 | 评估方法·数据来源 |
 | `failed_sources` | 执行时记录 | 检索失败的来源 | 评估方法·数据来源（括注） |
 | `taxonomy` | 3.4 / 推断 | `[{name, expected, high_confidence_records, target_share}]` | 评估方法·分类体系 + C1 计算 |
-| `standards` | 2.2/2.3 | 各项阈值（见 `engineering-standards.md`），默认按综述类型分层（叙事 A1≥0.75 / 系统 A1≥0.90 / 快速 A1≥0.60 / 伞式 A1≥0.85） | 总表·标准列 |
+| `standards` | 2.2/2.3 | 各项阈值（见 `engineering-standards.md`），默认按综述类型分层（叙事 A1≥0.75 / 系统 A1≥0.90 / 快速 A1≥0.60 / 伞式 A1≥0.90） | 总表·标准列 |
 | `tier1_venues` | 3.5 | Tier-1 venue 关键字列表 | E2 计算 |
 | `last_successful_search` | 执行时 | `{source: date}` 各来源检索日期 | D1 计算 |
 | `search_rounds` / `planned_pathways` / `source_marginal_yields` / `independent_validation_passed` | 执行时 | B 饱和度过程数据 | B1/B2/B3 计算 |
