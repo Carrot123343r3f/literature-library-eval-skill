@@ -991,6 +991,7 @@ def main():
     # F4: verify dedup-log exists, is parseable, and contains structured decisions.
     # dedup_log_ok only True when: structured sections exist AND all fuzzy/version candidates
     # have actual decisions (merge/retain_both/exclude/manual_review_required).
+    # "No pending candidates" is a valid conclusion (scan completed, nothing ambiguous) → pass.
     # Without decisions → F4_version_decisions remains not_assessable or warning.
     dedup_log_ok = False
     dedup_log_depth = "missing"
@@ -1006,13 +1007,17 @@ def main():
                     uncertain = data.get("uncertain_title_year_candidates", [])
                     version_fams = data.get("possible_version_families", [])
                     pending = uncertain + version_fams
-                    all_decided = all(
-                        c.get("decision") in ("merge", "retain_both", "exclude", "manual_review_required")
-                        for c in pending
-                    ) if pending else True
-                    dedup_log_depth = "structured_decisions" if all_decided else "structured_no_decisions"
-                    # Only consider the log "ok" when decisions actually exist
-                    dedup_log_ok = all_decided and pending
+                    if pending:
+                        all_decided = all(
+                            c.get("decision") in ("merge", "retain_both", "exclude", "manual_review_required")
+                            for c in pending
+                        )
+                        dedup_log_depth = "structured_decisions" if all_decided else "structured_no_decisions"
+                        dedup_log_ok = all_decided  # only when all pending have decisions
+                    else:
+                        # Scan completed, zero ambiguous candidates → pass
+                        dedup_log_depth = "structured_decisions"
+                        dedup_log_ok = True
                 else:
                     dedup_log_depth = "parseable_but_shallow"
             except (json.JSONDecodeError, OSError):
