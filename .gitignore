@@ -10,3 +10,4 @@ query-plan.json
 source-snapshot.json
 screening-log.json
 *.log
+skill.md
