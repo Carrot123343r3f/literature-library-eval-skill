@@ -155,7 +155,7 @@ git clone https://github.com/Carrot123343r3f/literature-library-eval-skill.git \
 | **深度了解** | [方法学](docs/methodology.md) · [架构](docs/architecture.md) · [输出说明](docs/outputs.md) |
 | **集成** | [集成指南](docs/integrations.md) · Zotero / 数据库 / 配套 skill |
 | **标准参考** | [用户标准说明书](references/user-standards-guide.md) · [指标注册表](schemas/indicator-registry.json) |
-| **AI Agent** | [AI 执行说明](AI_GUIDE.md) · [输入协议](references/intake-protocol.md) · [检索协议](references/search-strategy-protocol.md) |
+| **AI Agent** | [SKILL.md](SKILL.md) · [输入协议](references/intake-protocol.md) · [检索协议](references/search-strategy-protocol.md) |
 | **开发者** | [run-config-schema.json](schemas/run-config-schema.json) · [架构](docs/architecture.md) · [tests/](tests/) |
 
 ## 路线图

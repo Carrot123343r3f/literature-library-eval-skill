@@ -7,7 +7,7 @@ This helper exists only for backwards compatibility with simple A1 recall
 checks and will not be extended. Legacy fixed scores for quality, saturation,
 venue, and PDF scores are permanently retired.
 
-For full documentation, see README.md and AI_GUIDE.md.
+For full documentation, see README.md and SKILL.md.
 """
 import argparse
 import json

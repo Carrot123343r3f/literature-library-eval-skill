@@ -162,7 +162,7 @@ git clone https://github.com/Carrot123343r3f/literature-library-eval-skill.git \
 | **Deep dive** | [Methodology](docs/methodology.md) · [Architecture](docs/architecture.md) · [Outputs](docs/outputs.md) |
 | **Integration** | [Integrations](docs/integrations.md) · [Zotero / databases / companion skills](docs/integrations.md) |
 | **Standards** | [User standards guide](references/user-standards-guide.md) · [Indicator registry](schemas/indicator-registry.json) |
-| **AI Agents** | [AI Guide](AI_GUIDE.md) · [Intake protocol](references/intake-protocol.md) · [Search protocol](references/search-strategy-protocol.md) |
+| **AI Agents** | [SKILL.md](SKILL.md) · [Intake protocol](references/intake-protocol.md) · [Search protocol](references/search-strategy-protocol.md) |
 | **Developers** | [run-config-schema.json](schemas/run-config-schema.json) · [Architecture](docs/architecture.md) · [tests/](tests/) |
 
 ## Roadmap
