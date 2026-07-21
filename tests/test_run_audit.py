@@ -151,4 +151,80 @@ with tempfile.TemporaryDirectory() as temp:
 
 print("F4 no-decision guard: PASSED")
 
+# Test: F4 rejects manual_review_required (pending, not resolved)
+with tempfile.TemporaryDirectory() as temp:
+    dedup_mrr = pathlib.Path(temp) / "dedup_mrr.json"
+    dedup_mrr.write_text(json.dumps({
+        "exact_identifier_groups": [{"stable_id": "doi:10.1000/1", "records": 1}],
+        "possible_version_families": [
+            {"title_year": ("test", "2025"), "stable_ids": ["arxiv:1234.5678", "doi:10.1000/2"],
+             "decision": "manual_review_required"}
+        ]
+    }), encoding="utf-8")
+    out = pathlib.Path(temp) / "out"
+    audit = run_audit(str(root / "tests" / "context.json"), str(out),
+                      extra_args=["--deduplication-log", str(dedup_mrr)])
+    h = audit["library_health"]
+    # manual_review_required is PENDING → should NOT be structured_decisions
+    assert h.get("dedup_log_depth") == "structured_no_decisions", \
+        f"Expected structured_no_decisions for manual_review_required, got {h.get('dedup_log_depth')}"
+    f4_row = [r for r in audit["indicator_register"] if r["subproject"] == "F4"][0]
+    assert f4_row["meets_standard"] != "pass", \
+        f"F4 should not pass with manual_review_required, got {f4_row['meets_standard']}"
+
+print("F4 manual_review_required guard: PASSED")
+
+# Test: B discovery_only rounds → not_assessable, never 趋稳
+with tempfile.TemporaryDirectory() as temp:
+    # context with discovery_only rounds
+    disco_ctx = pathlib.Path(temp) / "disco_context.json"
+    disco_ctx.write_text(json.dumps({
+        "review_type": "叙事综述",
+        "planned_pathways": ["openalex-first-round"],
+        "search_rounds": [
+            {"pathway": "openalex-first-round", "completed": True,
+             "core_before": 100, "included_high": 0,
+             "discovery_candidates": 12,
+             "screening_status": "discovery_only",
+             "note": "auto-generated candidates"}
+        ],
+        "source_marginal_yields": [
+            {"yield": 0.12, "screening_status": "discovery_only"}
+        ]
+    }), encoding="utf-8")
+    out = pathlib.Path(temp) / "out"
+    audit = run_audit(str(disco_ctx), str(out))
+    proc = audit["process"]
+    b1 = proc["checks"]["B1_ggr"]
+    b2 = proc["checks"]["B2_drr"]
+    # B1/B2 must be not_assessable when only discovery_only rounds exist
+    assert b1 == "not_assessable", f"B1 should be not_assessable for discovery_only, got {b1}"
+    assert b2 == "not_assessable", f"B2 should be not_assessable for discovery_only, got {b2}"
+    assert proc["verdict"] != "趋稳", f"Verdict should not be 趋稳 for discovery_only, got {proc['verdict']}"
+
+print("B discovery_only guard: PASSED")
+
+# Test: F1 fails when only 1 of 3 queries is valid
+with tempfile.TemporaryDirectory() as temp:
+    partial_log = pathlib.Path(temp) / "partial_run_log.json"
+    partial_log.write_text(json.dumps({
+        "queries": [
+            {"source": "openalex", "query": "complete", "fields": "title,doi", "date": "2026-01-01"},
+            {"source": "crossref", "query": "incomplete"},  # no fields or date
+            {"source": "arxiv", "query": "also incomplete"}
+        ]
+    }), encoding="utf-8")
+    out = pathlib.Path(temp) / "out"
+    audit = run_audit(str(root / "tests" / "context.json"), str(out),
+                      extra_args=["--run-log", str(partial_log)])
+    f1_row = [r for r in audit["indicator_register"] if r["subproject"] == "F1"][0]
+    # Only 1/3 queries valid → F1 should fail
+    assert f1_row["meets_standard"] == "fail", \
+        f"F1 should fail when only 1/3 queries valid, got {f1_row['meets_standard']}"
+    ctx = audit.get("context", {})
+    assert ctx.get("run_log_completeness") == 0.333, \
+        f"Expected 0.333 completeness, got {ctx.get('run_log_completeness')}"
+
+print("F1 partial log guard: PASSED")
+
 print("\nAll tests passed.")

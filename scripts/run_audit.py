@@ -179,6 +179,7 @@ def health(library, standards=None, dedup_log_provided=False, dedup_log_depth="m
             "decision_link_rate": round(decision_links / n, 3) if n else None,
             "decision_log_provided": decision_log_provided,
             "dedup_log_depth": dedup_log_depth,
+            "f5_note": f5_note,
             "note": "F3=v 附件或开放链接任一可用的记录比例；两率分列展示以避免重复计数。版本族等价性、访问权限和更正状态需专项来源核验。F5 需 decision-log 以追溯纳入/排除理由。"}
 
 def stability(context):
@@ -840,10 +841,10 @@ def indicator_rows(report):
         dedup_verdict, dedup_info, h.get("status"),
         f"DOI 重复 {_fmt_num(hdoi)} 组。{'存在未处理重复。' if hdoi > 0 else '无精确重复。'}题名相似候选 {_fmt_num(hty)} 组（{'版本决定已保存（' + dedup_log_depth + '）。' if chk(h,'F4_version_decisions')=='pass' else '未提供结构化 dedup-log，版本候选待核验。'}）")
 
-    f5_note = h.get("note", "")
+    f5_note = h.get("f5_note", "")
     add("F 可用性", "F5", "来源可追溯", f"≥ {report['standards'].get('f_provenance_rate', .95)}",
         chk(h, "F5_provenance"), _fmt_pct(hpr), h.get("status"),
-        f"来源谱系率 {_fmt_pct(hpr)}。{'纳入/排除决定可追溯。' if h.get('decision_log_provided') else '仅来源字段可追溯——未提供 decision-log，纳入/排除理由不可追溯。'}达标。{'达标。' if hpr and hpr >= report['standards'].get('f_provenance_rate',.95) else '低于阈值。'}")
+        f5_note if f5_note else f"来源谱系率 {_fmt_pct(hpr)}。{'达标。' if hpr and hpr >= report['standards'].get('f_provenance_rate',.95) else '低于阈值。'}")
 
     add("F 可用性", "F6", "撤稿更正核查",
         "/" if hcr == 0 else "关键记录有更正检查",
@@ -1012,18 +1013,110 @@ def write(report, out, artifact_paths=None):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--library", required=True); p.add_argument("--benchmark"); p.add_argument("--gold")
+    p.add_argument("--run-config", help="run-config.json (v1.0) — auto-resolves all other inputs")
+    p.add_argument("--library"); p.add_argument("--benchmark"); p.add_argument("--gold")
     p.add_argument("--query-hits"); p.add_argument("--candidate-snapshots"); p.add_argument("--context")
     p.add_argument("--query-plan"); p.add_argument("--source-snapshot"); p.add_argument("--decision-log")
     p.add_argument("--deduplication-log"); p.add_argument("--run-log"); p.add_argument("--out", required=True)
     a = p.parse_args()
+
+    # ── run-config mode: auto-resolve all inputs from run-config.json ──
+    if a.run_config:
+        rc_path = pathlib.Path(a.run_config)
+        if not rc_path.is_file():
+            p.error(f"run-config file not found: {a.run_config}")
+        rc = json.loads(rc_path.read_text(encoding="utf-8"))
+        # Validate schema
+        if rc.get("schema_version") != "1.0":
+            print(f"WARNING: run-config schema_version={rc.get('schema_version')} (expected 1.0)")
+        # Resolve scope
+        scope_status = rc.get("project", {}).get("scope_status", "scope_uncertain")
+        allowed_level = rc.get("project", {}).get("allowed_assessment_level", "full")
+        if scope_status in ("out_of_scope",) or allowed_level == "stop":
+            print(f"ERROR: scope_status={scope_status}, allowed_assessment_level={allowed_level} — refusing to run full A-F.")
+            print("  Run with --scope-stop-ok to force, or limit to metadata-health mode.")
+            if "--scope-stop-ok" not in sys.argv[1:]:
+                p.exit(1)
+        # Resolve library
+        lib_info = rc.get("library", {})
+        if lib_info.get("provided") and lib_info.get("path") and not a.library:
+            a.library = lib_info["path"]
+        # Resolve evidence inputs
+        ev = rc.get("evidence_inputs", {})
+        if ev.get("benchmark") and not a.benchmark: a.benchmark = ev["benchmark"]
+        if ev.get("gold") and not a.gold: a.gold = ev["gold"]
+        if ev.get("query_log") and not a.run_log: a.run_log = ev["query_log"]
+        if ev.get("source_snapshot") and not a.candidate_snapshots: a.candidate_snapshots = ev["source_snapshot"]
+        if ev.get("screening_decisions") and not a.decision_log: a.decision_log = ev["screening_decisions"]
+        if ev.get("deduplication_log") and not a.deduplication_log: a.deduplication_log = ev["deduplication_log"]
+        # Resolve context: --context takes precedence, otherwise build from run-config
+        if not a.context:
+            ctx_from_rc = {
+                "review_type": rc.get("project", {}).get("review_type", ""),
+                "profile": (rc.get("project", {}).get("engineering_profile", [None]) or [None])[0] if rc.get("project", {}).get("engineering_profile") else "",
+                "year_start": (rc.get("project", {}).get("time_range") or {}).get("start"),
+                "year_end": (rc.get("project", {}).get("time_range") or {}).get("end"),
+                "languages": rc.get("project", {}).get("languages", []),
+                "scope_status": scope_status,
+            }
+            # Merge user standards overrides
+            user_stds = rc.get("standards", {}).get("user_overrides", {})
+            confirmed = rc.get("standards", {}).get("confirmed_by_user", False)
+            if user_stds:
+                ctx_from_rc["standards"] = user_stds
+            if not confirmed:
+                ctx_from_rc.setdefault("standards", {})["confirmed_by_user"] = False
+            # Write temporary context.json so the rest of main() can consume it
+            import tempfile as _tmp
+            _tmp_dir = pathlib.Path(a.out) / ".tmp"
+            _tmp_dir.mkdir(parents=True, exist_ok=True)
+            ctx_file = _tmp_dir / "context_from_run_config.json"
+            ctx_file.write_text(json.dumps(ctx_from_rc, ensure_ascii=False, indent=2), encoding="utf-8")
+            a.context = str(ctx_file)
+
+    if not a.library:
+        p.error("--library is required (or provide --run-config with library.path)")
     ctx = json.load(open(a.context, encoding="utf-8")) if a.context else {}
     ctx.setdefault("library_path", a.library)
     ctx = resolve_thresholds(ctx)
+    # Propagate scope_status
+    scope_status = ctx.get("scope_status", "")
+    if scope_status == "out_of_scope":
+        print("WARNING: scope_status=out_of_scope — run-config indicates out of scope, but --scope-stop-ok was passed. Continuing with caveats.")
     lib = load_items(a.library)
     cov = {"a1": benchmark(load_items(a.library), load_items(a.benchmark) if a.benchmark else []),
            "a2": a2(load_items(a.gold) if a.gold else None, load_items(a.query_hits) if a.query_hits else None),
            "a3": a3(load_snapshot(a.candidate_snapshots) if a.candidate_snapshots else {})}
+    # F1: parse run-log BEFORE stability() so F1_query_traceability can use the result
+    if a.run_log:
+        rp = pathlib.Path(a.run_log)
+        if rp.is_file():
+            try:
+                content = rp.read_text(encoding="utf-8")
+                if content.strip():
+                    data = json.loads(content)
+                    queries = data.get("queries", data.get("query_log", []))
+                    if queries and isinstance(queries, list):
+                        REQUIRED = {"source", "query", "fields", "date"}
+                        PREFERRED = {"filters", "result_count", "completion_status"}
+                        valid_count = sum(1 for q in queries if isinstance(q, dict) and REQUIRED <= set(q.keys()))
+                        preferred_count = sum(1 for q in queries if isinstance(q, dict) and PREFERRED <= set(q.keys()))
+                        total_count = len(queries)
+                        completeness = round(valid_count / total_count, 3) if total_count else None
+                        ctx["run_log_query_count"] = total_count
+                        ctx["run_log_valid_count"] = valid_count
+                        ctx["run_log_completeness"] = completeness
+                        ctx["run_log_complete"] = valid_count == total_count and total_count > 0
+                        ctx["run_log_depth"] = ("valid_full" if preferred_count == total_count and total_count > 0
+                                                else "valid" if valid_count == total_count
+                                                else "partial" if valid_count > 0
+                                                else "shallow")
+                    else:
+                        ctx["run_log_complete"] = False
+                        ctx["run_log_depth"] = "shallow"
+            except (OSError, json.JSONDecodeError):
+                ctx["run_log_complete"] = False
+                ctx["run_log_depth"] = "unparseable"
     proc = stability(ctx); bal = balance(lib, ctx.get("standards", {}))
     tbal = topic_balance(ctx); cur = currency(ctx); rec = recency(lib, ctx)
     # F4: verify dedup-log exists, is parseable, and contains structured decisions.
@@ -1081,39 +1174,6 @@ def main():
                   dedup_log_depth=dedup_log_depth, decision_log_provided=decision_log_ok)
     libh["dedup_log_depth"] = dedup_log_depth
     qual = quality(lib, ctx)
-    # F1: verify run-log structure — requires query text, source, fields, date at minimum.
-    # ALL queries must satisfy the minimal schema (not just any one).
-    if a.run_log:
-        rp = pathlib.Path(a.run_log)
-        if rp.is_file():
-            try:
-                content = rp.read_text(encoding="utf-8")
-                if content.strip():
-                    data = json.loads(content)
-                    queries = data.get("queries", data.get("query_log", []))
-                    if queries and isinstance(queries, list):
-                        # Minimal schema: source, query, fields, date
-                        REQUIRED = {"source", "query", "fields", "date"}
-                        PREFERRED = {"filters", "result_count", "completion_status"}
-                        valid_count = sum(1 for q in queries if isinstance(q, dict) and REQUIRED <= set(q.keys()))
-                        preferred_count = sum(1 for q in queries if isinstance(q, dict) and PREFERRED <= set(q.keys()))
-                        total_count = len(queries)
-                        completeness = round(valid_count / total_count, 3) if total_count else None
-                        ctx["run_log_query_count"] = total_count
-                        ctx["run_log_valid_count"] = valid_count
-                        ctx["run_log_completeness"] = completeness
-                        # F1 passes only when ALL queries have minimal fields
-                        ctx["run_log_complete"] = valid_count == total_count and total_count > 0
-                        ctx["run_log_depth"] = ("valid_full" if preferred_count == total_count and total_count > 0
-                                                else "valid" if valid_count == total_count
-                                                else "partial" if valid_count > 0
-                                                else "shallow")
-                    else:
-                        ctx["run_log_complete"] = False
-                        ctx["run_log_depth"] = "shallow"
-            except (OSError, json.JSONDecodeError):
-                ctx["run_log_complete"] = False
-                ctx["run_log_depth"] = "unparseable"
     # umbrella-specific A4/C4/F7 (requires libh to exist first)
     umb = umbrella_checks(lib, ctx, libh) if ctx.get("review_type") == "伞式综述" else {"a4": None, "c4": None, "f7": None}
     gt = dt.datetime.now(dt.timezone.utc).isoformat(); gts = gt[:19].replace("T", " ")
@@ -1162,7 +1222,8 @@ def main():
             "伞式综述专用子项 F7 仅报告就绪度——AMSTAR-2 的 16 项评分和 ROBIS 偏倚风险评估需人工或专用工具完成，本报告不代替实际质量评估。"
         ])
     write(report, pathlib.Path(a.out),
-          artifact_paths={"library": a.library,
+          artifact_paths={k: v for k, v in {
+                         "library": a.library,
                          "benchmark": a.benchmark,
                          "gold": a.gold,
                          "query-hits": a.query_hits,
@@ -1172,6 +1233,6 @@ def main():
                          "decision-log": a.decision_log,
                          "deduplication-log": a.deduplication_log,
                          "run-log": a.run_log,
-                         "context": a.context})
+                         "context": a.context}.items() if v is not None})
 
 if __name__ == "__main__": main()

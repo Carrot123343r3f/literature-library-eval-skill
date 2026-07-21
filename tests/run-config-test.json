@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0",
+  "project": {
+    "research_question": "3D Gaussian Splatting for real-time SLAM",
+    "review_type": "systematic",
+    "engineering_profile": [
+      "computer_ai"
+    ],
+    "scope_status": "in_scope",
+    "scope_rationale": "Engineering task-method-metric",
+    "time_range": {
+      "start": 2020,
+      "end": 2026
+    },
+    "languages": [
+      "en"
+    ],
+    "allowed_assessment_level": "full"
+  },
+  "library": {
+    "provided": true,
+    "path": "tests/library.json",
+    "format": "json",
+    "record_count": 2,
+    "normalization_required": false
+  },
+  "automation": {
+    "allow_search": true,
+    "allow_query_refinement": true,
+    "allowed_sources": [
+      "openalex"
+    ],
+    "stop_conditions": []
+  },
+  "evidence_inputs": {
+    "benchmark": "tests/benchmark.json",
+    "gold": null,
+    "query_log": null,
+    "source_snapshot": "tests/snapshot.json",
+    "screening_decisions": null,
+    "deduplication_log": null
+  },
+  "standards": {
+    "defaults_profile": "computer_ai",
+    "user_overrides": {},
+    "confirmed_by_user": true
+  },
+  "output": {
+    "language": "en",
+    "formats": [
+      "md",
+      "html",
+      "json"
+    ],
+    "include_standards_appendix": true
+  }
+}
