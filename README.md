@@ -1,100 +1,174 @@
-# Engineering Literature Library Audit
+# Literature Library Eval
 
 帮工程研究者把模糊的文献库，转变为一份可解释、可复跑、知道下一步该补什么的综述准备度诊断。
 
-不是"自动判库是否合格"——自动结果始终与你的人工判断配合使用。首次使用只需说出题目或提供库位置，AI 会用最少问题补全必要信息，不需要你理解 JSON schema 或文献计量术语。
+**English:** An engineering-focused literature-library readiness diagnostic for systematic, scoping, narrative, rapid & umbrella reviews. Evaluates coverage, saturation, balance, recency, impact signals, and usability — not a single quality score.
 
-## 适用范围
+[![Tests](https://img.shields.io/badge/tests-passing-green)](#)
+[![License](https://img.shields.io/badge/license-MIT-blue)](#)
+[![Version](https://img.shields.io/badge/version-model--x--2026--07-lightgrey)](#)
 
-支持计算机与 AI、电子通信、机械制造、土木建筑、材料工程、能源、环境工程、化工过程、航空航天、交通与生物医学工程。排除纯数学、纯物理、纯化学、临床医学和基础生命科学。
+---
 
-支持系统、范围、叙事、快速及伞式综述。任何"充分""趋稳"结论都只在报告声明的问题、来源、时间和纳入标准内成立。
+## 为什么需要它？
 
-## 它评估什么
+写综述前，你需要知道：**现有文献库能不能开始写？最大风险是什么？下一步补什么最有效？**
 
-六个维度平级，不合成总分：
+它不是"自动判库是否合格"，也不是论文质量打分器。它在三件事上帮你：
 
-| 维度 | 核心问题 | 要点 |
-| --- | --- | --- |
-| A 覆盖 | 已知必纳入文献找回来了吗？检索式能命中已知工作吗？ | A1 基准集召回、A2 检索灵敏度、A3 多源候选下界 |
-| B 饱和度 | 继续搜还会不会长？ | GGR、DRR、路径完成+独立验证 |
-| C 平衡 | 主题与来源是不是偏在一边？ | 主题/来源 Top-share、CV、Gini、Shannon、TVD、交叉依赖 |
-| D 时效 | 库跟得上当前研究状态吗？ | 来源新鲜度、近年比例、前沿覆盖、版本区分 |
-| E 学术影响 | 引用核心与顶级渠道覆盖？（仅背景信号，不是质量裁决） | h-core、Tier-1 命中 |
-| F 可用性 | 文献能拿来写综述吗？ | 查询可复跑、摘要、全文、去重/版本、谱系、撤稿 |
+1. **诊断**：覆盖够不够？检索还在长吗？主题偏斜吗？近年的够吗？文献能拿到全文吗？
+2. **定位**：不是给一个总分说"不行"——而是告诉你 _哪个维度_ 有问题、_为什么_。
+3. **指引**：缺什么、怎么补、最小成本是什么。
 
-共 21 子项（伞式综述 +3 = 24 子项）。`not_assessable` 表示缺少输入——不是失败，是指引下一步。
-
-## 首次使用
+## 60 秒开始
 
 只需说：
 
-> 使用 literature-library-eval 评估我的文献库，判断它能否支持关于 [题目] 的 [类型] 综述。
+> 使用 literature-library-eval 评估我的文献库，判断它能否支撑关于 **工业视觉缺陷检测的跨产线迁移** 的系统综述。
 
-AI 按状态机（见 [intake-protocol.md](references/intake-protocol.md)）完成最小确认后自主检索、调词、去重、筛选和生成报告。一次最多问三个问题。范围外不拒绝，提供降级护航（题录健康/检索设计）。
+三步完成：
 
-## 输出报告
+1. **提供题目**——AI 自动判断是否在工程范围内，询问最小必要信息（一次最多三个问题）
+2. **提供库**（可选）——Zotero、CSV、BibTeX、JSON，或者让 AI 帮你设计检索策略
+3. **得到报告**——诊断问题 + 优先级行动 + 输入快照 + 可复跑包
 
-`audit.md` + `audit.html` + `audit.json`（含 `indicator_register`），十个段落：
+[打开示例报告 →](example-report.md)
 
-1. **输入与证据状态**——哪些输入工件提供了、有效性如何、缺失影响什么
-2. **优先级行动**——最重要的三项下一步（阻断优先）
-3. **基本信息**——库规模、综述类型、工程领域、范围
-4. **综合判断**——叙述性总结，明确"不可评估不是失败"
-5. **评估方法与过程**——检索式、基准集构建、数据来源、分类体系
-6. **A–F 评估总表**——每行标准、判定、当前值、证据状态、说明与行动
-7. **各维度分析**——六段叙述，解释数字含义
-8. **改进建议**——阻断项 + 建议改进
-9. **局限与声明**——诚实声明局限性
-10. **本次采用标准**——实际生效的阈值及其来源
+## 你会得到什么
 
-所有结论标为：**实测**、**估计**、**自动初筛**、**待人工核验**或**不可评估**。估计和自动初筛不能单独形成阻断结论。
+```text
+┌─────────────────────────────────────────────────┐
+│ 本次评估输入与证据状态                            │
+│ ─────────────────────────────────────────────── │
+│ 文献库 ✓ 有效（203 篇）                          │
+│ A1 基准集 ✓ 有稳定 ID                            │
+│ A2 Gold 集 ⚠ 与 A1 复用（非独立）                 │
+│ 查询日志 ✗ 缺失  → F1 不可评估                   │
+│ 筛选决定 ✗ discovery_only → B 不可判饱和          │
+├─────────────────────────────────────────────────┤
+│ 优先级行动                                       │
+│ 1. 🔴 F1 检索可复跑：建库时查询未保留              │
+│ 2. 🟡 A2 检索式灵敏度：A2 非独立                  │
+│ 3. 🟡 A1 基准集召回：75%（6/8）                   │
+└─────────────────────────────────────────────────┘
+```
 
-## 如何解读
+一个完整的评估包包含 `audit.md` + `audit.html` + `audit.json`，以及所有输入文件的快照和 `manifest.json`。
 
-- `pass` = 当前水平满足参考阈值；不代表完美。
-- `warning` = 存在风险信号，建议在综述中说明。
-- `fail` = 明确不满足，通常是输入缺失或过程阻断。
-- `not_assessable` = 缺少必要输入或核验路径——补上后可以重评。
+## 评估什么（六维框架）
 
-阈值均为参考值（详见 [user-standards-guide.md](references/user-standards-guide.md)），可在首次确认时覆盖。"趋稳"只在报告声明的范围内成立。
+| 维度 | 核心问题 | 要点 |
+| --- | --- | --- |
+| A 覆盖 | 已知必纳入文献找回来了吗？ | A1 基准集召回、A2 检索灵敏度、A3 多源候选下界 |
+| B 饱和度 | 继续搜还会不会长？ | GGR、DRR、路径完成+独立验证 |
+| C 平衡 | 主题与来源是不是偏在一边？ | 主题/来源 Top-share、CV、Gini、Shannon |
+| D 时效 | 库跟得上当前研究状态吗？ | 来源新鲜度、近年比例、前沿覆盖、版本区分 |
+| E 学术影响 | 引用核心与顶级渠道覆盖？ | h-core、Tier-1 命中（仅背景信号） |
+| F 可用性 | 文献能拿来写综述吗？ | 查询可复跑、摘要、全文、去重、谱系、撤稿 |
 
-## 自动化边界
+共 21 子项（伞式综述 +3 = 24）。[完整指标说明 →](references/user-standards-guide.md)
 
-去重、字段补全、检索扩展、基础统计——自动完成。
-"是否应纳入""是否属于核心文献""Gold 是否独立可靠""伞式综述类型判定"——需要人工复核。
-自动结果必须显式标注，不得伪装成人工筛选结论。
+## 适用范围
 
-默认使用开放来源（OpenAlex、Crossref、Europe PMC、arXiv）；工程订阅源只在已有合法访问时使用。不要在提示词、报告或仓库中写入 API key。
+| ✅ 支持 | ❌ 不支持 |
+| --- | --- |
+| 计算机与 AI、电子通信、机械制造、土木建筑 | 纯数学、纯物理、纯化学 |
+| 材料工程、能源、环境工程、化工过程 | 临床医学、基础生命科学 |
+| 航空航天、交通、生物医学工程 | — |
+
+**综述类型**：系统综述、范围综述、叙事综述、快速综述、伞式综述。
+
+领域外的研究问题**不会直接被拒绝**——提供降级服务（题录健康检查 / 检索准备度设计）。
+
+## 能做 / 不能做
+
+| 能做 | 不能做 |
+| --- | --- |
+| 诊断覆盖、饱和、平衡、时效、可用性 | 替代领域专家的纳入判断 |
+| 生成可追溯、可复跑的运行包 | 宣称文献库"绝对合格" |
+| 在合理假设下估计多源候选下界 | 保证检索已穷尽全球所有文献 |
+| 对范围外问题提供降级服务 | 替代 AMSTAR-2、ROBIS 等专门质量评估工具 |
+| 自动完成去重、字段补全、检索扩展、基础统计 | 自动判"这篇该不该纳入" |
+
+## 工作流
+
+```text
+题目或文献库
+  → 最小确认（S0 识别 → S2 范围路由 → S3 必需项）
+  → 输出 run-config.json（后台，用户不可见）
+  → 规范化 / 检索 / 筛选证据
+  → A–F 诊断
+  → 报告 + 输入快照 + manifest.json
+```
+
+## 安装与兼容性
+
+### Claude
+
+将整个文件夹复制到 `~/.claude/skills/literature-library-eval`，重新打开应用即可。
+
+### Codex
+
+将整个文件夹复制到 `~/.codex/skills/literature-library-eval`，重新打开应用即可。
+
+### 从 GitHub 克隆
+
+```bash
+git clone https://github.com/Carrot123343r3f/literature-library-eval-skill.git
+# 然后按上方 Claude / Codex 路径放置
+```
+
+### 依赖
+
+- Python 3.10+（用于 `scripts/` 下的本地脚本）
+- 在线搜索功能需要网络连接
+- 无需 API key —— 使用开放源（OpenAlex、Crossref、Europe PMC、arXiv）
+
+## 可复现性与隐私
+
+- 每次运行会在 `out/inputs/` 下保存所有输入文件的副本，生成 `manifest.json`（含 sha256、git commit、Python 版本）
+- 输入文件按 `标签__<sha256前12位>.ext` 命名，避免同名覆盖
+- **不保存绝对路径** —— `manifest.json` 只记录文件名、sha256 和包内相对路径
+- 不要在提示词、报告或仓库中写入 API key
 
 ## 文件结构
 
 ```text
 literature-library-eval/
-├── SKILL.md                     # 入口：触发 → 状态机 → A–F 评估
-├── AI_GUIDE.md                  # AI 执行规范（状态机、不可违反规则、检索步骤、交付物）
-├── README.md                    # 你正在看的——入门 + 报告解读
+├── SKILL.md                     # 入口
+├── AI_GUIDE.md                  # AI 执行规范
+├── README.md                    # 你正在看的
 ├── references/
-│   ├── intake-protocol.md       # 输入状态机 + run-config schema
-│   ├── user-standards-guide.md  # 用户标准说明书（每个子项的含义、意图、依据）
-│   ├── engineering-profiles.md  # 工程领域路由与问题框架
-│   ├── dimension-model.md       # A–F 六维模型完整阐述
-│   ├── indicator-dictionary.md  # 21+3 子项定义、计算、输入字段
-│   ├── engineering-standards.md # 默认阈值与 profile 覆盖规则
-│   └── ...
+│   ├── intake-protocol.md       # 输入状态机
+│   ├── user-standards-guide.md  # 标准说明书
+│   ├── engineering-profiles.md  # 工程领域路由
+│   ├── dimension-model.md       # A–F 六维模型
+│   ├── indicator-dictionary.md  # 21+3 子项定义
+│   ├── engineering-standards.md # 默认阈值
+│   └── run-config-schema.json   # run-config JSON Schema
 ├── scripts/
-│   ├── run_audit.py             # 生成评估报告
-│   ├── search_for_eval.py       # 候选发现/诊断性检索
+│   ├── run_audit.py             # 报告生成器
+│   ├── search_for_eval.py       # 诊断性检索器
 │   ├── collect_open_sources.py  # 开放源快照采集
 │   └── normalize_candidates.py  # 去重与版本族管理
 ├── tests/                       # 端到端测试
 └── example-report.md
 ```
 
-## 安装
+## 文档
 
-复制整个文件夹。Claude 路径为 `~/.claude/skills/literature-library-eval`，Codex 为 `~/.codex/skills/literature-library-eval`。从 GitHub 获取后保留目录结构，重新打开应用即可。
+| 面向 | 文档 |
+| --- | --- |
+| 用户 | [标准说明书](references/user-standards-guide.md)、[README](README.md) |
+| AI | [AI 执行说明](AI_GUIDE.md)、[输入协议](references/intake-protocol.md) |
+| 开发者 | [tests/](tests/)、[scripts/](scripts/) |
 
-## AI 执行规范
+## 贡献与许可
 
-见 [AI_GUIDE.md](AI_GUIDE.md)。
+MIT License —— 欢迎通过 Issue 和 PR 贡献。
+
+---
+
+<p align="center">
+  不是「自动判库是否合格」——是帮你知道 <b>下一步该补什么</b>。
+</p>
