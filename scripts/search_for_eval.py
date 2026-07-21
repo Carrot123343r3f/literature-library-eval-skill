@@ -85,9 +85,7 @@ def main():
     lib_titles = {norm(r.get('title')) for r in library if r.get('title')}
 
     keywords = ctx.get('keywords', [])
-    core_terms = [k.lower() for k in keywords
-                  if any(x in k.lower() for x in ('gaussian', 'splatting', '3dgs'))]
-    core_terms = core_terms or [k.lower() for k in keywords[:3]]
+    core_terms = [k.lower() for k in keywords[:3]]
     queries = build_queries(keywords)
     print(f'构造 {len(queries)} 条检索式，核心词: {core_terms[:3]}')
 
@@ -96,6 +94,10 @@ def main():
         url = (f'https://api.openalex.org/works?search={urllib.parse.quote(q)}'
                f'&per-page={a.max_per_query}&sort=cited_by_count:desc&mailto=lit-eval@example.com')
         r = get(url)
+        status = "complete"
+        if isinstance(r, dict) and r.get("error"):
+            status = "failed"
+            r = {"results": []}
         hits = r.get('results', []) if isinstance(r, dict) else []
         q_count = 0
         for w in hits:
@@ -117,7 +119,9 @@ def main():
                 if any(term in tl for term in core_terms) and cited >= a.min_cited:
                     potential_add.append(item)
         queries_record.append({'source': 'OpenAlex', 'query': q, 'label': label,
-                               'date': time.strftime('%Y-%m-%d'), 'hits': q_count})
+                               'date': time.strftime('%Y-%m-%d'), 'hits': q_count,
+                               'status': status,
+                               'note': 'failed' if status == 'failed' else 'top-cited-only'})
         print(f'  [{label}] {q[:45]:45s} -> {q_count} 命中')
         time.sleep(0.3)
 

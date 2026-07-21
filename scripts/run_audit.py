@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Literature-library evaluation report generator (model X: A-F six dimensions, 21 sub-items; umbrella adds A4/C4/F7 → 24)."""
-import argparse, datetime as dt, hashlib, html, json, pathlib, re, shutil
+import argparse, datetime as dt, hashlib, html, json, pathlib, re, shutil, sys, tempfile
 from collections import Counter
 from math import log
 
@@ -1011,6 +1011,46 @@ def write(report, out, artifact_paths=None):
     (out / "audit.md").write_text("\n".join(md) + "\n", encoding="utf-8")
     (out / "audit.html").write_text("<html><meta charset='utf-8'><body><pre>" + html.escape("\n".join(md)) + "</pre></body></html>", encoding="utf-8")
 
+def _validate_run_config(rc):
+    """Lightweight schema validation without jsonschema dependency. Returns list of error strings."""
+    errors = []
+    if not isinstance(rc, dict):
+        return ["run-config must be a JSON object"]
+    if rc.get("schema_version") != "1.0":
+        errors.append(f"schema_version: expected '1.0', got {rc.get('schema_version')!r}")
+    # project
+    proj = rc.get("project", {})
+    if not isinstance(proj, dict):
+        errors.append("project must be an object")
+    else:
+        rt = proj.get("review_type")
+        VALID_RT = {"narrative", "systematic", "scoping", "rapid", "umbrella",
+                    "叙事综述", "系统综述", "范围综述", "快速综述", "伞式综述"}
+        if rt and rt not in VALID_RT:
+            errors.append(f"project.review_type: must be one of {VALID_RT}, got {rt!r}")
+        ss = proj.get("scope_status")
+        VALID_SS = {"in_scope", "cross_domain", "out_of_scope", "scope_uncertain"}
+        if ss and ss not in VALID_SS:
+            errors.append(f"project.scope_status: must be one of {VALID_SS}, got {ss!r}")
+        al = proj.get("allowed_assessment_level")
+        VALID_AL = {"full", "limited_metadata_only", "stop"}
+        if al and al not in VALID_AL:
+            errors.append(f"project.allowed_assessment_level: must be one of {VALID_AL}, got {al!r}")
+    # library
+    lib = rc.get("library", {})
+    if isinstance(lib, dict):
+        fmt = lib.get("format")
+        VALID_FMT = {"zotero_mcp", "zotero_api", "bibtex", "csv", "json", "ris", "pdf_directory", None}
+        if fmt is not None and fmt not in VALID_FMT:
+            errors.append(f"library.format: must be one of {VALID_FMT}, got {fmt!r}")
+    # standards
+    stds = rc.get("standards", {})
+    if isinstance(stds, dict):
+        ov = stds.get("user_overrides")
+        if ov is not None and not isinstance(ov, dict):
+            errors.append("standards.user_overrides must be an object")
+    return errors
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--run-config", help="run-config.json (v1.0) — auto-resolves all other inputs")
@@ -1018,38 +1058,63 @@ def main():
     p.add_argument("--query-hits"); p.add_argument("--candidate-snapshots"); p.add_argument("--context")
     p.add_argument("--query-plan"); p.add_argument("--source-snapshot"); p.add_argument("--decision-log")
     p.add_argument("--deduplication-log"); p.add_argument("--run-log"); p.add_argument("--out", required=True)
+    p.add_argument("--allow-out-of-scope", action="store_true",
+                   help="Force full A-F even when scope_status=out_of_scope (report will carry permanent caveats)")
     a = p.parse_args()
 
     # ── run-config mode: auto-resolve all inputs from run-config.json ──
+    rc_base_dir = None
     if a.run_config:
-        rc_path = pathlib.Path(a.run_config)
+        rc_path = pathlib.Path(a.run_config).resolve()
         if not rc_path.is_file():
             p.error(f"run-config file not found: {a.run_config}")
+        rc_base_dir = rc_path.parent
         rc = json.loads(rc_path.read_text(encoding="utf-8"))
-        # Validate schema
-        if rc.get("schema_version") != "1.0":
-            print(f"WARNING: run-config schema_version={rc.get('schema_version')} (expected 1.0)")
-        # Resolve scope
+
+        # ── schema validation ──
+        rc_errors = _validate_run_config(rc)
+        if rc_errors:
+            print("run-config validation errors:", file=sys.stderr)
+            for e in rc_errors:
+                print(f"  - {e}", file=sys.stderr)
+            # non-fatal for known fields; fatal for missing required fields
+            fatal = any("required" in e.lower() or "must be" in e.lower() for e in rc_errors)
+            if fatal:
+                p.error("run-config has fatal validation errors (see above).")
+
         scope_status = rc.get("project", {}).get("scope_status", "scope_uncertain")
         allowed_level = rc.get("project", {}).get("allowed_assessment_level", "full")
         if scope_status in ("out_of_scope",) or allowed_level == "stop":
-            print(f"ERROR: scope_status={scope_status}, allowed_assessment_level={allowed_level} — refusing to run full A-F.")
-            print("  Run with --scope-stop-ok to force, or limit to metadata-health mode.")
-            if "--scope-stop-ok" not in sys.argv[1:]:
+            if not a.allow_out_of_scope:
+                print(f"ERROR: scope_status={scope_status}, allowed_assessment_level={allowed_level} — refusing to run full A-F.")
+                print("  Use --allow-out-of-scope to force (report will carry permanent caveats),")
+                print("  or limit to metadata-health/search-design mode.")
                 p.exit(1)
-        # Resolve library
+            else:
+                print("WARNING: scope_status=out_of_scope but --allow-out-of-scope active — continuing with permanent caveats in report.")
+
+        # Resolve relative paths against the run-config directory
+        rc_base = rc_base_dir
+        def _resolve(path_str):
+            if not path_str: return None
+            pth = pathlib.Path(path_str)
+            if pth.is_absolute(): return str(pth)
+            resolved = (rc_base / pth).resolve()
+            return str(resolved) if resolved.is_file() else str(pathlib.Path(path_str).resolve())
+
         lib_info = rc.get("library", {})
         if lib_info.get("provided") and lib_info.get("path") and not a.library:
-            a.library = lib_info["path"]
-        # Resolve evidence inputs
+            a.library = _resolve(lib_info["path"])
+
         ev = rc.get("evidence_inputs", {})
-        if ev.get("benchmark") and not a.benchmark: a.benchmark = ev["benchmark"]
-        if ev.get("gold") and not a.gold: a.gold = ev["gold"]
-        if ev.get("query_log") and not a.run_log: a.run_log = ev["query_log"]
-        if ev.get("source_snapshot") and not a.candidate_snapshots: a.candidate_snapshots = ev["source_snapshot"]
-        if ev.get("screening_decisions") and not a.decision_log: a.decision_log = ev["screening_decisions"]
-        if ev.get("deduplication_log") and not a.deduplication_log: a.deduplication_log = ev["deduplication_log"]
-        # Resolve context: --context takes precedence, otherwise build from run-config
+        if ev.get("benchmark") and not a.benchmark: a.benchmark = _resolve(ev["benchmark"])
+        if ev.get("gold") and not a.gold: a.gold = _resolve(ev.get("gold"))
+        if ev.get("query_log") and not a.run_log: a.run_log = _resolve(ev["query_log"])
+        if ev.get("query_hits") and not a.query_hits: a.query_hits = _resolve(ev["query_hits"])
+        if ev.get("source_snapshot") and not a.candidate_snapshots: a.candidate_snapshots = _resolve(ev["source_snapshot"])
+        if ev.get("screening_decisions") and not a.decision_log: a.decision_log = _resolve(ev["screening_decisions"])
+        if ev.get("deduplication_log") and not a.deduplication_log: a.deduplication_log = _resolve(ev["deduplication_log"])
+
         if not a.context:
             ctx_from_rc = {
                 "review_type": rc.get("project", {}).get("review_type", ""),
@@ -1059,18 +1124,16 @@ def main():
                 "languages": rc.get("project", {}).get("languages", []),
                 "scope_status": scope_status,
             }
-            # Merge user standards overrides
             user_stds = rc.get("standards", {}).get("user_overrides", {})
             confirmed = rc.get("standards", {}).get("confirmed_by_user", False)
             if user_stds:
                 ctx_from_rc["standards"] = user_stds
             if not confirmed:
                 ctx_from_rc.setdefault("standards", {})["confirmed_by_user"] = False
-            # Write temporary context.json so the rest of main() can consume it
-            import tempfile as _tmp
-            _tmp_dir = pathlib.Path(a.out) / ".tmp"
-            _tmp_dir.mkdir(parents=True, exist_ok=True)
-            ctx_file = _tmp_dir / "context_from_run_config.json"
+            # write as resolved-config for manifest
+            resolved_dir = pathlib.Path(a.out) / ".tmp"
+            resolved_dir.mkdir(parents=True, exist_ok=True)
+            ctx_file = resolved_dir / "resolved-config.json"
             ctx_file.write_text(json.dumps(ctx_from_rc, ensure_ascii=False, indent=2), encoding="utf-8")
             a.context = str(ctx_file)
 
