@@ -27,14 +27,14 @@ def _derive_expected_ids(registry, is_umbrella):
     """Return the expected indicator ID list in registry order.
 
     For non-umbrella reviews, umbrella-only indicators are excluded.
-    For umbrella reviews, all indicators are included.
+    For umbrella reviews, all indicators are included in their registry order.
     """
     indicators = registry.get("indicators", [])
     all_ids = [ind["id"] for ind in indicators]
     umbrella_only = {ind["id"] for ind in indicators if ind.get("umbrella_only")}
-    base_ids = [iid for iid in all_ids if iid not in umbrella_only]
-    extra_ids = [iid for iid in all_ids if iid in umbrella_only]
-    return base_ids + (extra_ids if is_umbrella else [])
+    if is_umbrella:
+        return all_ids  # keep registry order — A4 between A3/B1, C4 between C3/D1, etc.
+    return [iid for iid in all_ids if iid not in umbrella_only]
 
 def validate_audit(audit, registry):
     """Validate audit.json.indicator_register against indicator-registry.json."""
