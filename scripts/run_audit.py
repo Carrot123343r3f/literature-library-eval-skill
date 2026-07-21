@@ -653,7 +653,7 @@ def _dimension_narrative(report):
     lines = []
     a1_r = _fmt_pct(c["a1"].get("recall")); a1_h = _fmt_num(c["a1"].get("matched")); a1_t = _fmt_num(c["a1"].get("total"))
     a3_lb = _fmt_num(c["a3"].get("deduplicated_candidate_lower_bound"))
-    lines.append(f"**A 覆盖**：基准集召回 {a1_r}（{a1_h}/{a1_t}），多源候选下界 {a3_lb} 篇。")
+    lines.append(f"**A 覆盖**：基准集召回 {a1_r}（{a1_h}/{a1_t}），多源候选下界至少 {a3_lb} 篇——'至少有多少篇相关文献存在'，不是漏了多少。")
     rates = p.get("high_confidence_new_rates", [])
     ggr = ", ".join(f"{r:.3f}" for r in rates[-2:]) if len(rates) >= 2 else "缺数据"
     lines.append(f"**B 饱和度**：最后两轮 GGR={ggr}（阈值<{p.get('thresholds',{}).get('new_rate','—')}）；{p.get('verdict','—')}。")
@@ -705,11 +705,12 @@ def indicator_rows(report):
         c["a2"].get("status"),
         f"A2 高只说明检索式能找回 Gold，不等于 Gold 足够代表问题。{a2_dep}实测 {_fmt_pct(a2r)}。{'零命中=实测 0。' if a2r == 0 and c['a2'].get('status') == 'measured' else ''}")
 
-    add("A 覆盖", "A3", "多源候选下界", "至少两完整来源；只报告下界",
-        "pass" if a3s == "estimated_lower_bound" else "not_assessable",
-        f"下界 {_fmt_num(a3l)} 篇（{', '.join(c['a3'].get('source_unique_identifier_counts',{}).keys()) or '—'}）",
+    add("A 覆盖", "A3", "多源候选下界",
+        "至少两完整来源去重后的不重复候选数；只报告下界",
+        "screening" if a3l is not None else "not_assessable",
+        f"至少 {_fmt_num(a3l)} 篇不重复候选（{', '.join(c['a3'].get('source_unique_identifier_counts',{}).keys()) or '—'}）",
         "estimated" if a3s.startswith("estimated") else a3s,
-        f"多源去重下界 {_fmt_num(a3l)} 篇。{'来源不完整。' if a3s == 'partial_snapshot' else '来源完整。'}不是召回率。")
+        f"至少 {_fmt_num(a3l)} 篇——'至少有多少篇相关文献存在于这些来源中'。不是 Recall，也不是'漏了多少'。{'来源不完整。' if a3s == 'partial_snapshot' else '来源完整。'}")
 
     b1_cur = (', '.join(f'{r:.4f}' for r in br[-2:]) if len(br) >= 2
               else (f'首轮 {br[-1]:.4f}（需第2轮确认趋稳）' if len(br) == 1 else '—'))
