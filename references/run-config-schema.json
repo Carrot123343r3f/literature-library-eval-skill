@@ -40,6 +40,7 @@
     },
     "automation": {
       "type": "object",
+      "description": "v1.0: allow_search is informational only. allowed_sources/stop_conditions/allow_query_refinement are declared for forward compatibility but not yet enforced by scripts.",
       "required": ["allow_search"],
       "properties": {
         "allow_search": {"type": "boolean"},
@@ -73,6 +74,7 @@
     },
     "output": {
       "type": "object",
+      "description": "v1.0: output is always md+html+json with zh-CN defaults. language/formats/include_standards_appendix are declared for forward compatibility but not yet enforced by the audit script.",
       "properties": {
         "language": {"type": "string", "default": "zh-CN"},
         "formats": {"type": "array", "items": {"type": "string"}, "default": ["md", "html", "json"]},

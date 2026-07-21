@@ -1046,16 +1046,31 @@ def _validate_run_config(rc):
     # library
     lib = rc.get("library", {})
     if isinstance(lib, dict):
+        if lib.get("provided") and not lib.get("path"):
+            errors.append("library.path is required when library.provided is true")
         fmt = lib.get("format")
-        VALID_FMT = {"zotero_mcp", "zotero_api", "bibtex", "csv", "json", "ris", "pdf_directory", None}
+        VALID_FMT = {"json", None}
         if fmt is not None and fmt not in VALID_FMT:
-            errors.append(f"library.format: must be one of {VALID_FMT}, got {fmt!r}")
+            errors.append(f"library.format: v1.0 only supports {VALID_FMT}, got {fmt!r} (bibtex/csv/ris/zotero are roadmap items)")
+    else:
+        errors.append("library is required and must be an object")
+    # automation
+    auto = rc.get("automation", {})
+    if isinstance(auto, dict):
+        if "allow_search" not in auto:
+            errors.append("automation.allow_search is required")
+    else:
+        errors.append("automation is required and must be an object")
     # standards
     stds = rc.get("standards", {})
     if isinstance(stds, dict):
         ov = stds.get("user_overrides")
         if ov is not None and not isinstance(ov, dict):
             errors.append("standards.user_overrides must be an object")
+    # output
+    out_cfg = rc.get("output", {})
+    if not isinstance(out_cfg, dict):
+        errors.append("output is required and must be an object")
     return errors
 
 def main():
