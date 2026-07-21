@@ -362,11 +362,50 @@ def balance(library, standards=None):
 def topic_balance(context):
     standards = context.get("standards", {})
     raw = context.get("taxonomy", [])
+    # ── Validate taxonomy entries before processing ──
+    taxonomy_errors = []
+    for i, r in enumerate(raw):
+        if not isinstance(r, dict):
+            taxonomy_errors.append(f"taxonomy[{i}]: not an object")
+            continue
+        if not isinstance(r.get("high_confidence_records"), (int, float)):
+            taxonomy_errors.append(
+                f"taxonomy[{i}] '{r.get('name','?')}': "
+                "high_confidence_records must be numeric, got "
+                f"{type(r.get('high_confidence_records')).__name__}"
+            )
+        elif isinstance(r.get("high_confidence_records"), (int, float)) and r["high_confidence_records"] < 0:
+            taxonomy_errors.append(
+                f"taxonomy[{i}] '{r.get('name','?')}': "
+                f"high_confidence_records cannot be negative, got {r['high_confidence_records']}"
+            )
+        if r.get("target_share") is not None:
+            if not isinstance(r["target_share"], (int, float)):
+                taxonomy_errors.append(
+                    f"taxonomy[{i}] '{r.get('name','?')}': "
+                    "target_share must be numeric"
+                )
+            elif r["target_share"] < 0:
+                taxonomy_errors.append(
+                    f"taxonomy[{i}] '{r.get('name','?')}': "
+                    f"target_share cannot be negative, got {r['target_share']}"
+                )
     topics = [{"name": r.get("name", "unnamed"), "expected": r.get("expected", True),
                "records": r.get("high_confidence_records"), "target_share": r.get("target_share"),
-               "opposing_viewpoint": r.get("opposing_viewpoint")}   # 对立观点标记——用于诊断 cherry-picking 风险
+               "opposing_viewpoint": r.get("opposing_viewpoint")}
               for r in raw if isinstance(r, dict) and r.get("expected", True)]
     values = [int(x["records"] or 0) for x in topics]
+    if taxonomy_errors:
+        err_block = "; ".join(taxonomy_errors)
+        return {"status": "measured" if topics else "not_assessable",
+                "topic_counts": {x["name"]: 0 for x in topics},
+                "top_topic_share": None, "cv": None, "gini": None, "normalized_shannon": None,
+                "target_tvd": None, "flags": ["input_validation_error"],
+                "cross_source_flags": [],
+                "cross_reconciliation_errors": taxonomy_errors,
+                "checks": {"C1_topic_balance": "not_assessable",
+                           "C3_topic_source_balance": "not_assessable"},
+                "note": f"Taxonomy validation failed: {err_block}"}
     if not topics:
         return {"status": "not_assessable",
                 "checks": {"C1_topic_balance": "not_assessable", "C3_topic_source_balance": "not_assessable"}}
@@ -398,14 +437,28 @@ def topic_balance(context):
         if tvd > limits["tvd"]: flags.append("target_distribution")
     cross = context.get("topic_source_counts", {})
     cross_flags = []
-    cross_reconciliation_errors = []
+    cross_reconciliation_errors = list(taxonomy_errors)  # carry forward taxonomy validation errors
     if cross:
+        # Validate cross table values
+        for tname, counts in cross.items():
+            if not isinstance(counts, dict):
+                continue
+            for src, cnt in counts.items():
+                if not isinstance(cnt, (int, float)):
+                    cross_reconciliation_errors.append(
+                        f"{tname}/{src}: 来源计数不是数字 (got {type(cnt).__name__})"
+                    )
+                elif cnt < 0:
+                    cross_reconciliation_errors.append(
+                        f"{tname}/{src}: 来源计数不可为负 ({cnt})"
+                    )
         for topic in topics:
             tname = topic["name"]
             counts = cross.get(tname, {})
             if not isinstance(counts, dict):
                 cross_flags.append(tname)
-                cross_reconciliation_errors.append(f"{tname}: topic_source_counts 值不是字典")
+                if f"{tname}: topic_source_counts 值不是字典" not in cross_reconciliation_errors:
+                    cross_reconciliation_errors.append(f"{tname}: topic_source_counts 值不是字典")
                 continue
             total = sum(counts.values())
             taxonomy_records = int(topic["records"] or 0)
@@ -1379,11 +1432,17 @@ def _validate_run_config(rc):
         return ["run-config must be a JSON object"]
     if rc.get("schema_version") != "1.0":
         errors.append(f"schema_version: expected '1.0', got {rc.get('schema_version')!r}")
+
+    # ── Required top-level fields ──
+    for field in ("project", "library", "automation", "output"):
+        if field not in rc:
+            errors.append(f"Missing required top-level field: '{field}'")
+        elif not isinstance(rc[field], dict):
+            errors.append(f"'{field}' must be an object, got {type(rc[field]).__name__}")
+
     # project
     proj = rc.get("project", {})
-    if not isinstance(proj, dict):
-        errors.append("project must be an object")
-    else:
+    if isinstance(proj, dict):
         rq = proj.get("research_question")
         if not rq or not isinstance(rq, str) or not rq.strip():
             errors.append("project.research_question is required (non-empty string)")

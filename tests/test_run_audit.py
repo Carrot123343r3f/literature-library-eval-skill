@@ -258,4 +258,29 @@ with tempfile.TemporaryDirectory() as temp:
 
 print("F1 partial log guard: PASSED")
 
+# ── Test: registry validation passes for non-umbrella and umbrella ──
+with tempfile.TemporaryDirectory() as temp:
+    out = pathlib.Path(temp) / "out"
+    audit = run_audit(str(root / "tests" / "context.json"), str(out))
+    r = subprocess.run(
+        [sys.executable, str(root / "scripts" / "validate_registry.py"),
+         "--audit", str(out / "audit.json")],
+        capture_output=True, text=True, encoding="utf-8"
+    )
+    assert r.returncode == 0, f"Registry validation failed:\n{r.stdout}\n{r.stderr}"
+    assert "[PASS]" in r.stdout
+    print("Registry validation (non-umbrella): PASSED")
+
+with tempfile.TemporaryDirectory() as temp:
+    out = pathlib.Path(temp) / "out"
+    audit = run_audit(str(root / "tests" / "context_umbrella.json"), str(out))
+    r = subprocess.run(
+        [sys.executable, str(root / "scripts" / "validate_registry.py"),
+         "--audit", str(out / "audit.json")],
+        capture_output=True, text=True, encoding="utf-8"
+    )
+    assert r.returncode == 0, f"Registry validation (umbrella) failed:\n{r.stdout}\n{r.stderr}"
+    assert "[PASS]" in r.stdout
+    print("Registry validation (umbrella): PASSED")
+
 print("\nAll tests passed.")
