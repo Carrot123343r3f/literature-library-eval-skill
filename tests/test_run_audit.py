@@ -40,6 +40,10 @@ with tempfile.TemporaryDirectory() as temp:
     register = audit["indicator_register"]
     assert len(register) == 21
     assert {row["subproject"] for row in register} >= {"A1", "B1", "C1", "D1", "E1", "F6"}
+    # strict order check — must match canonical registry
+    canonical_ids = ["A1","A2","A3","B1","B2","B3","C1","C2","C3","D1","D2","D3","D4","E1","E2","F1","F2","F3","F4","F5","F6"]
+    actual_ids = [row["subproject"] for row in register]
+    assert actual_ids == canonical_ids, f"Indicator order mismatch!\nExpected: {canonical_ids}\nGot:      {actual_ids}"
     # non-umbrella: A4/C4/F7 absent
     assert "A4" not in {row["subproject"] for row in register}
     assert "C4" not in {row["subproject"] for row in register}
