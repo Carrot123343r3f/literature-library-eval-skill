@@ -822,13 +822,13 @@ def indicator_rows(report):
 
     b1_cur = (', '.join(f'{r:.4f}' for r in br[-2:]) if len(br) >= 2
               else (f'首轮 {br[-1]:.4f}（需第2轮确认趋稳）' if len(br) == 1 else '—'))
-    add("B 饱和度", "B1", "核心库增长率 GGR",
+    add("B 饱和度", "B1", "核心库增长率 (GGR)",
         f"最后两轮均 < {p.get('thresholds',{}).get('new_rate','—')}" if len(br) >= 2 else "/",
         chk(p, "B1_ggr"),
         b1_cur, p.get("status"),
         f"B 趋稳仅在筛选决策真实、路径独立且多轮完成时才成立。GGR={', '.join(f'{r:.4f}' for r in br[-2:]) if len(br)>=2 else ('首轮 '+f'{br[-1]:.4f}'+'，需第2轮确认' if len(br)==1 else '需要至少两轮 search round')}。高置信新增/核心库。")
 
-    add("B 饱和度", "B2", "新增路径发现率 DRR",
+    add("B 饱和度", "B2", "新增路径发现率 (DRR)",
         f"各路径均 < {p.get('thresholds',{}).get('marginal_yield','—')}" if len(p.get('source_marginal_yields',[])) >= 2 else "/",
         chk(p, "B2_drr"),
         f"{_fmt_num(len(p.get('source_marginal_yields',[])))} 条路径", p.get("status"),

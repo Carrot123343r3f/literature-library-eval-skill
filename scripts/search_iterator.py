@@ -221,7 +221,7 @@ def main():
 
     vp = sp.add_parser("validate", help="Validate iterations.json against protocol")
     vp.add_argument("--iterations", required=True, help="iterations.json file")
-    vp.add_argument("--strict", action="store_true", help="Treat warnings as errors")
+    vp.add_argument("--strict", action="store_true", help="Treat warnings as errors (non-zero exit)")
 
     tp = sp.add_parser("table", help="Generate comparison table from iterations.json")
     tp.add_argument("--iterations", required=True, help="iterations.json file")
@@ -246,6 +246,9 @@ def main():
             print("✅ All checks passed.")
         elif not errors:
             print("⚠ Protocol compliant with warnings (see above).")
+            if a.strict:
+                print("Strict mode: warnings treated as errors.")
+                sys.exit(1)
 
     elif a.command == "table":
         data = load_json(a.iterations)

@@ -56,7 +56,7 @@
       "required_inputs": ["source_snapshot (≥2 sources)"],
       "default_threshold": {"_note": "description-only indicator, no pass/fail threshold"},
       "umbrella_only": false,
-      "evidence_states": ["estimated_lower_bound", "partial_snapshot", "not_assessable"],
+      "evidence_states": ["estimated_lower_bound", "partial_snapshot", "not_assessable", "estimated"],
       "limitations": [
         "下界不是 Recall——不能直接回答'漏了多少'",
         "单源 count 不得称为覆盖率",
@@ -82,7 +82,7 @@
     {
       "id": "B1",
       "dimension": "B",
-      "display_name": {"zh": "核心库增长率 (GGR)", "en": "Core Growth Rate"},
+      "display_name": {"zh": "核心库增长率 (GGR)", "en": "Core Growth Rate (GGR)"},
       "formula": "included_high_{round} / core_before_{round}",
       "required_inputs": ["search_rounds (≥2 screened rounds)"],
       "default_threshold": {"_ggr": 0.02},
@@ -97,7 +97,7 @@
     {
       "id": "B2",
       "dimension": "B",
-      "display_name": {"zh": "新增路径发现率 (DRR)", "en": "Discovery Rate by Pathway"},
+      "display_name": {"zh": "新增路径发现率 (DRR)", "en": "Discovery Rate by Pathway (DRR)"},
       "formula": "new_high_confidence_{pathway} / candidates_{pathway}",
       "required_inputs": ["source_marginal_yields (≥2 independent pathways)"],
       "default_threshold": {"_drr": 0.05},
@@ -248,7 +248,7 @@
       "required_inputs": ["library (with cited_by_count field)"],
       "default_threshold": {"_note": "no hard threshold — background signal only"},
       "umbrella_only": false,
-      "evidence_states": ["screening", "not_assessable"],
+      "evidence_states": ["screening", "not_assessable", "measured"],
       "limitations": [
         "仅背景信号——高被引 ≠ 高质量；新论文拉低 h-core",
         "对库规模、学科引用习惯、发表年限极敏感",
@@ -264,7 +264,7 @@
       "required_inputs": ["library (with publicationTitle/venue field)", "tier1_venues"],
       "default_threshold": {"_note": "no hard threshold — background signal only"},
       "umbrella_only": false,
-      "evidence_states": ["screening", "not_assessable"],
+      "evidence_states": ["screening", "not_assessable", "measured"],
       "limitations": [
         "仅背景信号——不等于质量裁决",
         "依赖期刊/会议名称精确匹配——可能低估",
@@ -353,7 +353,7 @@
       "required_inputs": ["retraction_watch / crossref retraction data"],
       "default_threshold": {"_note": "requires dedicated source verification"},
       "umbrella_only": false,
-      "evidence_states": ["manual-verification-required", "not_assessable"],
+      "evidence_states": ["manual-verification-required", "not_assessable", "measured"],
       "limitations": [
         "自动检测不完备——撤稿信息通常不在文献数据库中完整更新",
         "默认 not_assessable 是常态",
