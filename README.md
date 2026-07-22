@@ -1,11 +1,11 @@
 # Engineering Literature Library Audit
 
 <p align="center">
-  <strong>Most literature reviews fail before the writing begins.</strong>
+  <strong>A review begins long before the first sentence.</strong>
 </p>
 
 <p align="center">
-  They fail when the library is incomplete, the search cannot be reproduced, or apparent saturation is only an artifact of one database. An audit that runs <em>before</em> you write saves months of rework — and a manuscript that cannot be defended.
+  It begins with a library, a search trail, and a quiet question: “Can this evidence really carry the argument I am about to make?” This project helps answer that question <em>before</em> months of writing make the answer expensive.
 </p>
 
 <p align="center">
@@ -19,9 +19,11 @@
 
 ## What This Is
 
+This project audits both the library **and the search strategy that produced it**. A collection of papers cannot be judged separately from the query, databases, dates, and decisions that determined what could enter it.
+
 **Engineering Literature Library Audit** is an evidence-readiness diagnostic for engineering reviews. It does not write your review. It does not assign one opaque score. It shows what your library can support, what it cannot yet support, and why — before you invest months in a manuscript.
 
-### The Problem
+### A familiar scene
 
 Every researcher knows this feeling:
 
@@ -31,9 +33,17 @@ Every researcher knows this feeling:
 - You searched one database thoroughly — but another would have surfaced entirely different papers.
 - You wrote the review first, checked completeness later — and found out too late that the evidence base was never solid.
 
-**This is structural waste.** The review-writing process should start with a structural check, not end with one.
+**This is avoidable rework.** A review is stronger when its evidence is checked before its prose is polished.
 
-### How This Fixes It
+### The part that used to disappear: the search
+
+Imagine the useful version of this story. You bring a query that already reflects weeks of domain thinking. The system preserves it as **q0**, rather than silently replacing it. It tests that starting point, makes only one explainable change at a time, and keeps the original beside every later version.
+
+The report now carries that history: the query text, where it came from, which source ran it, when it ran, how many records it returned, what changed in each round, and the development/held-out validation results. If there is only one exploratory round, it says so plainly; it does not call an untested draft query “optimized.”
+
+This matters because a query can look successful simply by rediscovering the papers used to tune it. The project therefore separates development evidence from a frozen, held-out validation set and records the separation in `evidence-manifest.json`. Different agents or threads are not, by themselves, evidence of independence.
+
+### A different starting point
 
 Run the audit **before** writing. In one conversation with an AI agent, you get:
 
@@ -41,6 +51,7 @@ Run the audit **before** writing. In one conversation with an AI agent, you get:
 - Six independent dimensions of readiness — no single score hides a fatal flaw
 - Every input accounted for with sha256 hashes — the audit is reproducible
 - Missing inputs are flagged as `not_assessable`, not hidden — *"here's the cheapest way to fix this"*
+- A readable search-strategy record — q0, query versions, source/date/hits, atomic changes, and validation evidence
 
 ## Quickstart
 
