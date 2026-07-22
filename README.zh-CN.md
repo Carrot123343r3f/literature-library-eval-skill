@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/tests-18%20tests%20passing-22c55e" alt="Tests">
+  <img src="https://img.shields.io/badge/测试检查-通过-22c55e" alt="测试检查">
   <img src="https://img.shields.io/badge/license-MIT-3b82f6" alt="License">
   <img src="https://img.shields.io/badge/indicators-21%20(%2B3%20umbrella)-8b5cf6" alt="Indicators">
   <img src="https://img.shields.io/badge/platform-Claude%20%7C%20Codex-6366f1" alt="Platform">
@@ -34,25 +34,27 @@
 
 ### 它怎么解决
 
-在动笔**之前**跑一次审计。一条命令（或跟 AI 说一句话），你就能得到：
+在动笔**之前**跑一次审计。你可以直接对 AI 说一句话，得到：
 
 - 按优先级排列的待修复项——阻断项排在最前面
 - 六个独立维度的准备度——没有总分可以掩盖致命短板
 - 每个输入都以 sha256 哈希记录——审计可复现
 - 缺失的输入标为 `not_assessable` 而非隐藏——*"这是最便宜的修复方式"*
 
-## 三分钟开始
+## 快速开始
 
 ```text
 使用 literature-library-eval 评估我的文献库，
 判断它能否支撑"工业视觉缺陷检测的跨产线迁移"的系统综述。
 ```
 
-AI 会自动：
+AI 会协助你：
 
 1. 确认研究问题、综述类型、工程领域和边界（一次最多三个问题）
 2. 接受你的文献库（Zotero 导出/JSON，或者让 AI 设计检索策略）
-3. 执行检索、计算指标、生成审计包
+3. 执行可用的诊断检查，协助迭代检索，计算指标并生成审计包
+
+你不需要先准备 JSON Schema、Gold set 或去重日志。先告诉 AI 研究问题和文献库位置即可；缺少的证据会在报告中明确列出，并给出最低成本的补充方式。
 
 **当前 v1.0 自动化程度：**
 
@@ -156,13 +158,13 @@ git clone https://github.com/Carrot123343r3f/literature-library-eval-skill.git \
 | 互联网 | OpenAlex、Crossref、arXiv 等开放 API |
 | **无需 API key** | 全部数据来源为开放获取 |
 
-**开发依赖：** `pip install -r requirements-dev.txt` 安装 `pytest` 和 `jsonschema`，用于运行测试套件。
+**开发依赖：** `pip install -r requirements-dev.txt` 安装 `pytest` 和 `jsonschema`，用于运行测试套件。也可以直接运行项目自带检查：`python tests/test_run_audit.py`。
 
 ## 文档
 
 | 读者 | 资源 |
 |---|---|
-| **新用户** | [README.zh-CN.md](README.zh-CN.md) · [快速开始](#三分钟开始) · [示例报告](example-report.md) |
+| **新用户** | [README.zh-CN.md](README.zh-CN.md) · [快速开始](#快速开始) · [示例报告](example-report.md) |
 | **深度了解** | [方法学](docs/methodology.md) · [架构](docs/architecture.md) · [输出说明](docs/outputs.md) |
 | **集成** | [集成指南](docs/integrations.md) · Zotero / 数据库 / 配套 skill |
 | **标准参考** | [用户标准说明书](references/user-standards-guide.md) · [指标注册表](schemas/indicator-registry.json) |

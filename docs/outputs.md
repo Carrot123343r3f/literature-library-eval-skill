@@ -56,3 +56,7 @@ Derived from `schemas/indicator-registry.json` — the single source of truth.
 ## Reproducibility
 
 Every run is reproducible: `run-config.json` captures decisions, `manifest.json` records hashes, inputs are copied. Re-running with same inputs produces identical `audit.json`.
+
+### How to read a missing result
+
+`not_assessable` does not mean that the library is poor. It means the current run does not contain enough evidence for that indicator. The report should name the lowest-cost next input, such as an executed query log, an independent validation set, or a screening decision log. Treat `fail` as a risk signal against the configured standard, not as a final judgment about the review.

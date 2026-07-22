@@ -1449,11 +1449,15 @@ def _validate_run_config(rc):
         rt = proj.get("review_type")
         VALID_RT = {"narrative", "systematic", "scoping", "rapid", "umbrella",
                     "叙事综述", "系统综述", "范围综述", "快速综述", "伞式综述"}
-        if rt and rt not in VALID_RT:
+        if not rt:
+            errors.append("project.review_type is required")
+        elif rt not in VALID_RT:
             errors.append(f"project.review_type: must be one of {VALID_RT}, got {rt!r}")
         ss = proj.get("scope_status")
         VALID_SS = {"in_scope", "cross_domain", "out_of_scope", "scope_uncertain"}
-        if ss and ss not in VALID_SS:
+        if not ss:
+            errors.append("project.scope_status is required")
+        elif ss not in VALID_SS:
             errors.append(f"project.scope_status: must be one of {VALID_SS}, got {ss!r}")
         al = proj.get("allowed_assessment_level")
         VALID_AL = {"full", "limited_metadata_only", "stop"}

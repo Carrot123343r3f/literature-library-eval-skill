@@ -6,6 +6,8 @@ import subprocess
 import sys
 import tempfile
 
+from jsonschema import Draft202012Validator
+
 root = pathlib.Path(__file__).resolve().parents[1]
 
 def run_audit(context_file, out_dir, extra_args=None):
@@ -425,5 +427,37 @@ with tempfile.TemporaryDirectory() as temp:
         f"Error should mention research_question\noutput: {combined}"
 
 print("Schema guard (empty research_question): PASSED")
+
+# ── Test: the checked-in JSON Schema itself validates the canonical fixture ──
+schema = json.loads((root / "schemas" / "run-config-schema.json").read_text(encoding="utf-8"))
+fixture = json.loads((root / "tests" / "run-config-test.json").read_text(encoding="utf-8"))
+schema_errors = list(Draft202012Validator(schema).iter_errors(fixture))
+assert not schema_errors, "Canonical run-config fixture violates run-config-schema.json: " + "; ".join(
+    error.message for error in schema_errors
+)
+print("Schema contract (canonical fixture): PASSED")
+
+# ── Test: nested project requirements are enforced ──
+with tempfile.TemporaryDirectory() as temp:
+    incomplete_rc = pathlib.Path(temp) / "incomplete_run_config.json"
+    incomplete_rc.write_text(json.dumps({
+        "schema_version": "1.0",
+        "project": {"research_question": "test"},
+        "library": {"provided": False},
+        "automation": {"allow_search": False},
+        "output": {}
+    }), encoding="utf-8")
+    r = subprocess.run(
+        [sys.executable, str(root / "scripts" / "run_audit.py"),
+         "--run-config", str(incomplete_rc),
+         "--out", str(pathlib.Path(temp) / "out")],
+        capture_output=True, text=True, encoding="utf-8", errors="replace"
+    )
+    combined = (r.stderr or "") + (r.stdout or "")
+    assert r.returncode != 0, f"Should fail when nested project fields are missing\noutput: {combined}"
+    assert "review_type" in combined and "scope_status" in combined, \
+        f"Error should name missing nested fields\noutput: {combined}"
+
+print("Schema guard (nested project fields): PASSED")
 
 print("\nAll tests passed.")

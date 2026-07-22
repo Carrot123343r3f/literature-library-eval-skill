@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/tests-18%20tests%20passing-22c55e" alt="Tests">
+  <img src="https://img.shields.io/badge/test%20checks-passing-22c55e" alt="Test checks">
   <img src="https://img.shields.io/badge/license-MIT-3b82f6" alt="License">
   <img src="https://img.shields.io/badge/indicators-21%20(%2B3%20umbrella)-8b5cf6" alt="Indicators">
   <img src="https://img.shields.io/badge/platform-Claude%20%7C%20Codex-6366f1" alt="Platform">
@@ -35,7 +35,7 @@ Every researcher knows this feeling:
 
 ### How This Fixes It
 
-Run the audit **before** writing. In one command (or one conversation with an AI agent), you get:
+Run the audit **before** writing. In one conversation with an AI agent, you get:
 
 - A prioritized list of exactly what needs fixing — blocking items first
 - Six independent dimensions of readiness — no single score hides a fatal flaw
@@ -61,7 +61,7 @@ The AI will:
 
 1. Confirm your research question, review type, domain, and boundaries (max 3 questions)
 2. Accept your library — Zotero-exported JSON (Zotero → Better BibTeX JSON or CSL JSON export). BibTeX/RIS/CSV direct import and Zotero API integration are on the v1.x roadmap
-3. Execute single-round diagnostic search, help you iterate the query, compute all A–F indicators, and produce the audit package
+3. Run the available diagnostic checks, help you iterate the query, compute the A–F indicators, and produce the audit package
 
 → [View example report](example-report.md)
 
@@ -152,7 +152,7 @@ git clone https://github.com/Carrot123343r3f/literature-library-eval-skill.git \
 | Internet access | OpenAlex, Crossref, arXiv (open-access APIs) |
 | **No API keys** | All data sources are open-access |
 
-**Development:** `pip install -r requirements-dev.txt` adds `pytest` and `jsonschema` for running the test suite.
+**Development:** `pip install -r requirements-dev.txt` adds `pytest` and `jsonschema` for running the test suite. The repository also includes a direct system check: `python tests/test_run_audit.py`.
 
 ## Documentation
 
