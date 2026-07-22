@@ -1,0 +1,91 @@
+{
+  "schema_version": "1.0",
+  "project": {
+    "research_question": "3D Gaussian Splatting (3DGS)：综述三维高斯泼溅技术的进展、变体与应用",
+    "review_type": "narrative",
+    "engineering_profile": ["计算机与AI", "电子通信"],
+    "scope_status": "in_scope",
+    "scope_rationale": "3DGS 属于计算机视觉与计算机图形学交叉领域，在工程范围'计算机与AI'内",
+    "time_range": {
+      "start": null,
+      "end": 2026
+    },
+    "languages": ["en"],
+    "allowed_assessment_level": "full"
+  },
+  "library": {
+    "provided": true,
+    "path": "outputs/3DGS_narrative_eval_2026-07-22/library.json",
+    "format": "json",
+    "record_count": null,
+    "normalization_required": true,
+    "source": "zotero_mcp",
+    "collection_name": "3DGS研究",
+    "access_note": "Zotero MCP 已修复（mcp 1.27.2 + fastmcp 3.3.1），需重启 Claude Code 以加载 MCP 连接"
+  },
+  "automation": {
+    "allow_search": true,
+    "allow_query_refinement": true,
+    "allowed_sources": ["openalex", "semantic_scholar", "arxiv", "crossref"],
+    "stop_conditions": ["validation_recall达标且连续两轮无改善", "GGR连续两轮≤b_ggr_threshold且DRR≤b_drr_threshold且独立路径完成"]
+  },
+  "evidence_inputs": {
+    "benchmark": "outputs/3DGS_narrative_eval_2026-07-22/gold_set.json",
+    "gold": "outputs/3DGS_narrative_eval_2026-07-22/gold_set.json",
+    "query_log": null,
+    "query_hits": "outputs/3DGS_narrative_eval_2026-07-22/search_r1/query-hits.json",
+    "query_plan": null,
+    "source_snapshot": null,
+    "screening_decisions": null,
+    "deduplication_log": null,
+    "search_meta": "outputs/3DGS_narrative_eval_2026-07-22/search_r1/search_meta.json",
+    "failed_sources": []
+  },
+  "standards": {
+    "defaults_profile": "narrative_review__cs_ai",
+    "confirmed_by_user": true,
+    "thresholds": {
+      "a1_min_recall": 0.75,
+      "a2_min_recall": 0.70,
+      "f_access_rate": 0.60,
+      "f_provenance_rate": 0.85,
+      "f_core_metadata_rate": 0.90,
+      "f_abstract_rate": 0.80,
+      "recency_years": 3,
+      "recency_min_share": 0.40,
+      "d_freshness_days": 30,
+      "b_ggr_threshold": 0.02,
+      "b_drr_threshold": 0.05,
+      "balance_top_share_warning": 0.80,
+      "balance_cv_warning": 1.00,
+      "balance_gini_warning": 0.60,
+      "balance_shannon_low_warning": 0.45,
+      "balance_shannon_high_warning": 0.95,
+      "topic_top_share_warning": 0.70,
+      "topic_cv_warning": 0.80,
+      "topic_gini_warning": 0.50,
+      "topic_shannon_low_warning": 0.55,
+      "topic_target_tvd_warning": 0.25,
+      "topic_min_sources": 2,
+      "topic_source_top_share_warning": 0.80
+    },
+    "user_overrides": {}
+  },
+  "output": {
+    "language": "zh-CN",
+    "formats": ["md", "html", "json"],
+    "out_dir": "outputs/3DGS_narrative_eval_2026-07-22"
+  },
+  "context": {
+    "search_decomposition": {
+      "pico": {
+        "object": {"value": "3D scene representations, radiance fields, point clouds, Gaussian primitives", "source": "user_provided"},
+        "technology": {"value": "3D Gaussian Splatting, differentiable rendering, real-time rendering, novel view synthesis", "source": "user_provided"},
+        "performance": {"value": "rendering quality (PSNR/SSIM/LPIPS), rendering speed (FPS), training efficiency, memory footprint", "source": "profile"},
+        "context_field": {"value": "computer vision, computer graphics, novel view synthesis, scene reconstruction, SLAM, dynamic scenes, 4D reconstruction, digital humans, autonomous driving", "source": "profile"}
+      }
+    },
+    "search_iterations": [],
+    "notes": "3DGS 由 Kerbl et al. (SIGGRAPH 2023) 提出，是快速发展的新兴领域。评估覆盖 2023 年至今的全部衍生工作。"
+  }
+}

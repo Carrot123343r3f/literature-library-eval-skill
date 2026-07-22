@@ -77,6 +77,8 @@ The AI will:
 2. Accept your library — Zotero-exported JSON (Zotero → Better BibTeX JSON or CSL JSON export). BibTeX/RIS/CSV direct import and Zotero API integration are on the v1.x roadmap
 3. Run the available diagnostic checks, help you iterate the query, compute the A–F indicators, and produce the audit package
 
+With an existing `run-config.json`, run `python scripts/run_audit.py --run-config run-config.json`; when `--out` is omitted, the configured `output.out_dir` is used. `search_iterator.py` can also inspect the first-round `search_meta.json` emitted by `search_for_eval.py`, while still reporting missing development or independent validation evidence.
+
 ## Six-Dimension Framework
 
 22 indicators. 25 for umbrella reviews. No composite score. Every dimension stands alone — a perfect A1 cannot hide a broken F1.

@@ -1,0 +1,31 @@
+{
+  "dev_set": [
+    {"title": "3D Gaussian Splatting for Real-Time Radiance Field Rendering", "doi": "10.1145/3592433", "first_author": "Kerbl", "year": 2023, "source": "seminal_paper", "note": "Original 3DGS paper, SIGGRAPH 2023"},
+    {"title": "3D Gaussian as a New Era: A Survey", "doi": null, "first_author": "Fei", "year": 2024, "source": "survey", "note": "Early comprehensive survey on 3DGS"},
+    {"title": "PixelSplat: 3D Gaussian Splats from Image Pairs for Scalable Generalizable 3D Reconstruction", "doi": null, "first_author": "Charatan", "year": 2024, "source": "library_seed", "note": "Key generalizable 3DGS paper"},
+    {"title": "Mip-Splatting: Alias-free 3D Gaussian Splatting", "doi": null, "first_author": "Yu", "year": 2023, "source": "library_seed", "note": "Anti-aliasing for 3DGS"},
+    {"title": "2D Gaussian Splatting for Geometrically Accurate Radiance Fields", "doi": null, "first_author": "Huang", "year": 2024, "source": "library_seed", "note": "Surface reconstruction with 2DGS"},
+    {"title": "SplaTAM: Splat, Track & Map 3D Gaussians for Dense RGB-D SLAM", "doi": null, "first_author": "Keetha", "year": 2024, "source": "library_seed", "note": "SLAM with 3DGS"},
+    {"title": "4D Gaussian Splatting for Real-Time Dynamic Scene Rendering", "doi": null, "first_author": "Wu", "year": 2023, "source": "library_seed", "note": "Dynamic 4DGS"},
+    {"title": "Dynamic 3D Gaussians: Tracking by Persistent Dynamic View Synthesis", "doi": null, "first_author": "Luiten", "year": 2023, "source": "library_seed", "note": "Dynamic scene tracking with 3DGS"},
+    {"title": "GaussianDreamer: Fast Generation from Text to 3D Gaussians by Bridging 2D and 3D Diffusion Models", "doi": null, "first_author": "Yi", "year": 2024, "source": "library_seed", "note": "Text-to-3D generation with 3DGS"},
+    {"title": "LangSplat: 3D Language Gaussian Splatting", "doi": null, "first_author": "Qin", "year": 2024, "source": "library_seed", "note": "Language-driven 3DGS"}
+  ],
+  "validation_set": [
+    {"title": "3D Gaussian Splatting: Survey, Technologies, Challenges, and Opportunities", "doi": "10.48550/arXiv.2407.17418", "first_author": "Chen", "year": 2024, "source": "external_survey", "note": "External survey from arXiv for validation"},
+    {"title": "Recent Advances in 3D Gaussian Splatting", "doi": "10.48550/arXiv.2403.11134", "first_author": "Wu", "year": 2024, "source": "external_survey", "note": "External review paper for validation"},
+    {"title": "Compact 3D Gaussian Splatting for Real-Time Rendering", "doi": null, "first_author": "Lee", "year": 2024, "source": "external", "note": "Compression-focused paper for validation"},
+    {"title": "Scaling 3D Gaussian Splatting to City-Scale Scenes", "doi": null, "first_author": "Kerbl", "year": 2024, "source": "external", "note": "Large-scale 3DGS for validation"}
+  ],
+  "dev_set_origin": ["seminal_paper", "survey", "library_seed"],
+  "validation_set_source": "external_surveys_and_papers",
+  "independence_rationale": "Validation set sourced from external arXiv surveys not yet in the Zotero library, ensuring no overlap with dev set",
+  "dev_validation_overlap_check": true,
+  "gold_set_metadata": {
+    "dev_set_size": 10,
+    "validation_set_size": 4,
+    "total_gold_size": 14,
+    "seminal_count": 1,
+    "survey_count": 1
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "object": {"term": "3D scene representations; radiance fields; point clouds; Gaussian primitives; 3D reconstruction", "source": "user_provided"},
+  "technology": {"term": "3D Gaussian Splatting; differentiable rendering; real-time rendering; novel view synthesis; point-based graphics", "source": "user_provided"},
+  "performance": {"term": "rendering quality (PSNR/SSIM/LPIPS); rendering speed (FPS); training efficiency; memory footprint; geometric accuracy", "source": "profile"},
+  "context": {"term": "computer vision; computer graphics; novel view synthesis; scene reconstruction; SLAM; dynamic scenes; 4D reconstruction; digital humans; autonomous driving; 3D generation; inverse rendering", "source": "profile"},
+  "supplements": [
+    {"term": "NeRF (Neural Radiance Fields); Plenoxels; Instant NGP; Mip-NeRF", "source": "seed_papers", "category": "historical_terms"},
+    {"term": "SIGGRAPH; CVPR; ICCV; ECCV; NeurIPS; ICLR", "source": "profile", "category": "venues"},
+    {"term": "PSNR; SSIM; LPIPS; FPS; GPU; CUDA; rasterization; ray tracing", "source": "profile", "category": "abbreviations"},
+    {"term": "Mip-NeRF 360; Tanks&Temples; DTU; ScanNet; Replica; 3D-FRONT", "source": "benchmark", "category": "datasets"}
+  ]
+}

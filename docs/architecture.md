@@ -68,7 +68,9 @@ User Intake (run-config.json)
 ## Data Contracts
 
 - **run-config.json**: Single entry point, validated against schema, relative paths resolved against config directory
+- **run-config execution**: `python scripts/run_audit.py --run-config run-config.json` uses `output.out_dir` when `--out` is omitted; explicit `--out` still overrides it
 - **search_meta.json**: Bridge between search execution and audit computation
+- **search_iterator.py** accepts either the curated `iterations.json` contract or the first-round `search_meta.json` emitted by `search_for_eval.py`; absent dev/validation evidence is still reported as a validation error/warning
 - **audit.json**: Machine-readable output with full indicator register
 - **manifest.json**: sha256, git commit, Python version — every input accounted for
 - **evidence-manifest.json**: dataset roles, source routes, freeze state, and A2/B3 + A3/B2 evidence reuse checks

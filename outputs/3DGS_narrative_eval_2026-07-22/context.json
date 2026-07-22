@@ -1,0 +1,36 @@
+{
+  "keywords": [
+    "3D Gaussian Splatting",
+    "3DGS",
+    "novel view synthesis",
+    "radiance fields",
+    "real-time rendering",
+    "differentiable rendering",
+    "Gaussian primitives",
+    "scene reconstruction",
+    "SLAM",
+    "dynamic scenes",
+    "4D Gaussian Splatting",
+    "inverse rendering",
+    "3D generation"
+  ],
+  "research_question": "3D Gaussian Splatting (3DGS)：综述三维高斯泼溅技术的进展、变体与应用",
+  "review_type": "narrative",
+  "engineering_profile": [
+    "计算机与AI"
+  ],
+  "time_range": {
+    "start": null,
+    "end": 2026
+  },
+  "languages": [
+    "en"
+  ],
+  "initial_query": "(3D Gaussian Splatting OR 3DGS) AND novel view synthesis",
+  "pico": {
+    "object": "3D scene representations, radiance fields, point clouds",
+    "technology": "3D Gaussian Splatting, differentiable rendering, real-time rendering",
+    "performance": "rendering quality, rendering speed, training efficiency",
+    "context": "computer vision, computer graphics, SLAM, autonomous driving"
+  }
+}

@@ -10,6 +10,7 @@ produced by AI-assisted search rounds and validates protocol compliance:
 
 Usage:
     python search_iterator.py validate --iterations iterations.json
+    python search_iterator.py validate --iterations search_meta.json
     python search_iterator.py table --iterations iterations.json --output comparison.md
 
 The iterations.json schema:
@@ -58,6 +59,63 @@ A2_STOP_DELTA = 0.03  # Two consecutive rounds with validation_recall increase <
 def load_json(path):
     with open(path, encoding='utf-8') as f:
         return json.load(f)
+
+
+def normalize_input(data):
+    """Accept the search_meta.json emitted by search_for_eval.py.
+
+    The iterator keeps its richer iterations.json contract for hand-curated
+    rounds, but first-round diagnostics should be inspectable without a
+    manual copy/paste bridge.  Missing dev/validation sets remain missing and
+    are reported by validate(); this adapter does not manufacture evidence.
+    """
+    if data.get("iterations"):
+        return data
+
+    rounds = data.get("search_iterations") or data.get("search_rounds") or []
+    if not rounds:
+        return data
+
+    query_rows = data.get("queries") or []
+    by_label = {}
+    for row in query_rows:
+        label = row.get("label") or row.get("query_id")
+        if label:
+            by_label.setdefault(label, []).append(row)
+
+    normalized = []
+    for index, row in enumerate(rounds):
+        iteration_id = row.get("iteration_id") or row.get("pathway") or f"v{index + 1}"
+        # search_for_eval labels query executions (q0/q1), while its
+        # search_rounds use pathway labels (openalex-first-round).  If there
+        # is no exact label match, retain the recorded query executions rather
+        # than emitting an invalid empty iteration.
+        query_rows_for_iteration = by_label.get(iteration_id) or query_rows
+        queries = {
+            (q.get("source") or f"source_{n + 1}"): q.get("query", "")
+            for n, q in enumerate(query_rows_for_iteration)
+        }
+        change_type = row.get("change_type") or ("initial" if index == 0 else "add_synonym")
+        results = dict(row.get("results") or {})
+        for key in ("core_before", "included_high", "discovery_candidates", "dev_recall", "validation_recall"):
+            if key in row and key not in results:
+                results[key] = row[key]
+        normalized.append({
+            "iteration_id": iteration_id,
+            "parent_iteration": row.get("parent_iteration"),
+            "change_type": change_type,
+            "change_description": row.get("change_description", row.get("note", "")),
+            "change_source": row.get("change_source", "search_for_eval.py"),
+            "queries": queries,
+            "execution_date": row.get("execution_date") or (query_rows_for_iteration[0].get("date") if query_rows_for_iteration else None),
+            "results": results,
+            "failures": row.get("failures", []),
+            "decision": row.get("decision", "continue"),
+        })
+
+    adapted = dict(data)
+    adapted["iterations"] = normalized
+    return adapted
 
 
 def validate(data, strict=False):
@@ -237,17 +295,17 @@ def main():
     sp = p.add_subparsers(dest="command")
 
     vp = sp.add_parser("validate", help="Validate iterations.json against protocol")
-    vp.add_argument("--iterations", required=True, help="iterations.json file")
+    vp.add_argument("--iterations", required=True, help="iterations.json or search_meta.json file")
     vp.add_argument("--strict", action="store_true", help="Treat warnings as errors (non-zero exit)")
 
     tp = sp.add_parser("table", help="Generate comparison table from iterations.json")
-    tp.add_argument("--iterations", required=True, help="iterations.json file")
+    tp.add_argument("--iterations", required=True, help="iterations.json or search_meta.json file")
     tp.add_argument("--output", help="Output markdown file (stdout if omitted)")
 
     a = p.parse_args()
 
     if a.command == "validate":
-        data = load_json(a.iterations)
+        data = normalize_input(load_json(a.iterations))
         errors, warnings = validate(data, strict=a.strict)
         if errors:
             print(f"❌ {len(errors)} error(s):")
@@ -268,7 +326,7 @@ def main():
                 sys.exit(1)
 
     elif a.command == "table":
-        data = load_json(a.iterations)
+        data = normalize_input(load_json(a.iterations))
         table = generate_comparison_table(data)
         matrix = generate_pathway_matrix(data)
         output = table + "\n\n" + matrix if matrix else table

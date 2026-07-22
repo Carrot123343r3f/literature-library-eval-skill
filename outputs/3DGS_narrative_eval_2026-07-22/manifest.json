@@ -1,0 +1,76 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-07-22T15:30:07.115160+00:00",
+  "run_audit_version": "model-x-2026-07-21",
+  "git_commit": "6cc31515b29ac9221f5ceafa71f8475249e6f93a",
+  "run_audit_sha256": "fa971500e9bdf03e114c57bf5b34e877b6b5b8ac0420eb9a32fd274181a82985",
+  "python_version": "3.13.5",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "review_type": "叙事综述",
+  "standards_applied": {
+    "confirmed_by_user": true,
+    "a1_min_recall": 0.75,
+    "a2_min_recall": 0.7,
+    "f_access_rate": 0.6,
+    "f_provenance_rate": 0.85,
+    "f_core_metadata_rate": 0.9,
+    "f_abstract_rate": 0.8,
+    "d_freshness_days": 30,
+    "b_ggr_threshold": 0.02,
+    "b_drr_threshold": 0.05,
+    "balance_top_share_warning": 0.8,
+    "balance_cv_warning": 1.0,
+    "balance_gini_warning": 0.6,
+    "balance_shannon_low_warning": 0.45,
+    "balance_shannon_high_warning": 0.95,
+    "topic_top_share_warning": 0.7,
+    "topic_cv_warning": 0.8,
+    "topic_gini_warning": 0.5,
+    "topic_shannon_low_warning": 0.55,
+    "topic_target_tvd_warning": 0.25,
+    "topic_min_sources": 2,
+    "topic_source_top_share_warning": 0.8,
+    "viewpoint_min_classified_fraction": 0.5,
+    "viewpoint_max_dominant_share": 0.9,
+    "viewpoint_min_counterevidence": 3
+  },
+  "record_source_paths": false,
+  "input_files": {
+    "benchmark": {
+      "provided": true,
+      "sha256": "70a3b2c279bdfc764a665a9d4408a9ef87ea2c59a523fe9290a3113c0c5d1f1f",
+      "copied_to": "inputs\\benchmark__70a3b2c279bd.json",
+      "source_filename": "gold_set.json"
+    },
+    "context": {
+      "provided": true,
+      "sha256": "940a12a066c8375d9f83038ab4265ec996855db08ecb2434937244b5e880c759",
+      "copied_to": "inputs\\context__940a12a066c8.json",
+      "source_filename": "resolved-config.json"
+    },
+    "gold": {
+      "provided": true,
+      "sha256": "70a3b2c279bdfc764a665a9d4408a9ef87ea2c59a523fe9290a3113c0c5d1f1f",
+      "copied_to": "inputs\\gold__70a3b2c279bd.json",
+      "source_filename": "gold_set.json"
+    },
+    "library": {
+      "provided": true,
+      "sha256": "69f902d6937574cca6ffe73d792a0cec62d4a396fa5a272ea185d012cd092bee",
+      "source_filename": "library.json",
+      "copied_to": "inputs\\library__69f902d69375.json"
+    },
+    "query-hits": {
+      "provided": true,
+      "sha256": "c42e1533d30aa9d4dd6afc35b8f8f5f881bfc52e7e805e33c62b87ed29f5c8fd",
+      "copied_to": "inputs\\query-hits__c42e1533d30a.json",
+      "source_filename": "query-hits.json"
+    },
+    "search-meta": {
+      "provided": true,
+      "sha256": "c83507a1074b1a45dd08cee6ee6eb40bc9636dbe5da7cc3f0c3e524046a3512d",
+      "copied_to": "inputs\\search-meta__c83507a1074b.json",
+      "source_filename": "search_meta.json"
+    }
+  }
+}

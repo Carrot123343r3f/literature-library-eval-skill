@@ -1814,7 +1814,7 @@ def main():
     p.add_argument("--deduplication-log"); p.add_argument("--run-log"); p.add_argument("--search-meta",
                    help="search_meta.json from search_for_eval.py — auto-detected alongside --query-hits if omitted")
     p.add_argument("--evidence-manifest", help="evidence-manifest.json for dataset provenance and independence checks")
-    p.add_argument("--out", required=True)
+    p.add_argument("--out", help="Output directory; defaults to output.out_dir from --run-config")
     p.add_argument("--allow-out-of-scope", action="store_true",
                    help="Force full A-F even when scope_status=out_of_scope (report will carry permanent caveats)")
     a = p.parse_args()
@@ -1828,6 +1828,14 @@ def main():
             p.error(f"run-config file not found: {a.run_config}")
         rc_base_dir = rc_path.parent
         rc = json.loads(rc_path.read_text(encoding="utf-8-sig"))
+
+        # A run-config is intended to be a self-contained entry point.  Keep
+        # the CLI override, but fall back to the configured output directory.
+        if not a.out:
+            configured_out = (rc.get("output", {}) or {}).get("out_dir")
+            if configured_out:
+                out_path = pathlib.Path(configured_out)
+                a.out = str((rc_base_dir / out_path).resolve()) if not out_path.is_absolute() else str(out_path)
 
         # ── schema validation ──
         rc_errors = _validate_run_config(rc)
@@ -1870,6 +1878,7 @@ def main():
         if ev.get("gold") and not a.gold: a.gold = _resolve(ev.get("gold"))
         if ev.get("query_log") and not a.run_log: a.run_log = _resolve(ev["query_log"])
         if ev.get("query_hits") and not a.query_hits: a.query_hits = _resolve(ev["query_hits"])
+        if ev.get("search_meta") and not a.search_meta: a.search_meta = _resolve(ev["search_meta"])
         if ev.get("source_snapshot") and not a.candidate_snapshots: a.candidate_snapshots = _resolve(ev["source_snapshot"])
         if ev.get("screening_decisions") and not a.decision_log: a.decision_log = _resolve(ev["screening_decisions"])
         if ev.get("deduplication_log") and not a.deduplication_log: a.deduplication_log = _resolve(ev["deduplication_log"])
