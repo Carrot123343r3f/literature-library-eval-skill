@@ -1154,7 +1154,7 @@ def _writing_readiness_section(report):
     """Give narrative-review workset advice without turning it into a seventh score."""
     ctx = report.get("context", {})
     review_type = normalize_review_type(ctx.get("review_type", ""))
-    records = report.get("health", {}).get("records", 0) or 0
+    records = report.get("library_health", {}).get("records", 0) or 0
     workset = ctx.get("writing_workset", {})
     if not isinstance(workset, dict):
         workset = {}
@@ -1681,6 +1681,15 @@ def write(report, out, artifact_paths=None):
     if artifact_paths:
         copy_inputs_and_manifest(report, artifact_paths, out)
         report["manifest"] = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+
+    # Keep absolute local paths out of the human and machine-readable report.
+    # The manifest retains hashed input metadata and source filenames for
+    # reproducibility without leaking the caller's filesystem layout.
+    report_context = report.get("context", {})
+    raw_library_path = report_context.get("library_path")
+    if raw_library_path:
+        report_context["library_name"] = pathlib.Path(raw_library_path).name
+        report_context["library_path"] = pathlib.Path(raw_library_path).name
 
     (out / "audit.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 

@@ -1,9 +1,9 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-07-22T15:30:07.115160+00:00",
+  "generated_at": "2026-07-22T15:39:51.267333+00:00",
   "run_audit_version": "model-x-2026-07-21",
-  "git_commit": "6cc31515b29ac9221f5ceafa71f8475249e6f93a",
-  "run_audit_sha256": "fa971500e9bdf03e114c57bf5b34e877b6b5b8ac0420eb9a32fd274181a82985",
+  "git_commit": "659e3693d713a14f0d4dd51e3ea01914f0e4466b",
+  "run_audit_sha256": "17161b629dea29dd14b6089c9d901dbef5c1e820b89a874ae56db8fdb2584817",
   "python_version": "3.13.5",
   "platform": "Windows-11-10.0.26200-SP0",
   "review_type": "叙事综述",
