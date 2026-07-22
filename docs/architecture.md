@@ -66,6 +66,7 @@ User Intake (run-config.json)
 - **search_meta.json**: Bridge between search execution and audit computation
 - **audit.json**: Machine-readable output with full indicator register
 - **manifest.json**: sha256, git commit, Python version — every input accounted for
+- **evidence-manifest.json**: dataset roles, source routes, freeze state, and A2/B3 + A3/B2 evidence reuse checks
 
 ## Extension Points
 
@@ -74,3 +75,7 @@ User Intake (run-config.json)
 3. **New indicators**: Add to indicator-registry.json → update run_audit.py → update report
 4. **New output formats**: Extend `write()` in run_audit.py
 5. **New review types**: Add threshold row + schema enum value
+
+## Agent-assisted evidence isolation
+
+The recommended workflow uses four procedural roles: Dataset Builder, Query Optimizer, Blind Evaluator, and Audit Agent. They may be separate threads, but independence is established by frozen artifacts and access boundaries, not memory separation alone. `evidence-manifest.json` is the machine-readable handoff contract.

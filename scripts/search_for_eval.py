@@ -11,6 +11,7 @@ Dev/validation set separation（v2）：
   两个集合不应有重叠。若只提供 --benchmark，整套作为 dev_set 使用，validation_set 为空，
   A2 将标注为 estimated 证据状态。
   独立验证集不参与检索式迭代——一旦用于调整检索式，就"烧掉"了独立性。
+  --initial-query 保存用户提供的 q0，并以 q0-user 原样执行；未提供时才由 PICO/keywords 生成 ai_generated q0。
 
 DRR 可复算性：source_marginal_yields 中每条路径附带 candidates（候选数）、
 screened_high_confidence（高置信筛选数）、new_high_confidence（此前未发现的）和
@@ -130,6 +131,7 @@ def main():
     p.add_argument('--dev-set', help='[v2] 开发集 JSON — 用于迭代检索式（多次使用）')
     p.add_argument('--validation-set', help='[v2] 独立验证集 JSON — 仅用于最终 A2 判定（看过即"烧掉"，不用于调检索式）')
     p.add_argument('--pico', help='[v2] 工程 PICO 分解 JSON — object/technology/performance/context')
+    p.add_argument('--initial-query', help='用户提供的原始检索式 q0；首轮优先执行并原样记录，不被 AI 静默替换')
     p.add_argument('--out', required=True)
     p.add_argument('--min-cited', type=int, default=10, help='潜在新增的 cited_by 下限')
     p.add_argument('--max-per-query', type=int, default=50,
@@ -189,7 +191,8 @@ def main():
 
     keywords = ctx.get('keywords', [])
     core_terms = [k.lower() for k in keywords[:3]]
-    queries = build_queries(keywords, pico)
+    initial_query = a.initial_query or ctx.get('initial_query') or ctx.get('user_query')
+    queries = [('q0-user', initial_query)] if initial_query else build_queries(keywords, pico)
     if pico:
         # Use PICO terms for core terms when available
         pico_core = []
@@ -231,6 +234,8 @@ def main():
                 if any(term in tl for term in core_terms) and cited >= a.min_cited:
                     potential_add.append(item)
         queries_record.append({'source': 'OpenAlex', 'query': q, 'label': label,
+                               'query_id': 'q0' if label == 'q0-user' else f'generated-{len(queries_record)+1}',
+                               'origin': 'user_provided' if label == 'q0-user' else 'ai_generated',
                                'date': time.strftime('%Y-%m-%d'), 'hits': q_count,
                                'status': status,
                                'note': 'failed' if status == 'failed' else 'top-cited-only'})
@@ -331,6 +336,13 @@ def main():
                'validation_recall': val_recall,
                'validation_recall_total': val_total,
                'validation_source': val_source or '无独立验证集',
+               'query_versions': [{'query_id': q.get('query_id'), 'origin': q.get('origin'),
+                                   'query': q.get('query'), 'change_type': 'initial',
+                                   'source': q.get('source'), 'execution_date': q.get('date'),
+                                   'hits': q.get('hits'), 'status': q.get('status'),
+                                   'execution_note': q.get('note')}
+                                  for q in queries_record],
+               'initial_query_origin': 'user_provided' if initial_query else 'ai_generated',
                'a2_evidence_status': a2_evidence,
                'potential_additions_titles': [x['title'] for x in potential_add[:20]],
                'potential_additions_count': len(potential_add),

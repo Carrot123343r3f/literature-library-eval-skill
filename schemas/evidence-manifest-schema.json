@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Carrot123343r3f/literature-library-eval-skill/blob/main/schemas/evidence-manifest-schema.json",
+  "title": "Evidence Set Provenance Manifest",
+  "description": "Procedural separation contract for seed, development, validation, benchmark, and saturation evidence.",
+  "type": "object",
+  "required": ["schema_version", "datasets", "relationships"],
+  "properties": {
+    "schema_version": {"type": "string", "const": "1.0"},
+    "datasets": {
+      "type": "object",
+      "properties": {
+        "seed": {"$ref": "#/$defs/dataset"},
+        "dev": {"$ref": "#/$defs/dataset"},
+        "validation": {"$ref": "#/$defs/dataset"},
+        "benchmark": {"$ref": "#/$defs/dataset"},
+        "b3_validation": {"$ref": "#/$defs/dataset"}
+      },
+      "additionalProperties": {"$ref": "#/$defs/dataset"}
+    },
+    "relationships": {
+      "type": "object",
+      "properties": {
+        "a2_validation_dataset": {"type": ["string", "null"]},
+        "b3_validation_dataset": {"type": ["string", "null"]},
+        "a3_source_ids": {"type": "array", "items": {"type": "string"}},
+        "b2_pathway_source_ids": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  },
+  "$defs": {
+    "dataset": {
+      "type": "object",
+      "required": ["role", "source_routes", "used_tested_query", "used_for_query_optimization", "frozen_at"],
+      "properties": {
+        "role": {"type": "string", "enum": ["seed", "dev", "validation", "benchmark", "b3_validation", "pathway"]},
+        "path": {"type": ["string", "null"]},
+        "item_ids": {"type": "array", "items": {"type": "string"}},
+        "source_routes": {"type": "array", "items": {"type": "string"}},
+        "used_tested_query": {"type": "boolean"},
+        "used_for_query_optimization": {"type": "boolean"},
+        "frozen_at": {"type": ["string", "null"]},
+        "notes": {"type": "string"}
+      }
+    }
+  }
+}

@@ -52,6 +52,8 @@ Run the audit **before** writing. In one conversation with an AI agent, you get:
 | 🔧 Semi-automated | Multi-round iteration, cross-database search, citation tracking, formal screening — orchestrated by AI agent in conversation |
 | 📋 Planned | End-to-end one-shot orchestrator (`run_full_audit.py`, v2.0) |
 
+Users do not need to provide every validation paper. A Dataset Builder can construct a challenge set from reviews, standards, citation paths, and held-out time/source routes, then freeze it before query optimization. `evidence-manifest.json` records provenance, freezing, and leakage checks; separate subagents or threads alone do not establish independence.
+
 ```text
 使用 literature-library-eval 评估我的文献库，
 判断它能否支撑"工业视觉缺陷检测的跨产线迁移"的系统综述。
@@ -75,7 +77,7 @@ The AI will:
 | **B · Saturation** | Is the search still growing? | GGR, DRR, pathway completion + independent validation |
 | **C · Balance** | Are topics and sources skewed? | Top-share, CV, Gini, Shannon entropy, author concentration, opposing viewpoints |
 | **D · Recency** | Does the library reflect the current state? | Source freshness, recent-share (profile-aware), frontier coverage |
-| **E · Impact** | Are core citations and venues covered? | h-core, Tier-1 venue coverage *(background signals only)* |
+| **E · Impact & Bibliometric Context** | What is the citation and venue context? | h-core, Tier-1 venue coverage *(background signals only)* |
 | **F · Usability** | Can you actually write the review? | Query reproducibility, abstract/fulltext access, dedup, provenance, retraction checks |
 
 → [Full methodology](docs/methodology.md) · [Indicator registry](schemas/indicator-registry.json) · [Standards guide](references/user-standards-guide.md)

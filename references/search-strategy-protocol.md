@@ -39,7 +39,7 @@
 
 ## 2. 开发集与验证集的分离（Dev Set vs Validation Set）
 
-这是**最关键的科学性修复**。Gold 不能完全由同一轮搜索结果反向构造，否则 A2 会虚高（模型只是记住了自己找到的文献）。
+这是**最关键的科学性修复**。Gold 不能完全由同一轮搜索结果反向构造，否则 A2 会虚高（模型只是记住了自己找到的文献）。验证集可以由 AI 的 Dataset Builder 获取，但必须通过来源留出、冻结和 provenance manifest 实现程序隔离；不同 subagent 的记忆隔离本身不构成独立证据。
 
 ### 2.1 开发集（Dev Set）
 
@@ -59,7 +59,9 @@
 **来源**（按优先级）：
 1. 另一批独立综述/标准/基准论文——与用户提供的种子论文来自不同出处
 2. 时间切分：最新发表论文（如近 6 个月）——这些不可能在检索式中被特化过
-3. 引文追踪发现：种子论文的 forward/backward 引用中随机抽取的独立样本
+3. 引文追踪发现：种子论文的 forward/backward 引用中按主题和年份分层抽取
+
+验证集候选不能由被测检索式单独发现。至少留出一条未参与 q* 优化的发现路径，并在 `evidence-manifest.json` 中记录 `source_routes`、`used_tested_query`、`used_for_query_optimization` 和 `frozen_at`。若验证集曾被检索式优化读取，A2 降级为 `estimated`。
 
 **校验**：AI 必须在 `context.gold_set_metadata` 中声明：
 - `validation_set_source`: 来源描述
@@ -73,7 +75,11 @@
 | `dev_recall` | 开发集 | 迭代方向反馈——这个改动有效吗？ | 检索迭代比较表中 |
 | `validation_recall` | 独立验证集 | 最终 A2 判定——检索式有没有真正泛化？ | A2 评估表中作为 `a2_recall` 的主值 |
 
-**若用户没有提供独立验证集**：`a2_recall` 使用开发集计算，但证据状态降级为 `estimated`，并在 note 中注明"开发集=验证集复用，A2 可能被高估——建议补充独立验证集"。
+**若用户没有提供独立验证集**：AI 可以由 Dataset Builder 从留出的综述、标准和引文路径构建候选验证集；在冻结前不得用于最终评分。若仍没有来源留出或冻结记录，`a2_recall` 使用开发集计算，但证据状态降级为 `estimated`，并在 note 中注明"开发集=验证集复用，A2 可能被高估"。
+
+### 2.4 Subagent 隔离
+
+Dataset Builder、Query Optimizer、Blind Evaluator 和 Audit Agent 可以由同一模型的不同线程执行，但必须使用角色隔离的输入工件：Query Optimizer 只读 dev set，Blind Evaluator 在 q* 冻结后才读 validation set，Audit Agent 检查 manifest 而不参与选文献。共享目录、缓存或把 validation recall 转述给优化器，都视为验证集泄漏。
 
 ## 3. 检索路径（True Independent Pathways）
 
@@ -238,6 +244,10 @@ A2 的停止与 B 的停止是两套独立判据，不能混淆。
 | 独立验证未发现漏项 | B3 的独立验证通过 |
 
 **B 停止 ≠ A2 已优化**。尽管 GGR/DRR 很低，但可能因为检索式本身太窄——检索式写得太窄同样会让结果集单调递减。
+
+**A3/B2 证据不得直接复用**。A3 的多源快照只支持候选下界；B2 只能使用经筛选确认的新纳入文献。若 manifest 显示两者共享来源，B2 标为 `not_assessable`。
+
+**A2/B3 验证不得默认复用**。若二者使用同一个 validation dataset，B3 的独立验证不可证明，不能据此声称饱和。
 
 ### 6.3 停止的联合判据
 

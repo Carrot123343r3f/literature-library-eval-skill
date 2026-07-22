@@ -4,6 +4,11 @@ import argparse, datetime as dt, hashlib, html, json, pathlib, re, shutil, sys, 
 from collections import Counter
 from math import log
 
+try:
+    from evidence_isolation import inspect_manifest
+except ImportError:  # pragma: no cover - package-style fallback
+    from scripts.evidence_isolation import inspect_manifest
+
 # Review-type → default thresholds (narrative / systematic / scoping / rapid / umbrella)
 REVIEW_THRESHOLDS = {
     "叙事综述": {"a1_min_recall": 0.75, "a2_min_recall": 0.70, "f_access_rate": 0.60,
@@ -156,6 +161,15 @@ def a3(sources):
     if incomplete: result["note"] = "Source snapshots incomplete; provisional count must not support A3 conclusions."
     return result
 
+
+def load_evidence_manifest(path):
+    if not path:
+        return None
+    try:
+        return json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
 def health(library, standards=None, dedup_log_provided=False, dedup_log_depth="missing", decision_log_provided=False, taxonomy=None):
     standards = standards or {}
     n = len(library)
@@ -235,11 +249,13 @@ def stability(context):
               if isinstance(x.get("yield"), (int, float))
               and x.get("screening_status") != "discovery_only"]
     iv_passed = context.get("independent_validation_passed")
+    evidence_integrity = context.get("evidence_integrity", {})
     run_log = context.get("run_log_complete")
     run_log_depth = context.get("run_log_depth", "missing")
     has_enough_screened = len(screened_rounds) >= 2
+    validation_independent = not evidence_integrity.get("a2_b3_shared_validation", False)
     converged = (has_enough_screened and all(x < threshold for x in rates[-2:]) and complete == 1.0
-                 and iv_passed is True
+                 and iv_passed is True and validation_independent
                  and bool(yields) and all(x < yield_threshold for x in yields))
     # B1 / B2: require screened rounds — discovery_only → not_assessable
     if any_discovery_only and not has_enough_screened:
@@ -248,13 +264,15 @@ def stability(context):
     else:
         b1_verdict = "pass" if len(rates) >= 2 and all(x < threshold for x in rates[-2:]) else ("not_assessable" if len(rates) < 2 else "fail")
         b2_verdict = "pass" if yields and all(x < yield_threshold for x in yields) else ("not_assessable" if not yields else "fail")
+        if evidence_integrity.get("a3_b2_overlap"):
+            b2_verdict = "not_assessable"
     checks = {"B1_ggr": b1_verdict,
               "B3_pathway_completion": "pass" if complete == 1.0 else "not_assessable" if complete is None else "fail",
               "B2_drr": b2_verdict,
               "F1_query_traceability": "pass" if run_log is True
               else "fail" if run_log is False else "not_assessable",
-              "B3_independent_validation": "pass" if iv_passed is True
-              else "fail" if iv_passed is False else "not_assessable"}
+              "B3_independent_validation": "not_assessable" if evidence_integrity.get("a2_b3_shared_validation")
+              else ("pass" if iv_passed is True else "fail" if iv_passed is False else "not_assessable")}
     result = {"status": "discovery_only" if any_discovery_only and not has_enough_screened else ("measured" if rounds else "not_assessable"),
               "high_confidence_new_rates": rates, "discovery_candidates_total": discovery_candidates_count,
               "pathway_completion": complete, "source_marginal_yields": yields,
@@ -264,6 +282,10 @@ def stability(context):
               else "不可证明" if "not_assessable" in checks.values() else "未稳定"}
     if any_discovery_only and not has_enough_screened:
         result["note"] = "B 维处于候选发现阶段——discovery candidates 不等于纳入项。GGR/DRR 不可评估直至完成筛选。"
+    if evidence_integrity.get("a3_b2_overlap"):
+        result["note"] = (result.get("note", "") + " A3 快照与 B2 路径共享证据来源；B2 不作独立边际收益结论。 ").strip()
+    if evidence_integrity.get("a2_b3_shared_validation"):
+        result["note"] = (result.get("note", "") + " A2 与 B3 复用验证集；B3 独立验证不可证明。 ").strip()
     return result
 
 def currency(context):
@@ -635,12 +657,18 @@ def quality(library, context):
     citations = sorted([int(x.get("cited_by_count")) for x in library
                         if isinstance(x.get("cited_by_count"), (int, float))], reverse=True)
     h = max((idx for idx, value in enumerate(citations, 1) if value >= idx), default=0)
-    tiers = {str(x).strip().lower() for x in context.get("tier1_venues", [])}
+    configured_tiers = {str(x).strip().lower() for x in context.get("tier1_venues", [])}
+    tiers = set(configured_tiers)
+    aliases = context.get("tier1_venue_aliases", {})
+    if isinstance(aliases, dict):
+        for alias, canonical in aliases.items():
+            tiers.update({str(alias).strip().lower(), str(canonical).strip().lower()})
     venues = [str(x.get("publicationTitle") or x.get("venue") or "").strip().lower() for x in library]
     tier_hits = sum(bool(v and v in tiers) for v in venues)
     rate = tier_hits / len(library) if library and tiers else None
     return {"status": "measured" if library else "not_assessable", "citation_records": len(citations),
-            "h_core": h if citations else None, "tier1_venues_configured": len(tiers),
+            "citation_coverage_rate": round(len(citations) / len(library), 3) if library else None,
+            "h_core": h if citations else None, "tier1_venues_configured": len(configured_tiers),
             "tier1_records": tier_hits if tiers else None,
             "tier1_rate": round(rate, 3) if rate is not None else None,
             "checks": {"E1_h_core": "screening" if citations else "not_assessable",
@@ -724,6 +752,18 @@ def _method_narrative(report):
     if not keywords and not queries and not plan_queries:
         lines.append("**检索关键词**：未记录（建库时未保留 query-plan.json，检索不可复跑）")
 
+    integrity = ctx.get("evidence_integrity", {})
+    if integrity.get("manifest_present"):
+        lines.append("\n**证据隔离审计**：" + integrity.get("status", "not_assessable"))
+        if integrity.get("a2_validation_independent") is False:
+            lines.append("⚠ A2 验证集存在查询泄漏或开发集重叠，A2 已降级为 estimated。")
+        if integrity.get("a2_b3_shared_validation"):
+            lines.append("⚠ A2 与 B3 复用验证集，B3 独立验证不可证明。")
+        if integrity.get("a3_b2_overlap"):
+            lines.append("⚠ A3 多源快照与 B2 路径共享来源，B2 不作独立边际收益结论。")
+        for warning in integrity.get("warnings", []):
+            lines.append(f"- {warning}")
+
     bm_method = ctx.get("benchmark_method", ""); bm_source = ctx.get("benchmark_source", "")
     bm_size = report["coverage"]["a1"].get("total", 0); bm_note = ctx.get("benchmark_note", "")
     if bm_method or bm_source:
@@ -779,18 +819,74 @@ def _method_narrative(report):
     return "\n".join(lines)
 
 def _search_iteration_section(report):
-    """Generate the search iteration process section — narrative + detailed comparison table.
+    """Generate the search strategy and iteration section.
 
-    Renders when context.search_iterations is present (from search-strategy-protocol).
-    Shows PICO decomposition, dev/val set status, iteration summary, comparison table,
-    per-round query details, pathway contribution matrix, and A2-vs-B stop explanation.
+    It renders for a first-round search record as well as a full iteration log. This
+    keeps a user-provided q0 visible even when query refinement has not started.
     """
     ctx = report.get("context", {})
     iterations = ctx.get("search_iterations", [])
-    if not iterations:
+    versions = ctx.get("search_query_versions", [])
+    if not isinstance(versions, list):
+        versions = []
+    if not versions:
+        legacy_queries = ctx.get("queries", [])
+        if isinstance(legacy_queries, list):
+            versions = [dict(query, query_id=query.get("query_id") or f"q{index}")
+                        for index, query in enumerate(legacy_queries)
+                        if isinstance(query, dict) and query.get("query")]
+        if not versions and isinstance(ctx.get("query_plan"), dict):
+            versions = [{"query_id": f"q{index}", "origin": "未记录", "change_type": "initial",
+                         "source": source, "query": query}
+                        for index, (source, query) in enumerate(ctx["query_plan"].items())]
+    initial_query = ctx.get("initial_query") or ctx.get("user_query")
+    has_legacy_query = bool(ctx.get("queries") or ctx.get("query_plan"))
+    if not iterations and not versions and not initial_query and not has_legacy_query:
         return ""
 
-    lines = ["## 检索迭代过程\n"]
+    lines = ["## 检索策略与迭代过程\n"]
+    lines.append("本节保留检索式的起点、每轮原子修改、执行来源和结果；它用于复核策略，不把命中数本身当作检索充分性的证明。\n")
+
+    # ── Query origin and version history ──
+    if versions or initial_query:
+        lines.append("### 检索式起点与版本\n")
+        lines.append("| 版本 | 起点 | 改动类型 | 执行来源 | 日期 | 命中 | 状态 | 检索式 |")
+        lines.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
+        origin_labels = {"user_provided": "用户提供", "ai_generated": "AI 生成", "agent_refined": "AI 原子迭代"}
+        rows = versions or [{"query_id": "q0", "origin": ctx.get("search_initial_query_origin", "user_provided"),
+                             "query": initial_query, "change_type": "initial"}]
+        for version in rows:
+            if not isinstance(version, dict):
+                continue
+            query = str(version.get("query", "—")).replace("\n", " ").replace("|", "\\|")
+            query = query.replace("`", "\\`")
+            vid = version.get("query_id") or version.get("label") or "—"
+            origin = origin_labels.get(version.get("origin"), version.get("origin") or "未记录")
+            change = version.get("change_type") or "initial"
+            source = version.get("source") or version.get("database") or "未记录"
+            date = version.get("execution_date") or version.get("date") or "未记录"
+            hits = version.get("hits", "—")
+            status = version.get("status", "已记录")
+            lines.append(f"| {vid} | {origin} | {change} | {source} | {date} | {hits} | {status} | `{query}` |")
+        lines.append("")
+        if ctx.get("search_initial_query_origin") == "user_provided":
+            lines.append("q0 为用户提供的原始检索式；后续版本应仅在此基础上进行可解释的原子改动。\n")
+
+        dev_recall = ctx.get("_search_meta_dev_recall")
+        val_recall = ctx.get("_search_meta_val_recall")
+        if dev_recall is not None or val_recall is not None:
+            dev_total = ctx.get("_search_meta_dev_total", "—")
+            val_total = ctx.get("_search_meta_val_total", "—")
+            val_source = ctx.get("search_validation_source") or "未提供独立验证集"
+            dev_text = f"{float(dev_recall):.3f}（n={dev_total}）" if dev_recall is not None else "未记录"
+            val_text = f"{float(val_recall):.3f}（n={val_total}）" if val_recall is not None else "未记录"
+            lines.append(f"首轮诊断：dev_recall={dev_text}；validation_recall={val_text}；验证来源：{val_source}。\n")
+
+    if not iterations:
+        lines.append("### 过程状态\n")
+        lines.append("当前仅记录了首轮检索/诊断，尚未提供逐轮优化日志。因此报告可以展示 q0 的执行情况，"
+                     "但不能据此声称检索式已经完成优化或达到 A2 停止条件。\n")
+        return "\n".join(lines)
 
     # ── PICO decomposition ──
     pico = ctx.get("search_decomposition", {})
@@ -958,7 +1054,7 @@ def _dimension_narrative(report):
         auth_note = f" 作者集中度：top-author {author_conc.get('top_author_share','—')}（{author_conc.get('top_author','')}: {author_conc.get('top_author_count','')}篇）。"
     lines.append(f"**C 平衡**：{n_topics} 个预期主题，{'含空主题' if 'empty_topic' in flags else '全部有文献'}；来源集中度 {b.get('top_source_share','—')}（CV={_fmt_num(b.get('cv'))} Gini={_fmt_num(b.get('gini'))}）。{auth_note}")
     lines.append(f"**D 时效**：近 {d.get('window_years','—')} 年占比 {_fmt_pct(d.get('recent_share'))}（{d.get('recent_records','—')}/{d.get('dated_records','—')} 标有日期）；预印本 {d.get('preprint_records','—')} 条。")
-    lines.append(f"**E 学术影响**：h-core={_fmt_num(q.get('h_core'))}（{q.get('citation_records','—')} 条引用）；Tier-1 {_fmt_pct(q.get('tier1_rate'))}（{q.get('tier1_venues_configured','—')} venue）。仅作背景信号，不等于研究质量——真正的研究质量评估应使用与研究设计匹配的批判性评价工具。")
+    lines.append(f"**E 学术影响与来源背景**：h-core={_fmt_num(q.get('h_core'))}（{q.get('citation_records','—')} 条引用）；Tier-1 {_fmt_pct(q.get('tier1_rate'))}（{q.get('tier1_venues_configured','—')} venue）。仅作背景信号，不等于研究质量——真正的研究质量评估应使用与研究设计匹配的批判性评价工具。")
     fc = h.get("field_completeness", {})
     lines.append(f"**F 可用性**：核心元数据 {_fmt_pct(fc.get('title'))}；摘要 {_fmt_pct(fc.get('abstractNote'))}；DOI {_fmt_pct(fc.get('DOI'))}；全文获取率 {_fmt_pct(h.get('access_union_rate'))}（附件 {_fmt_pct(h.get('attachment_rate'))} / OA {_fmt_pct(h.get('open_link_rate'))}）；谱系率 {_fmt_pct(h.get('provenance_rate'))}。")
     return "\n\n".join(lines)
@@ -980,6 +1076,7 @@ def indicator_rows(report):
     chk = lambda g, k: g.get("checks", {}).get(k, "not_assessable")
     user_confirmed = s.get("confirmed_by_user", True)
     is_umbrella = ctx.get("review_type") == "伞式综述"
+    evidence_integrity = ctx.get("evidence_integrity", {})
 
     def tv(value, threshold):
         if not user_confirmed: return "screening"
@@ -1026,6 +1123,8 @@ def indicator_rows(report):
         a2m = d["a2m"]; a2r = d["a2r"]
         a2_dep = ("⚠ A2 非独立——Gold 与 A1 基准集复用；A1 和 A2 不能相互增强证据强度。"
                   if (d["a2_path"] and d["a2_path"] == d["a1_path"]) else "")
+        if evidence_integrity.get("a2_validation_independent") is False:
+            a2_dep += "⚠ evidence-manifest 显示 validation 集存在查询泄漏或重叠，A2 仅作 estimated。"
         zero_hit_note = "零命中=实测 0。" if a2r == 0 and c["a2"].get("status") == "measured" else ""
         return (tv(a2r, a2m),
                 f"{_fmt_pct(a2r)}（{_fmt_num(c['a2'].get('matched'))}/{_fmt_num(c['a2'].get('total'))}）",
@@ -1052,10 +1151,12 @@ def indicator_rows(report):
 
     def _b2(d):
         my = p.get('source_marginal_yields', [])
+        overlap_note = ("⚠ A3 快照与 B2 路径共享证据来源，B2 不作独立边际收益结论。"
+                        if evidence_integrity.get("a3_b2_overlap") else "")
         return (chk(p, "B2_drr"),
                 f"{_fmt_num(len(my))} 条路径", p.get("status"),
                 f"DRR 只有在筛选确认后才有意义——发现候选不等于纳入项。边际收益：{my}。"
-                f"新路径高置信文献/候选量。")
+                f"新路径高置信文献/候选量。{overlap_note}")
 
     def _b3(d):
         bv = d["bv"]
@@ -1067,7 +1168,8 @@ def indicator_rows(report):
         return (verdict,
                 f"路径 {_fmt_pct(p.get('pathway_completion'))} | 独立验证 {iv_label}",
                 p.get("status"),
-                f"结论：**{bv}**。仅低 GGR/DRR 不够——需路径完成+独立验证+筛选真实同时成立。")
+                f"结论：**{bv}**。仅低 GGR/DRR 不够——需路径完成+独立验证+筛选真实同时成立。"
+                f"{'⚠ A2 与 B3 复用验证集，B3 独立验证不可证明。' if evidence_integrity.get('a2_b3_shared_validation') else ''}")
 
     def _c1(d):
         tc = d["tc"]; tf = d["tf"]
@@ -1130,8 +1232,8 @@ def indicator_rows(report):
         qh = d["qh"]
         note = (f"h-core={_fmt_num(qh)}。仅背景信号——高被引不等于高质量，新论文拉低 h-core。"
                 f"真正的研究质量评估应使用与研究设计匹配的批判性评价工具。")
-        if q.get('citation_records') and h.get('records') and q['citation_records'] < h['records'] * 0.5:
-            note += f" 注意仅 {_fmt_pct(q['citation_records']/h['records'])} 条目有引用数据。"
+        if q.get('citation_coverage_rate') is not None and q['citation_coverage_rate'] < 0.5:
+            note += f" 注意仅 {_fmt_pct(q['citation_coverage_rate'])} 条目有引用数据。"
         return (chk(q, "E1_h_core"),
                 f"h={_fmt_num(qh)}（{q.get('citation_records','—')} 条引用）",
                 q.get("status"), note)
@@ -1139,9 +1241,9 @@ def indicator_rows(report):
     def _e2(d):
         qt1 = d["qt1"]
         return (chk(q, "E2_tier1"),
-                f"{_fmt_pct(qt1)}（{_fmt_num(q.get('tier1_records'))}/{_fmt_num(q.get('tier1_venues_configured'))} venue）",
+                f"{_fmt_pct(qt1)}（{_fmt_num(q.get('tier1_records'))}/{_fmt_num(h.get('records'))} 条库内文献）",
                 q.get("status"),
-                f"已配置 {q.get('tier1_venues_configured','—')} 个 venue。"
+                f"已配置 {q.get('tier1_venues_configured','—')} 个 venue（支持 tier1_venue_aliases 规范化）。"
                 f"{'未配置 tier1_venues。' if not q.get('tier1_venues_configured') else '当前仅为下界。'}")
 
     def _f1(d):
@@ -1501,6 +1603,7 @@ def main():
     p.add_argument("--query-plan"); p.add_argument("--source-snapshot"); p.add_argument("--decision-log")
     p.add_argument("--deduplication-log"); p.add_argument("--run-log"); p.add_argument("--search-meta",
                    help="search_meta.json from search_for_eval.py — auto-detected alongside --query-hits if omitted")
+    p.add_argument("--evidence-manifest", help="evidence-manifest.json for dataset provenance and independence checks")
     p.add_argument("--out", required=True)
     p.add_argument("--allow-out-of-scope", action="store_true",
                    help="Force full A-F even when scope_status=out_of_scope (report will carry permanent caveats)")
@@ -1560,6 +1663,7 @@ def main():
         if ev.get("source_snapshot") and not a.candidate_snapshots: a.candidate_snapshots = _resolve(ev["source_snapshot"])
         if ev.get("screening_decisions") and not a.decision_log: a.decision_log = _resolve(ev["screening_decisions"])
         if ev.get("deduplication_log") and not a.deduplication_log: a.deduplication_log = _resolve(ev["deduplication_log"])
+        if ev.get("evidence_manifest") and not a.evidence_manifest: a.evidence_manifest = _resolve(ev["evidence_manifest"])
 
         if not a.context:
             ctx_from_rc = {
@@ -1618,6 +1722,14 @@ def main():
                 ctx["source_marginal_yields"] = sm.get("source_marginal_yields", [])
             if "planned_pathways" not in ctx or not ctx["planned_pathways"]:
                 ctx["planned_pathways"] = sm.get("planned_pathways", [])
+            # Preserve q0 and first-round execution for the user-facing strategy
+            # section, even before the iterative refinement log exists.
+            if not ctx.get("search_query_versions"):
+                ctx["search_query_versions"] = sm.get("query_versions") or sm.get("queries", [])
+            if not ctx.get("search_initial_query_origin"):
+                ctx["search_initial_query_origin"] = sm.get("initial_query_origin", "")
+            if not ctx.get("search_validation_source"):
+                ctx["search_validation_source"] = sm.get("validation_source", "")
             # Consume dev/val recall for A2 evidence status
             a2_meta = sm.get("a2", {})
             dev_recall = sm.get("dev_recall")
@@ -1647,6 +1759,9 @@ def main():
                     )
             except (json.JSONDecodeError, OSError):
                 pass
+    evidence_manifest = load_evidence_manifest(a.evidence_manifest)
+    evidence_integrity = inspect_manifest(evidence_manifest, a.evidence_manifest)
+    ctx["evidence_integrity"] = evidence_integrity
     lib = load_items(a.library)
     cov = {"a1": benchmark(load_items(a.library), load_items(a.benchmark) if a.benchmark else []),
            "a2": a2(load_items(a.gold) if a.gold else None, load_items(a.query_hits) if a.query_hits else None),
@@ -1661,6 +1776,21 @@ def main():
     if search_meta_a2_ev == "estimated" and cov["a2"].get("status") == "measured":
         cov["a2"]["status"] = "estimated"
         cov["a2"]["note"] = (cov["a2"].get("note", "") + " No independent validation set — A2 may be overestimated (dev=val reuse).").strip()
+    # When search_for_eval supplied an independent validation result, it is the
+    # A2 primary value. Do not silently report the dev/gold recall instead.
+    if (ctx.get("_search_meta_val_total", 0) > 0 and
+            ctx.get("_search_meta_val_recall") is not None):
+        val_total = int(ctx["_search_meta_val_total"])
+        val_recall = float(ctx["_search_meta_val_recall"])
+        cov["a2"]["total"] = val_total
+        cov["a2"]["matched"] = round(val_recall * val_total)
+        cov["a2"]["recall"] = val_recall
+        cov["a2"]["status"] = "measured"
+        cov["a2"]["note"] = (cov["a2"].get("note", "") +
+                              " A2 主值来自 search_meta 的独立 validation_recall，而非 dev/gold recall。").strip()
+    if evidence_integrity.get("a2_validation_independent") is False and cov["a2"].get("status") == "measured":
+        cov["a2"]["status"] = "estimated"
+        cov["a2"]["note"] = (cov["a2"].get("note", "") + " Evidence manifest shows validation leakage or overlap; A2 is procedurally non-independent.").strip()
     # F1: parse run-log BEFORE stability() so F1_query_traceability can use the result
     if a.run_log:
         rp = pathlib.Path(a.run_log)
@@ -1781,9 +1911,10 @@ def main():
               "library_health": libh, "coverage": cov, "process": proc, "balance": bal,
               "topic_balance": tbal, "currency": cur, "recency": rec, "quality": qual,
               "umbrella": umb,
-              "artifacts": artifacts({"query-plan": a.query_plan, "source-snapshot": a.source_snapshot,
+              "artifacts": artifacts({"query-plan": a.query_plan, "query-hits": a.query_hits,
+                                      "search-meta": search_meta_path, "source-snapshot": a.source_snapshot,
                                       "decision-log": a.decision_log, "deduplication-log": a.deduplication_log,
-                                      "run-log": a.run_log}),
+                                      "evidence-manifest": a.evidence_manifest, "run-log": a.run_log}),
               "summary": summary,
               "limitations": ["本报告中的各项阈值均为基于工程文献计量经验的参考值，旨在辅助识别可能的风险信号，不等于文献库质量的绝对标准。pass/warning/fail 是自动化诊断提示，不是质量裁决，所有结论均应结合具体研究问题和领域惯例做人工判断。",
                               "A3 下界不是 Recall；区间需另行声明模型假设。",
@@ -1802,11 +1933,13 @@ def main():
                          "benchmark": a.benchmark,
                          "gold": a.gold,
                          "query-hits": a.query_hits,
+                         "search-meta": search_meta_path,
                          "candidate-snapshots": a.candidate_snapshots,
                          "query-plan": a.query_plan,
                          "source-snapshot": a.source_snapshot,
                          "decision-log": a.decision_log,
                          "deduplication-log": a.deduplication_log,
+                         "evidence-manifest": a.evidence_manifest,
                          "run-log": a.run_log,
                          "context": a.context}.items() if v is not None})
 

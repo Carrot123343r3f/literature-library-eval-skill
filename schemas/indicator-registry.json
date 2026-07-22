@@ -9,7 +9,7 @@
     "B": {"name": "饱和度 (Saturation)", "question": "检索是否还在增长？"},
     "C": {"name": "平衡 (Balance)", "question": "主题与来源分布是否失衡？"},
     "D": {"name": "时效 (Recency)", "question": "库是否反映当前研究状态？"},
-    "E": {"name": "学术影响 (Impact Signals)", "question": "核心引用与领域渠道是否被覆盖？"},
+    "E": {"name": "学术影响与来源背景 (Impact & Bibliometric Context)", "question": "核心引用和领域渠道的结构背景如何？"},
     "F": {"name": "可用性 (Usability)", "question": "文献能否实际用来写综述？"}
   },
   "indicators": [

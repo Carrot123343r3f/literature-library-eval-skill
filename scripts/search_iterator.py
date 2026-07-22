@@ -84,6 +84,23 @@ def validate(data, strict=False):
         if not data.get("dev_validation_overlap_check"):
             warnings.append("dev_validation_overlap_check not explicitly declared")
 
+    # ── Procedural isolation manifest ──
+    evidence = data.get("evidence_manifest", {})
+    if evidence:
+        validation_meta = evidence.get("datasets", {}).get("validation", {})
+        if validation_meta.get("used_tested_query"):
+            errors.append("evidence_manifest: validation set was discovered by the tested query")
+        if validation_meta.get("used_for_query_optimization"):
+            errors.append("evidence_manifest: validation set was exposed to query optimization")
+        if not validation_meta.get("frozen_at"):
+            warnings.append("evidence_manifest: validation set has no frozen_at timestamp")
+        relationships = evidence.get("relationships", {})
+        if (relationships.get("a2_validation_dataset") and
+                relationships.get("a2_validation_dataset") == relationships.get("b3_validation_dataset")):
+            warnings.append("evidence_manifest: A2 and B3 reuse the same validation dataset")
+        if set(relationships.get("a3_source_ids", [])) & set(relationships.get("b2_pathway_source_ids", [])):
+            warnings.append("evidence_manifest: A3 and B2 share evidence source IDs")
+
     # ── Iterations ──
     iterations = data.get("iterations", [])
     if not iterations:

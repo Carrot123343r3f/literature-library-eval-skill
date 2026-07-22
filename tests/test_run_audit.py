@@ -6,7 +6,10 @@ import subprocess
 import sys
 import tempfile
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "scripts"))
+
 from jsonschema import Draft202012Validator
+from evidence_isolation import inspect_manifest
 
 root = pathlib.Path(__file__).resolve().parents[1]
 
@@ -459,5 +462,118 @@ with tempfile.TemporaryDirectory() as temp:
         f"Error should name missing nested fields\noutput: {combined}"
 
 print("Schema guard (nested project fields): PASSED")
+
+# ── Test: procedural evidence isolation detects leakage and A/B reuse ──
+with tempfile.TemporaryDirectory() as temp:
+    manifest = {
+        "schema_version": "1.0",
+        "datasets": {
+            "dev": {"role": "dev", "item_ids": ["doi:10.1000/dev"],
+                    "source_routes": ["db_boolean"], "used_tested_query": True,
+                    "used_for_query_optimization": True, "frozen_at": "2026-07-22"},
+            "validation": {"role": "validation", "item_ids": ["doi:10.1000/val"],
+                            "source_routes": ["backward_citation"], "used_tested_query": True,
+                            "used_for_query_optimization": False, "frozen_at": "2026-07-22"}
+        },
+        "relationships": {
+            "a2_validation_dataset": "validation",
+            "b3_validation_dataset": "validation",
+            "a3_source_ids": ["snapshot-openalex"],
+            "b2_pathway_source_ids": ["snapshot-openalex"]
+        }
+    }
+    report = inspect_manifest(manifest)
+    assert report["status"] == "invalid"
+    assert report["a2_validation_independent"] is False
+    assert report["a2_b3_shared_validation"] is True
+    assert report["a3_b2_overlap"] is True
+
+print("Evidence isolation leakage guard: PASSED")
+
+# ── Test: evidence manifest conforms to its declared JSON contract ──
+manifest_schema = json.loads((root / "schemas" / "evidence-manifest-schema.json").read_text(encoding="utf-8"))
+manifest_errors = list(Draft202012Validator(manifest_schema).iter_errors(manifest))
+assert not manifest_errors, [error.message for error in manifest_errors]
+
+print("Evidence manifest schema guard: PASSED")
+
+# ── Test: run_audit downgrades reused evidence instead of claiming A/B independence ──
+with tempfile.TemporaryDirectory() as temp:
+    manifest_path = pathlib.Path(temp) / "evidence-manifest.json"
+    manifest_path.write_text(json.dumps({
+        "schema_version": "1.0",
+        "datasets": {
+            "validation": {"role": "validation", "item_ids": ["doi:10.1000/val"],
+                            "source_routes": ["backward_citation"], "used_tested_query": True,
+                            "used_for_query_optimization": False, "frozen_at": "2026-07-22"}
+        },
+        "relationships": {
+            "a2_validation_dataset": "validation",
+            "b3_validation_dataset": "validation",
+            "a3_source_ids": ["snapshot-openalex"],
+            "b2_pathway_source_ids": ["snapshot-openalex"]
+        }
+    }), encoding="utf-8")
+    out = pathlib.Path(temp) / "out"
+    audit = run_audit(str(root / "tests" / "context.json"), str(out), extra_args=[
+        "--evidence-manifest", str(manifest_path)
+    ])
+    assert audit["coverage"]["a2"]["status"] == "estimated"
+    assert audit["process"]["checks"]["B2_drr"] == "not_assessable"
+    assert audit["process"]["checks"]["B3_independent_validation"] == "not_assessable"
+    assert audit["context"]["evidence_integrity"]["a3_b2_overlap"] is True
+
+print("Evidence reuse downgrade: PASSED")
+
+# ── Test: independent validation recall from search_meta is the A2 primary value ──
+with tempfile.TemporaryDirectory() as temp:
+    search_meta = pathlib.Path(temp) / "search_meta.json"
+    search_meta.write_text(json.dumps({
+        "a2_evidence_status": "measured",
+        "validation_recall": 0.75,
+        "validation_recall_total": 4,
+        "dev_recall": 1.0,
+        "dev_recall_total": 4
+    }), encoding="utf-8")
+    out = pathlib.Path(temp) / "out"
+    audit = run_audit(str(root / "tests" / "context.json"), str(out), extra_args=[
+        "--search-meta", str(search_meta)
+    ])
+    assert audit["coverage"]["a2"]["recall"] == 0.75
+    assert audit["coverage"]["a2"]["total"] == 4
+    assert audit["coverage"]["a2"]["matched"] == 3
+    assert "A2 主值来自 search_meta" in audit["coverage"]["a2"]["note"]
+
+print("Independent validation primary-value guard: PASSED")
+
+# ── Test: q0 and first-round search metadata are visible without an iteration log ──
+with tempfile.TemporaryDirectory() as temp:
+    search_meta = pathlib.Path(temp) / "search_meta.json"
+    search_meta.write_text(json.dumps({
+        "query_versions": [{
+            "query_id": "q0", "origin": "user_provided", "change_type": "initial",
+            "query": '("defect detection") AND ("transfer learning")',
+            "source": "OpenAlex", "execution_date": "2026-07-22",
+            "hits": 17, "status": "complete"
+        }],
+        "initial_query_origin": "user_provided",
+        "dev_recall": 0.8,
+        "dev_recall_total": 5,
+        "validation_recall": 0.75,
+        "validation_recall_total": 4,
+        "validation_source": "held-out citation tracking"
+    }), encoding="utf-8")
+    out = pathlib.Path(temp) / "out"
+    run_audit(str(root / "tests" / "context.json"), str(out), extra_args=[
+        "--search-meta", str(search_meta)
+    ])
+    markdown = (out / "audit.md").read_text(encoding="utf-8")
+    assert "## 检索策略与迭代过程" in markdown
+    assert "检索式起点与版本" in markdown
+    assert '("defect detection") AND ("transfer learning")' in markdown
+    assert "首轮诊断：dev_recall=0.800（n=5）；validation_recall=0.750（n=4）" in markdown
+    assert "当前仅记录了首轮检索/诊断" in markdown
+
+print("Search strategy report section: PASSED")
 
 print("\nAll tests passed.")

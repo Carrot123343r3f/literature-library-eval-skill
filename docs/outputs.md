@@ -14,9 +14,13 @@ out/
 └── .tmp/                 ← Auto-generated resolved config
 ```
 
+When an evidence-isolation manifest is supplied, it is copied into `inputs/` and the report records whether the validation set was frozen, query-independent, and separate from B3/A3 evidence. See `schemas/evidence-manifest-schema.json`.
+
 > **Privacy**: No absolute paths recorded. Input files are copied with sha256 prefix only.
 
 ## Report Sections
+
+The report includes a **Search Strategy & Iteration Process** section whenever q0, query versions, or an iteration log is available. It lists query origin, exact query text, database/source, execution date, hit count, status, and every atomic change. A first-round-only record is explicitly described as diagnostic rather than an optimized final strategy.
 
 1. **Input Evidence Table** — Shows exactly what data was available and what was missing
 2. **Priority Actions** — Top 3 highest-priority actions (🔴 blocking first, 🟡 warnings second)
