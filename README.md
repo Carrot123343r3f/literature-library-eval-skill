@@ -9,7 +9,6 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/test%20checks-passing-22c55e" alt="Test checks">
   <img src="https://img.shields.io/badge/license-MIT-3b82f6" alt="License">
   <img src="https://img.shields.io/badge/indicators-21%20(%2B3%20umbrella)-8b5cf6" alt="Indicators">
   <img src="https://img.shields.io/badge/platform-Claude%20%7C%20Codex-6366f1" alt="Platform">
@@ -55,12 +54,12 @@ Run the audit **before** writing. In one conversation with an AI agent, you get:
 
 ## Quickstart
 
-**Current capability** (v1.0): The audit computation engine, single-round diagnostic search, and iteration compliance validation are production-ready. The AI agent orchestrates the multi-step pipeline in conversation — search, screen, iterate, compute, report. A one-shot end-to-end CLI orchestrator (`run_full_audit.py`) is planned for v2.0.
+**Current capability**: The audit engine, single-round diagnostic search, and iteration-record validation are implemented. The AI agent orchestrates the multi-step workflow in conversation — search, screen, iterate, compute, report. This project is still being refined; a one-shot end-to-end CLI orchestrator (`run_full_audit.py`) remains planned.
 
 | Status | Step |
 | :---: | --- |
 | ✅ Automated | Audit computation (`run_audit.py`), single-round diagnostic search (`search_for_eval.py`), candidate dedup (`normalize_candidates.py`), iteration validation (`search_iterator.py`), report generation |
-| 🔧 Semi-automated | Multi-round iteration, cross-database search, citation tracking, formal screening — orchestrated by AI agent in conversation |
+| 🔧 Semi-automated | Open-source multi-source snapshots (`collect_open_sources.py`), multi-round iteration, cross-database search, citation tracking, formal screening — orchestrated by AI agent in conversation |
 | 📋 Planned | End-to-end one-shot orchestrator (`run_full_audit.py`, v2.0) |
 
 Users do not need to provide every validation paper. A Dataset Builder can construct a challenge set from reviews, standards, citation paths, and held-out time/source routes, then freeze it before query optimization. `evidence-manifest.json` records provenance, freezing, and leakage checks; separate subagents or threads alone do not establish independence.
@@ -75,8 +74,6 @@ The AI will:
 1. Confirm your research question, review type, domain, and boundaries (max 3 questions)
 2. Accept your library — Zotero-exported JSON (Zotero → Better BibTeX JSON or CSL JSON export). BibTeX/RIS/CSV direct import and Zotero API integration are on the v1.x roadmap
 3. Run the available diagnostic checks, help you iterate the query, compute the A–F indicators, and produce the audit package
-
-→ [View example report](example-report.md)
 
 ## Six-Dimension Framework
 
@@ -161,22 +158,20 @@ git clone https://github.com/Carrot123343r3f/literature-library-eval-skill.git \
 
 | Dependency | Why |
 |---|---|
-| Python 3.10+ | `run_audit.py`, `search_for_eval.py`, `search_iterator.py` |
+| Python 3.10+ | All command-line scripts |
 | Internet access | OpenAlex, Crossref, arXiv (open-access APIs) |
 | **No API keys** | All data sources are open-access |
-
-**Development:** `pip install -r requirements-dev.txt` adds `pytest` and `jsonschema` for running the test suite. The repository also includes a direct system check: `python tests/test_run_audit.py`.
 
 ## Documentation
 
 | Audience | Resources |
 |---|---|
-| **New users** | [README.zh-CN.md](README.zh-CN.md) · [Quickstart](#quickstart) · [Example report](example-report.md) |
+| **New users** | [README.zh-CN.md](README.zh-CN.md) · [Quickstart](#quickstart) |
 | **Deep dive** | [Methodology](docs/methodology.md) · [Architecture](docs/architecture.md) · [Outputs](docs/outputs.md) |
 | **Integration** | [Integrations](docs/integrations.md) · [Zotero / databases / companion skills](docs/integrations.md) |
 | **Standards** | [User standards guide](references/user-standards-guide.md) · [Indicator registry](schemas/indicator-registry.json) |
 | **AI Agents** | [SKILL.md](SKILL.md) · [Intake protocol](references/intake-protocol.md) · [Search protocol](references/search-strategy-protocol.md) |
-| **Developers** | [run-config-schema.json](schemas/run-config-schema.json) · [Architecture](docs/architecture.md) · [tests/](tests/) |
+| **Developers** | [run-config-schema.json](schemas/run-config-schema.json) · [Architecture](docs/architecture.md) · [Indicator registry](schemas/indicator-registry.json) |
 
 ## Roadmap
 

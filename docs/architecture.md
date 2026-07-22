@@ -2,7 +2,7 @@
 
 ## Pipeline
 
-> **Current state (v1.0)**: Steps 1–2, 6–9 are fully implemented in code.
+> **Current implementation**: Steps 1–2, 6–9 are implemented in code.
 > Steps 3–5 are partially automated (single-round diagnostic search,
 > automated candidate dedup) but rely on AI agent orchestration in
 > conversation for multi-round iteration, cross-database queries,
@@ -50,7 +50,10 @@ User Intake (run-config.json)
 | `indicator-registry.json` | Machine-readable indicator definitions | ✅ |
 | `search_for_eval.py` | Single-round diagnostic search | ✅ |
 | `search_iterator.py` | Multi-round iteration validator | ✅ |
+| `evidence_isolation.py` | Evidence-set provenance and leakage checks | ✅ |
+| `collect_open_sources.py` | Open-source candidate snapshot collection | 🔧 |
 | `normalize_candidates.py` | Identifier dedup + version grouping | ✅ |
+| `validate_registry.py` | Validate a real audit output against the indicator registry | ✅ |
 | `run_audit.py` | A–F computation + report generation | ✅ |
 | `build_query_plan.py` | Cross-database query plan from PICO | 📋 |
 | `execute_search.py` | Multi-source search with pagination | 📋 |

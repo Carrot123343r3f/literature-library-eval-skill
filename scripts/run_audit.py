@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Literature-library evaluation report generator (model X: A-F six dimensions, 21 sub-items; umbrella adds A4/C4/F7 → 24)."""
-import argparse, datetime as dt, hashlib, html, json, pathlib, re, shutil, sys, tempfile
+import argparse, datetime as dt, hashlib, html, json, pathlib, re, shutil, sys
 from collections import Counter
 from math import log
 
