@@ -2,31 +2,38 @@
 
 ## Pipeline
 
+> **Current state (v1.0)**: Steps 1–2, 6–9 are fully implemented in code.
+> Steps 3–5 are partially automated (single-round diagnostic search,
+> automated candidate dedup) but rely on AI agent orchestration in
+> conversation for multi-round iteration, cross-database queries,
+> citation tracking, and formal screening. A one-shot end-to-end
+> orchestrator (`run_full_audit.py`) is planned for v2.0.
+
 ```text
 User Intake (run-config.json)
   │
-  ├─→ [1] Problem & Scope Modeling
+  ├─→ [1] Problem & Scope Modeling         ✅
   │       PICO decomposition, review type, profile, boundaries
   │
-  ├─→ [2] Search Plan & Vocabulary
+  ├─→ [2] Search Plan & Vocabulary         ✅ (protocol) / 📋 (auto-build)
   │       Concept matrix, source syntax mapping, query construction
   │
-  ├─→ [3] Multi-Source Search & Snapshots
+  ├─→ [3] Multi-Source Search & Snapshots    🔧
   │       Execute queries, paginate, retry, save raw snapshots
   │
-  ├─→ [4] Normalize, Deduplicate, Version-Family
+  ├─→ [4] Normalize, Deduplicate, Version-Family ✅
   │       Stable-ID dedup, title-year fuzzy matching, preprint–published linking
   │
-  ├─→ [5] Automated Screening & Decision Log
+  ├─→ [5] Automated Screening & Decision Log   🔧
   │       Frozen inclusion/exclusion rules → per-item decisions
   │
-  ├─→ [6] Dev Set / Validation Set
+  ├─→ [6] Dev Set / Validation Set              ✅
   │       Evidence set separation, independence verification
   │
-  ├─→ [7] Query Iteration & Stop Decision
+  ├─→ [7] Query Iteration & Stop Decision       🔧 (AI-assisted)
   │       Atomic changes, comparison table, A2 stop ≠ B stop
   │
-  ├─→ [8] A–F Indicator Calculation
+  ├─→ [8] A–F Indicator Calculation             ✅
   │       run_audit.py — deterministic computation + report
   │
   └─→ [9] Audit Package
