@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/tests-10%2F10%20passing-22c55e" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-18%20tests%20passing-22c55e" alt="Tests">
   <img src="https://img.shields.io/badge/license-MIT-3b82f6" alt="License">
   <img src="https://img.shields.io/badge/indicators-21%20(%2B3%20umbrella)-8b5cf6" alt="Indicators">
   <img src="https://img.shields.io/badge/platform-Claude%20%7C%20Codex-6366f1" alt="Platform">
@@ -46,6 +46,12 @@ Run the audit **before** writing. In one command (or one conversation with an AI
 
 **Current capability** (v1.0): The audit computation engine, single-round diagnostic search, and iteration compliance validation are production-ready. The AI agent orchestrates the multi-step pipeline in conversation — search, screen, iterate, compute, report. A one-shot end-to-end CLI orchestrator (`run_full_audit.py`) is planned for v2.0.
 
+| Status | Step |
+| :---: | --- |
+| ✅ Automated | Audit computation (`run_audit.py`), single-round diagnostic search (`search_for_eval.py`), candidate dedup (`normalize_candidates.py`), iteration validation (`search_iterator.py`), report generation |
+| 🔧 Semi-automated | Multi-round iteration, cross-database search, citation tracking, formal screening — orchestrated by AI agent in conversation |
+| 📋 Planned | End-to-end one-shot orchestrator (`run_full_audit.py`, v2.0) |
+
 ```text
 使用 literature-library-eval 评估我的文献库，
 判断它能否支撑"工业视觉缺陷检测的跨产线迁移"的系统综述。
@@ -56,14 +62,6 @@ The AI will:
 1. Confirm your research question, review type, domain, and boundaries (max 3 questions)
 2. Accept your library — Zotero-exported JSON (Zotero → Better BibTeX JSON or CSL JSON export). BibTeX/RIS/CSV direct import and Zotero API integration are on the v1.x roadmap
 3. Execute single-round diagnostic search, help you iterate the query, compute all A–F indicators, and produce the audit package
-
-```text
-Input → Scope → Search → Dedup → Screen → Iterate → A–F Compute → Audit Package
-       ✅        ✅      ✅       ✅        ✅           ✅
-       intake   search  normalize  (AI-       search      run_audit
-       proto    _for    _cand      assisted)  iterator    .py
-                _eval   idates
-```
 
 → [View example report](example-report.md)
 
@@ -153,6 +151,8 @@ git clone https://github.com/Carrot123343r3f/literature-library-eval-skill.git \
 | Python 3.10+ | `run_audit.py`, `search_for_eval.py`, `search_iterator.py` |
 | Internet access | OpenAlex, Crossref, arXiv (open-access APIs) |
 | **No API keys** | All data sources are open-access |
+
+**Development:** `pip install -r requirements-dev.txt` adds `pytest` and `jsonschema` for running the test suite.
 
 ## Documentation
 

@@ -283,4 +283,147 @@ with tempfile.TemporaryDirectory() as temp:
     assert "[PASS]" in r.stdout
     print("Registry validation (umbrella): PASSED")
 
+# ── Test: schema — missing required field (project) ──
+with tempfile.TemporaryDirectory() as temp:
+    bad_rc = pathlib.Path(temp) / "bad_run_config.json"
+    bad_rc.write_text(json.dumps({
+        "schema_version": "1.0",
+        "library": {"provided": False},
+        "automation": {"allow_search": False},
+        "output": {}
+    }), encoding="utf-8")
+    r = subprocess.run(
+        [sys.executable, str(root / "scripts" / "run_audit.py"),
+         "--run-config", str(bad_rc),
+         "--out", str(pathlib.Path(temp) / "out")],
+        capture_output=True, text=True, encoding="utf-8", errors="replace"
+    )
+    combined = (r.stderr or "") + (r.stdout or "")
+    assert r.returncode != 0, f"Should fail on missing 'project' field\nerr: {combined}"
+    assert "project" in combined.lower(), \
+        f"Error should mention missing project field\noutput: {combined}"
+
+print("Schema guard (missing required field): PASSED")
+
+# ── Test: schema — illegal review_type ──
+with tempfile.TemporaryDirectory() as temp:
+    bad_rc = pathlib.Path(temp) / "bad_run_config.json"
+    bad_rc.write_text(json.dumps({
+        "schema_version": "1.0",
+        "project": {"research_question": "test", "review_type": "invalid_type", "scope_status": "in_scope"},
+        "library": {"provided": False},
+        "automation": {"allow_search": False},
+        "output": {}
+    }), encoding="utf-8")
+    r = subprocess.run(
+        [sys.executable, str(root / "scripts" / "run_audit.py"),
+         "--run-config", str(bad_rc),
+         "--out", str(pathlib.Path(temp) / "out")],
+        capture_output=True, text=True, encoding="utf-8", errors="replace"
+    )
+    combined = (r.stderr or "") + (r.stdout or "")
+    assert r.returncode != 0, f"Should fail on illegal review_type\nerr: {combined}"
+    assert "review_type" in combined, \
+        f"Error should mention review_type\noutput: {combined}"
+
+print("Schema guard (illegal review_type): PASSED")
+
+# ── Test: schema — illegal scope_status ──
+with tempfile.TemporaryDirectory() as temp:
+    bad_rc = pathlib.Path(temp) / "bad_run_config.json"
+    bad_rc.write_text(json.dumps({
+        "schema_version": "1.0",
+        "project": {"research_question": "test", "review_type": "systematic", "scope_status": "bogus_status"},
+        "library": {"provided": False},
+        "automation": {"allow_search": False},
+        "output": {}
+    }), encoding="utf-8")
+    r = subprocess.run(
+        [sys.executable, str(root / "scripts" / "run_audit.py"),
+         "--run-config", str(bad_rc),
+         "--out", str(pathlib.Path(temp) / "out")],
+        capture_output=True, text=True, encoding="utf-8", errors="replace"
+    )
+    combined = (r.stderr or "") + (r.stdout or "")
+    assert r.returncode != 0, f"Should fail on illegal scope_status\nerr: {combined}"
+    assert "scope_status" in combined, \
+        f"Error should mention scope_status\noutput: {combined}"
+
+print("Schema guard (illegal scope_status): PASSED")
+
+# ── Test: scope — out_of_scope refuses full evaluation ──
+with tempfile.TemporaryDirectory() as temp:
+    oos_rc = pathlib.Path(temp) / "oos_run_config.json"
+    oos_rc.write_text(json.dumps({
+        "schema_version": "1.0",
+        "project": {"research_question": "test", "review_type": "systematic", "scope_status": "out_of_scope"},
+        "library": {"provided": False},
+        "automation": {"allow_search": False},
+        "output": {}
+    }), encoding="utf-8")
+    r = subprocess.run(
+        [sys.executable, str(root / "scripts" / "run_audit.py"),
+         "--run-config", str(oos_rc),
+         "--out", str(pathlib.Path(temp) / "out")],
+        capture_output=True, text=True, encoding="utf-8", errors="replace"
+    )
+    combined = (r.stderr or "") + (r.stdout or "")
+    assert r.returncode != 0, f"Should refuse out_of_scope without --allow-out-of-scope\nerr: {combined}"
+    assert "out_of_scope" in combined.lower(), \
+        f"Error should mention out_of_scope\noutput: {combined}"
+
+print("Scope guard (out_of_scope refusal): PASSED")
+
+# ── Test: scope — out_of_scope + --allow-out-of-scope runs successfully ──
+with tempfile.TemporaryDirectory() as temp:
+    oos_rc = pathlib.Path(temp) / "oos_run_config.json"
+    oos_rc.write_text(json.dumps({
+        "schema_version": "1.0",
+        "project": {"research_question": "test", "review_type": "systematic", "scope_status": "out_of_scope"},
+        "library": {"provided": True, "path": str(root / "tests" / "library.json"), "format": "json"},
+        "automation": {"allow_search": False},
+        "output": {}
+    }), encoding="utf-8")
+    out = pathlib.Path(temp) / "out"
+    r = subprocess.run(
+        [sys.executable, str(root / "scripts" / "run_audit.py"),
+         "--run-config", str(oos_rc), "--allow-out-of-scope",
+         "--out", str(out)],
+        capture_output=True, text=True, encoding="utf-8", errors="replace"
+    )
+    combined = (r.stderr or "") + (r.stdout or "")
+    assert r.returncode == 0, f"Should succeed with --allow-out-of-scope\noutput: {combined}"
+    audit = json.loads((out / "audit.json").read_text(encoding="utf-8"))
+    # out_of_scope override must be recorded in context
+    ctx = audit.get("context", {})
+    assert ctx.get("_scope_override_active") is True, \
+        f"_scope_override_active should be True in context, got: {ctx}"
+    assert ctx.get("scope_status") == "out_of_scope", \
+        f"scope_status should be out_of_scope, got: {ctx.get('scope_status')}"
+
+print("Scope guard (allow-out-of-scope override): PASSED")
+
+# ── Test: schema — research_question empty is rejected ──
+with tempfile.TemporaryDirectory() as temp:
+    bad_rc = pathlib.Path(temp) / "bad_run_config.json"
+    bad_rc.write_text(json.dumps({
+        "schema_version": "1.0",
+        "project": {"research_question": "", "review_type": "systematic", "scope_status": "in_scope"},
+        "library": {"provided": False},
+        "automation": {"allow_search": False},
+        "output": {}
+    }), encoding="utf-8")
+    r = subprocess.run(
+        [sys.executable, str(root / "scripts" / "run_audit.py"),
+         "--run-config", str(bad_rc),
+         "--out", str(pathlib.Path(temp) / "out")],
+        capture_output=True, text=True, encoding="utf-8", errors="replace"
+    )
+    combined = (r.stderr or "") + (r.stdout or "")
+    assert r.returncode != 0, f"Should fail on empty research_question\nerr: {combined}"
+    assert "research_question" in combined, \
+        f"Error should mention research_question\noutput: {combined}"
+
+print("Schema guard (empty research_question): PASSED")
+
 print("\nAll tests passed.")

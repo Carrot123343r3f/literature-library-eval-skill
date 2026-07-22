@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/tests-9%2F9%20passing-22c55e" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-18%20tests%20passing-22c55e" alt="Tests">
   <img src="https://img.shields.io/badge/license-MIT-3b82f6" alt="License">
   <img src="https://img.shields.io/badge/indicators-21%20(%2B3%20umbrella)-8b5cf6" alt="Indicators">
   <img src="https://img.shields.io/badge/platform-Claude%20%7C%20Codex-6366f1" alt="Platform">
@@ -54,8 +54,17 @@ AI 会自动：
 2. 接受你的文献库（Zotero 导出/JSON，或者让 AI 设计检索策略）
 3. 执行检索、计算指标、生成审计包
 
+**当前 v1.0 自动化程度：**
+
+| 状态 | 环节 |
+|:---:|---|
+| ✅ 已自动化 | 审计计算（`run_audit.py`）、单轮诊断检索（`search_for_eval.py`）、候选去重（`normalize_candidates.py`）、迭代验证（`search_iterator.py`）、报告生成 |
+| 🔧 半自动 | 多轮检索迭代、跨数据库检索、引文追踪、正式筛选——由 AI agent 在对话中手动编排 |
+| 📋 规划中 | 端到端一键编排（`run_full_audit.py`，计划 v2.0） |
+
 ```text
 输入确认 → 范围建模 → 检索计划 → 多源检索 → 去重 → 筛选 → 迭代优化 → A–F 计算 → 审计包
+   ✅          ✅          🔧         🔧       ✅       🔧         🔧           ✅         ✅
 ```
 
 → [查看示例报告](example-report.md)
@@ -146,6 +155,8 @@ git clone https://github.com/Carrot123343r3f/literature-library-eval-skill.git \
 | Python 3.10+ | `run_audit.py`、`search_for_eval.py`、`search_iterator.py` |
 | 互联网 | OpenAlex、Crossref、arXiv 等开放 API |
 | **无需 API key** | 全部数据来源为开放获取 |
+
+**开发依赖：** `pip install -r requirements-dev.txt` 安装 `pytest` 和 `jsonschema`，用于运行测试套件。
 
 ## 文档
 

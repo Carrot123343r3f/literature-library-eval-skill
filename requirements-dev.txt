@@ -1,0 +1,5 @@
+# Development dependencies for literature-library-eval
+# Install with: pip install -r requirements-dev.txt
+
+pytest>=7.0
+jsonschema>=4.0
