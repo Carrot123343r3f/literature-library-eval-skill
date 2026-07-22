@@ -3,7 +3,7 @@
 ## Pipeline
 
 > **Current implementation**: Steps 1–2, 6–9 are implemented in code.
-> Steps 3–5 are partially automated (single-round diagnostic search,
+> Steps 3–5 are partly automated (first-run q0/atomic diagnostics,
 > automated candidate dedup) but rely on AI agent orchestration in
 > conversation for multi-round iteration, cross-database queries,
 > citation tracking, and formal screening. A one-shot end-to-end
@@ -48,7 +48,9 @@ User Intake (run-config.json)
 | `run-config-schema.json` | Single source of truth for evaluation inputs | ✅ |
 | `search-strategy-protocol.md` | Query iteration protocol | ✅ |
 | `indicator-registry.json` | Machine-readable indicator definitions | ✅ |
-| `search_for_eval.py` | Single-round diagnostic search | ✅ |
+| `run_initial_assessment.py` | No-anchor/no-query first-run orchestration; outputs A1–A3/B1–B3 with direct verdicts and explicit evidence tiers | ✅ |
+| `prepare_first_run_evidence.py` | Candidate-anchor auto-screening and deterministic dev/holdout preparation | ✅ |
+| `search_for_eval.py` | Profile-aware multi-source q0 + atomic-variant diagnostic search | ✅ |
 | `search_iterator.py` | Multi-round iteration validator | ✅ |
 | `evidence_isolation.py` | Evidence-set provenance and leakage checks | ✅ |
 | `collect_open_sources.py` | Open-source candidate snapshot collection | 🔧 |

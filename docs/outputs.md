@@ -24,7 +24,7 @@ The report includes a **Search Strategy & Iteration Process** section whenever q
 
 1. **Input Evidence Table** — Shows exactly what data was available and what was missing
 2. **Priority Actions** — Top 3 highest-priority actions (🔴 blocking first, 🟡 warnings second)
-3. **A–F Summary Table** — All 21 (24 for umbrella) indicators in one table
+3. **A–F Summary Table** — All 22 (25 for umbrella) indicators in one table
 4. **Dimension Narratives** — One paragraph per dimension connecting numbers to meaning
 5. **Recommendations** — Grouped blocking vs. suggested, each with concrete action
 6. **Limitations & Disclaimers** — What this report cannot tell you

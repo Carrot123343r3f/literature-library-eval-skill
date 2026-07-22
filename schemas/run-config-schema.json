@@ -52,7 +52,8 @@
     "evidence_inputs": {
       "type": "object",
       "properties": {
-        "benchmark": {"type": ["string", "null"], "description": "A1 baseline file path. Produced by: manual/agent. Supports: A1."},
+        "benchmark": {"type": ["string", "null"], "description": "Frozen, relevance-screened A1 benchmark path. Candidate anchors alone do not support measured A1."},
+        "anchor_candidates": {"type": ["string", "null"], "description": "Candidate A1 anchors from build_anchor_candidates.py; screen and freeze before using as benchmark."},
         "gold": {"type": ["string", "null"], "description": "A2 gold set file path. Produced by: manual/agent. Supports: A2."},
         "query_log": {"type": ["string", "null"], "description": "Run-log file. Produced by: user or search_for_eval.py. Supports: F1. Missing → F1 not_assessable."},
         "query_hits": {"type": ["string", "null"], "description": "query-hits.json from search_for_eval.py. Produced by: search_for_eval.py. Supports: A2. Missing → A2 not_assessable."},
@@ -62,6 +63,32 @@
         "deduplication_log": {"type": ["string", "null"], "description": "Dedup/version log. Produced by: normalize_candidates.py. Supports: F4. Missing → F4 not_assessable (version candidates)."},
         "search_meta": {"type": ["string", "null"], "description": "search_meta.json from search_for_eval.py. Produced by: search_for_eval.py. Supports: A2 sensitivity, B discovery candidates."},
         "failed_sources": {"type": "array", "items": {"type": "string"}, "description": "Names of sources that failed during collection. Produced by: all collectors. Supports: A2/A3 partial_snapshot downgrade."}
+      }
+    },
+    "assessment_context": {
+      "type": "object",
+      "description": "Optional structured context for balance diagnostics.",
+      "properties": {
+        "viewpoint_framework": {
+          "type": "object",
+          "description": "C4 viewpoint-balance input. Declare a focal claim before classifying evidence stance.",
+          "properties": {
+            "claim": {"type": "string"},
+            "contested": {"type": "boolean", "default": true},
+            "counts": {
+              "type": "object",
+              "properties": {
+                "supports_claim": {"type": "integer", "minimum": 0},
+                "challenges_claim": {"type": "integer", "minimum": 0},
+                "mixed_or_conditional": {"type": "integer", "minimum": 0},
+                "unclassified": {"type": "integer", "minimum": 0}
+              }
+            },
+            "records_assessed": {"type": "integer", "minimum": 0, "description": "Size of the deduplicated record pool used for stance classification."},
+            "classification_method": {"type": "string"},
+            "sample_verified": {"type": ["integer", "null"], "minimum": 0}
+          }
+        }
       }
     },
     "standards": {

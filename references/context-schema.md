@@ -49,6 +49,14 @@
     "低照度": {"openalex": 0, "ieee": 0},
     "跨产线迁移": {"openalex": 20, "ieee": 15, "dblp": 7}
   },
+  "viewpoint_framework": {
+    "claim": "跨产线迁移学习能在目标场景稳定提升缺陷检测泛化性",
+    "contested": true,
+    "counts": {"supports_claim": 31, "challenges_claim": 6, "mixed_or_conditional": 10, "unclassified": 5},
+    "records_assessed": 52,
+    "classification_method": "AI 根据题名与摘要按预先声明的主张分类",
+    "sample_verified": 12
+  },
 
   "tier1_venues": ["cvpr", "iccv", "eccv", "tpami", "ijcv", "neurips", "icml", "iclr", "aaai", "wacv"],
   "frontier_coverage_verdict": "not_assessable",
@@ -71,6 +79,7 @@
 | `taxonomy[].high_confidence_records` | C1 主题平衡 | C 维必需 |
 | `taxonomy[].target_share` | C1 TVD（可选） | 可选 |
 | `topic_source_counts` | C3 主题-来源交叉 | 可选，缺失则 C3 标 not_assessable |
+| `viewpoint_framework` | C4 观点偏斜度 | 推荐；须包含中心主张、`records_assessed` 和支持/质疑/条件性计数。缺失时 C4 直接警示“未建立可审计分类”，而非从泛化情绪词臆测立场。 |
 | `search_rounds`（≥2 轮，含 `core_before`/`included_high`） | B1 GGR | B 维必需 |
 | `planned_pathways` + rounds 的 `completed`/`pathway` | B3 路径完成 | B 维必需 |
 | `source_marginal_yields[]`（含 `pathway`/`candidates`/`screened_high_confidence`/`new_high_confidence`/`dedup_rule`/`yield`） | B2 DRR | B 维必需；原始字段供第三方从 query-hits.json 复算 |
@@ -82,13 +91,16 @@
 | `frontier_coverage_verdict` / `version_currency_verdict` | D3 / D4 | 可选，默认 not_assessable |
 | `run_log_complete` | F1 检索可复跑 | 可选；传入 `--run-log` 文件则自动核验 |
 | `standards.*` | 各项阈值 | 可选，缺省走 `engineering-standards.md` 默认 |
+| `writing_workset` | 叙事综述的写作可用性建议 | 可选；`{core_count, role_counts, fields_confirmed}`。不参与 A–F 评分，也不替代完整库。 |
+| `anchor_discovery_query` | 首轮候选锚点发现 | 可选；未提供用户检索式时可与 `keywords` 一起生成候选锚点。 |
 
 ## 其他输入文件
 
 除 `context.json` 外，`run_audit.py` 还接收：
 
 - `--library`（必需）：题录数组，每项含 `title`/`DOI`/`date`/`source`/`cited_by_count`/`publicationTitle` 等
-- `--benchmark`（A1）：基准集，每项含稳定标识符（DOI/arXiv ID）
+- `--benchmark`（A1）：已审查、来源可追溯且已冻结的基准集，每项含稳定标识符（DOI/OpenAlex/arXiv/PMID/PMCID）
+- `scripts/build_anchor_candidates.py`：用户未提供锚点时的候选发现；候选未审查前不能作为 A1 基准集
 - `--gold` + `--query-hits`（A2）：Gold set 与已执行的检索命中快照
 - `--candidate-snapshots`（A3）：采集器输出的多源快照（`collect_open_sources.py` 生成）
 

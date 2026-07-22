@@ -7,32 +7,14 @@ when it was frozen, and whether it was exposed to query optimization.
 """
 import json
 import pathlib
-import re
-
-
-def _doi(value):
-    match = re.search(r"(10\.\d{4,9}/\S+)", str(value or ""), re.I)
-    return match.group(1).rstrip(".,;:)]}").lower() if match else ""
+try:
+    from stable_ids import stable_ids
+except ImportError:  # pragma: no cover - package-style fallback
+    from scripts.stable_ids import stable_ids
 
 
 def item_ids(item):
-    if not isinstance(item, dict):
-        return set()
-    found = set()
-    for key in ("DOI", "doi", "extra"):
-        value = _doi(item.get(key))
-        if value:
-            found.add("doi:" + value)
-    for key, prefix in (("PMID", "pmid"), ("pmid", "pmid"),
-                        ("PMCID", "pmcid"), ("pmcid", "pmcid"),
-                        ("arxiv", "arxiv"), ("arXiv", "arxiv"),
-                        ("openalex_id", "openalex")):
-        if item.get(key):
-            found.add(prefix + ":" + str(item[key]).casefold())
-    raw = str(item.get("id") or "").casefold()
-    if raw.startswith(("doi:", "pmid:", "pmcid:", "arxiv:", "openalex:")):
-        found.add(raw)
-    return found
+    return stable_ids(item)
 
 
 def _read_items(entry, base_dir):
@@ -48,7 +30,7 @@ def _read_items(entry, base_dir):
     if not path.is_absolute() and base_dir:
         path = pathlib.Path(base_dir) / path
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
     except (OSError, json.JSONDecodeError):
         return []
     return data if isinstance(data, list) else data.get("items", [])
@@ -135,7 +117,7 @@ def main():
     args = parser.parse_args()
     path = pathlib.Path(args.manifest)
     try:
-        manifest = json.loads(path.read_text(encoding="utf-8"))
+        manifest = json.loads(path.read_text(encoding="utf-8-sig"))
     except (OSError, json.JSONDecodeError) as exc:
         print(f"[FAIL] cannot read manifest: {exc}")
         raise SystemExit(1)

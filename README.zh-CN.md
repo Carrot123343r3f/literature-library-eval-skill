@@ -11,7 +11,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/license-MIT-3b82f6" alt="License">
-  <img src="https://img.shields.io/badge/indicators-21%20(%2B3%20umbrella)-8b5cf6" alt="Indicators">
+  <img src="https://img.shields.io/badge/indicators-22%20(%2B3%20umbrella)-8b5cf6" alt="Indicators">
   <img src="https://img.shields.io/badge/platform-Claude%20%7C%20Codex-6366f1" alt="Platform">
 </p>
 
@@ -41,6 +41,7 @@
 - 六个独立维度的准备度——没有总分可以掩盖致命短板
 - 每个输入都以 sha256 哈希记录——审计可复现
 - 缺失的输入标为 `not_assessable` 而非隐藏——*"这是最便宜的修复方式"*
+- 检索式 q0、每次原子改动与首轮诊断会进入报告——检索不再是黑箱
 
 ## 快速开始
 
@@ -52,20 +53,24 @@
 AI 会协助你：
 
 1. 确认研究问题、综述类型、工程领域和边界（一次最多三个问题）
-2. 接受你的文献库（Zotero 导出/JSON，或者让 AI 设计检索策略）
+2. 接受你的文献库（当前脚本完整支持 JSON；Zotero、BibTeX、RIS、CSV 可先由 AI 协助规范化为 JSON）
 3. 执行可用的诊断检查，协助迭代检索，计算指标并生成审计包
 
 你不需要先准备 JSON Schema、Gold set 或去重日志。先告诉 AI 研究问题和文献库位置即可；缺少的证据会在报告中明确列出，并给出最低成本的补充方式。
+
+如果你没有 seminal papers 和检索式，首轮也不会留白：系统会自动建立多源候选锚点、生成 q0 和原子变体，并给出 A1–A3、B1–B3 的 **AI 主导初评**。首轮与后续轮次使用同一张结果表和同一阈值：A1/A2/B1 会直接显示通过或不通过，B2 明确显示独立路径不足的警示，B3 在路径/验证未完成时直接显示不通过。`automated-screening` 只标注证据来源，详细边界移到表后的说明，绝不被包装成“检索已饱和”。
 
 **当前实现状态：**
 
 | 状态 | 环节 |
 |:---:|---|
-| ✅ 已自动化 | 审计计算（`run_audit.py`）、单轮诊断检索（`search_for_eval.py`）、候选去重（`normalize_candidates.py`）、迭代验证（`search_iterator.py`）、报告生成 |
-| 🔧 半自动 | 开放多源快照收集（`collect_open_sources.py`）、多轮检索迭代、跨数据库检索、引文追踪、正式筛选——由 AI agent 在对话中手动编排 |
+| ✅ 已自动化 | 审计计算、无锚点/无检索式的一键首轮 A1–A3/B1–B3 初评（`run_initial_assessment.py`）、OpenAlex + Crossref（按领域补 arXiv/Europe PMC）的 q0 + 原子变体、多源候选锚点发现、迭代记录验证、报告生成 |
+| 🔧 半自动 | 中心主张下的 C4 观点分类与反向补检、多轮检索迭代、引文追踪、标准/指南路径与正式筛选——由 AI agent 在对话中手动编排 |
 | 📋 规划中 | 端到端一键编排（`run_full_audit.py`）；项目仍在迭代，尚未定稿 |
 
 验证集不要求用户逐篇提供：AI 可以从综述、标准、引文网络和时间留出路径构建候选验证集，再冻结后评估检索式。验证集的来源、冻结时间和是否接触过检索式会写入 `evidence-manifest.json`；不同 subagent/线程不自动等于独立证据。
+
+对于叙事综述，报告还会给出“写作工作集”建议。一个 1000 篇的库可以在 A–F 上很强，却仍不适合直接拿来写作；正确做法是保留完整证据池，再建立按主题、论证角色、优先级和综合笔记组织的可回溯工作集，而不是删除原库。
 
 ### 检索式不再是报告里的黑箱
 
@@ -82,13 +87,13 @@ AI 会协助你：
 
 ## 六维框架
 
-21 个指标（伞式综述 24 个）。六个维度平级，不合成总分。任何一维的致命短板都不能被其他维度掩盖。
+22 个指标（伞式综述 25 个）。六个维度平级，不合成总分。任何一维的致命短板都不能被其他维度掩盖。
 
 | 维 | 问题 | 衡量什么 |
 |:---:|---|---|
 | **A · 覆盖** | 已知必收录文献找回来了吗？ | 基准集召回、检索式灵敏度、多源候选下界 |
 | **B · 饱和度** | 检索还在继续增长吗？ | GGR、DRR、独立路径完成 + 独立验证 |
-| **C · 平衡** | 主题和来源偏斜了吗？ | Top-share、CV、Gini、Shannon 熵、作者集中度、对立观点 |
+| **C · 平衡** | 主题、来源或观点偏斜了吗？ | Top-share、CV、Gini、Shannon 熵、作者集中度、观点偏斜度（支持/质疑/条件性证据） |
 | **D · 时效** | 文献库是否反映当前研究状态？ | 来源新鲜度、近年比例（按领域自适应）、前沿覆盖 |
 | **E · 学术影响与来源背景** | 核心引用和领域渠道的结构背景如何？ | h-core、Tier-1 覆盖（*仅背景信号——不是质量裁决*） |
 | **F · 可用性** | 能实际用来写综述吗？ | 检索可复跑、摘要覆盖率、全文获取率、去重、可追溯、撤稿核查 |
@@ -182,7 +187,7 @@ git clone https://github.com/Carrot123343r3f/literature-library-eval-skill.git \
 
 | 阶段 | 内容 | 状态 |
 |---|---|---|
-| v1.0 | 核心 A–F（21+3 指标）、CLI、5 种综述类型、9 个工程 profile | ✅ 当前 |
+| v1.0 | 核心 A–F（22+3 指标）、CLI、5 种综述类型、9 个工程 profile | ✅ 当前 |
 | v1.x | BibTeX/RIS/CSV 导入、Scopus/WoS/IEEE 适配器、Crossref/Semantic Scholar | 🔜 下一步 |
 | v2.0 | `run_full_audit.py`——端到端编排（搜→筛→评→报一键执行） | 📋 规划中 |
 | 未来 | `review-manuscript-audit`——PRISMA 合规、引用完整性、研究质量工具匹配 | 💡 计划中 |

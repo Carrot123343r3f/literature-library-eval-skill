@@ -22,7 +22,7 @@
       "required_inputs": ["library", "benchmark"],
       "default_threshold": {"narrative": 0.75, "scoping": 0.75, "systematic": 0.90, "rapid": 0.60, "umbrella": 0.90},
       "umbrella_only": false,
-      "evidence_states": ["measured", "estimated", "not_assessable"],
+      "evidence_states": ["measured", "estimated", "automated-screening", "not_assessable"],
       "limitations": [
         "稳定 ID 匹配仅计算有 DOI/arXiv/PMID/OpenAlex ID 的条目——无 ID 条目进入人工核验队列",
         "基准集必须独立于文献库构建",
@@ -38,7 +38,7 @@
       "required_inputs": ["gold_set", "query_hits"],
       "default_threshold": {"narrative": 0.70, "scoping": 0.70, "systematic": 0.85, "rapid": 0.60, "umbrella": 0.80},
       "umbrella_only": false,
-      "evidence_states": ["measured", "estimated", "partial_snapshot", "not_assessable"],
+      "evidence_states": ["measured", "estimated", "automated-screening", "partial_snapshot", "not_assessable"],
       "limitations": [
         "Gold set 不得完全由被测检索结果反向构建（开发集 ≠ 验证集）",
         "无独立验证集时 A2 降级为 estimated",
@@ -87,7 +87,7 @@
       "required_inputs": ["search_rounds (≥2 screened rounds)"],
       "default_threshold": {"_ggr": 0.02},
       "umbrella_only": false,
-      "evidence_states": ["measured", "discovery_only", "not_assessable"],
+      "evidence_states": ["measured", "automated-screening", "discovery_only", "not_assessable"],
       "limitations": [
         "discovery candidates ≠ 纳入项",
         "仅低 GGR 不够——需 B2+B3 同时成立",
@@ -102,7 +102,7 @@
       "required_inputs": ["source_marginal_yields (≥2 independent pathways)"],
       "default_threshold": {"_drr": 0.05},
       "umbrella_only": false,
-      "evidence_states": ["measured", "discovery_only", "not_assessable"],
+      "evidence_states": ["measured", "automated-screening", "discovery_only", "not_assessable"],
       "limitations": [
         "宽/中/窄检索式不是独立路径",
         "五类独立路径：db_boolean, backward_citation, forward_citation, related_articles, standards_guidelines",
@@ -117,11 +117,11 @@
       "required_inputs": ["planned_pathways", "independent_validation_record"],
       "default_threshold": {"_pathway_completion": 1.0, "_independent_validation": true},
       "umbrella_only": false,
-      "evidence_states": ["measured", "not_assessable"],
+      "evidence_states": ["measured", "automated-screening", "not_assessable"],
       "limitations": [
         "仅低 GGR/DRR 不等于饱和——可能存在策略共谋盲区",
         "独立验证形式因领域而异：外部专家评审/引用跟踪抽查/非检索来源比照",
-        "首轮 B3 标 not_assessable"
+        "首轮可报告 automated-screening 的流程启动状态，但未完成独立验证时不得声称饱和"
       ]
     },
     {
@@ -170,6 +170,21 @@
     },
     {
       "id": "C4",
+      "dimension": "C",
+      "display_name": {"zh": "观点偏斜度", "en": "Viewpoint Balance"},
+      "formula": "support/challenge/mixed counts for an explicit focal claim",
+      "required_inputs": ["viewpoint_framework (claim, counts, classification_method)"],
+      "default_threshold": {"min_classified_fraction": 0.50, "max_dominant_share": 0.90, "min_counterevidence": 3},
+      "umbrella_only": false,
+      "evidence_states": ["measured", "automated-screening", "not_assessable"],
+      "limitations": [
+        "必须先声明需要平衡的中心主张；不能从通用正负面词自动推出学术立场",
+        "单边结果可能反映真实学术共识，因此只触发 warning 和反向补检建议",
+        "AI 标题/摘要分类须保留方法与抽样核验记录"
+      ]
+    },
+    {
+      "id": "C5",
       "dimension": "C",
       "display_name": {"zh": "综述间覆盖分布", "en": "Review Coverage Distribution"},
       "formula": "CCA, method_type_distribution, search_window_overlap",

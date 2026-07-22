@@ -10,7 +10,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/license-MIT-3b82f6" alt="License">
-  <img src="https://img.shields.io/badge/indicators-21%20(%2B3%20umbrella)-8b5cf6" alt="Indicators">
+  <img src="https://img.shields.io/badge/indicators-22%20(%2B3%20umbrella)-8b5cf6" alt="Indicators">
   <img src="https://img.shields.io/badge/platform-Claude%20%7C%20Codex-6366f1" alt="Platform">
 </p>
 
@@ -54,12 +54,14 @@ Run the audit **before** writing. In one conversation with an AI agent, you get:
 
 ## Quickstart
 
-**Current capability**: The audit engine, single-round diagnostic search, and iteration-record validation are implemented. The AI agent orchestrates the multi-step workflow in conversation — search, screen, iterate, compute, report. This project is still being refined; a one-shot end-to-end CLI orchestrator (`run_full_audit.py`) remains planned.
+**Current capability**: The audit engine, no-anchor/no-query first-run orchestration, multi-source q0 + atomic-variant diagnostics, and iteration-record validation are implemented. `run_initial_assessment.py` produces A1–A3 and B1–B3 in the same table and against the same thresholds used later: A1/A2/B1 show direct pass/fail results, B2 warns that source-level screening is not yet independent-path evidence, and B3 fails until pathways and independent validation are complete. `automated-screening` identifies the evidence tier rather than replacing the verdict. Independent verification, citation/standards pathways, and full screening still require later work.
+
+The diagnostic search preserves a supplied q0 and records OpenAlex + Crossref execution (with arXiv or Europe PMC when profile-relevant) plus transparent atomic variants in the report. It can discover candidate A1 anchors when none are supplied, but candidates require relevance screening and a frozen provenance record before they count as a measured benchmark. For narrative reviews, the report also separates a strong evidence pool from a manageable writing workset: a large library should be retained, then curated by topic and argumentative role rather than cut down destructively.
 
 | Status | Step |
 | :---: | --- |
-| ✅ Automated | Audit computation (`run_audit.py`), single-round diagnostic search (`search_for_eval.py`), candidate dedup (`normalize_candidates.py`), iteration validation (`search_iterator.py`), report generation |
-| 🔧 Semi-automated | Open-source multi-source snapshots (`collect_open_sources.py`), multi-round iteration, cross-database search, citation tracking, formal screening — orchestrated by AI agent in conversation |
+| ✅ Automated | Audit computation (`run_audit.py`), profile-aware multi-source q0 + atomic-variant diagnostic (`search_for_eval.py`), multi-source candidate-anchor discovery (`build_anchor_candidates.py`), candidate dedup, iteration validation, report generation |
+| 🔧 Semi-automated | Multi-round iteration, citation tracking, standards/guidelines pathways, formal screening — orchestrated by AI agent in conversation |
 | 📋 Planned | End-to-end one-shot orchestrator (`run_full_audit.py`, v2.0) |
 
 Users do not need to provide every validation paper. A Dataset Builder can construct a challenge set from reviews, standards, citation paths, and held-out time/source routes, then freeze it before query optimization. `evidence-manifest.json` records provenance, freezing, and leakage checks; separate subagents or threads alone do not establish independence.
@@ -77,13 +79,13 @@ The AI will:
 
 ## Six-Dimension Framework
 
-21 indicators. 24 for umbrella reviews. No composite score. Every dimension stands alone — a perfect A1 cannot hide a broken F1.
+22 indicators. 25 for umbrella reviews. No composite score. Every dimension stands alone — a perfect A1 cannot hide a broken F1.
 
 | Dim | Question | What we measure |
 |:---:|---|---|
 | **A · Coverage** | Did we find the known must-include works? | Benchmark recall, search sensitivity, multi-source lower bound |
 | **B · Saturation** | Is the search still growing? | GGR, DRR, pathway completion + independent validation |
-| **C · Balance** | Are topics and sources skewed? | Top-share, CV, Gini, Shannon entropy, author concentration, opposing viewpoints |
+| **C · Balance** | Are topics, sources, or viewpoints skewed? | Top-share, CV, Gini, Shannon entropy, author concentration, and claim-level support/challenge/conditional evidence |
 | **D · Recency** | Does the library reflect the current state? | Source freshness, recent-share (profile-aware), frontier coverage |
 | **E · Impact & Bibliometric Context** | What is the citation and venue context? | h-core, Tier-1 venue coverage *(background signals only)* |
 | **F · Usability** | Can you actually write the review? | Query reproducibility, abstract/fulltext access, dedup, provenance, retraction checks |
@@ -177,7 +179,7 @@ git clone https://github.com/Carrot123343r3f/literature-library-eval-skill.git \
 
 | Phase | What | Status |
 |---|---|---|
-| v1.0 | Core A–F (21+3 indicators), CLI, 5 review types, 9 engineering profiles | ✅ Current |
+| v1.0 | Core A–F (22+3 indicators), CLI, 5 review types, 9 engineering profiles | ✅ Current |
 | v1.x | BibTeX/RIS/CSV import, Scopus/WoS/IEEE adapters, Crossref/Semantic Scholar API | 🔜 Next |
 | v2.0 | `run_full_audit.py` — end-to-end orchestrator (search→screen→audit→report) | 📋 Planned |
 | Future | `review-manuscript-audit` — PRISMA compliance, citation integrity, study quality tool matching | 💡 Planned |
