@@ -223,7 +223,13 @@ def health(library, standards=None, dedup_log_provided=False, dedup_log_depth="m
             "note": "F3=v 附件或开放链接任一可用的记录比例；两率分列展示以避免重复计数。版本族等价性、访问权限和更正状态需专项来源核验。F5 需 decision-log 以追溯纳入/排除理由。"}
 
 def stability(context):
-    rounds = context.get("search_rounds", [])
+    # Query refinement rounds (q0 -> q*) are not saturation rounds.  B1/B2
+    # only use executions of the fixed, robust query recorded in
+    # saturation_rounds.  Legacy search_rounds is accepted only when the
+    # caller explicitly marks it as saturation data.
+    rounds = context.get("saturation_rounds", [])
+    if not rounds and context.get("search_rounds_are_saturation_rounds") is True:
+        rounds = context.get("search_rounds", [])
     # Only rounds with screened_complete or explicit screening bypass count for convergence.
     # discovery_only rounds are excluded from GGR/DRR verdicts — candidates != inclusions.
     screened_rounds = [x for x in rounds if x.get("screening_status") != "discovery_only"]
@@ -234,9 +240,13 @@ def stability(context):
              for x in screened_rounds if isinstance(x.get("core_before"), (int, float)) and x["core_before"] > 0]
     discovery_candidates_count = sum(x.get("discovery_candidates", 0) for x in rounds
                                      if x.get("screening_status") == "discovery_only")
-    pathway_records = context.get("independent_pathways") or context.get("source_marginal_yields", [])
+    round_pathways = []
+    for saturation_round in rounds:
+        round_pathways.extend(saturation_round.get("pathway_yields", []) or [])
+    pathway_records = (round_pathways or context.get("saturation_pathway_yields", []))
+    completion_records = context.get("independent_pathways") or pathway_records
     paths = set(context.get("planned_pathways", []))
-    done = {x.get("pathway") for x in pathway_records if x.get("completed")}
+    done = {x.get("pathway") for x in completion_records if x.get("completed")}
     if not done:
         done = {x.get("pathway") for x in rounds if x.get("completed")}
     complete = round(len(paths & done) / len(paths), 3) if paths else None
@@ -262,7 +272,10 @@ def stability(context):
     # Evidence tier and result are separate.  Automated screening may produce a
     # direct threshold result, but source-level routes never substitute for the
     # independent pathways required by B2.
-    if any_discovery_only and not has_enough_screened:
+    if not rounds:
+        b1_verdict = "not_assessable"
+        b2_verdict = "not_assessable"
+    elif any_discovery_only and not has_enough_screened:
         b1_verdict = "not_assessable"
         b2_verdict = "not_assessable"
     else:
@@ -286,13 +299,16 @@ def stability(context):
               else "automated-screening" if any_automated_screening
               else ("measured" if rounds else "not_assessable"),
               "high_confidence_new_rates": rates, "discovery_candidates_total": discovery_candidates_count,
+              "saturation_round_count": len(rounds), "saturation_pathway_yields": pathway_records,
               "pathway_completion": complete, "source_marginal_yields": yields,
               "automated_pathway_yields": automated_pathways,
               "thresholds": {"new_rate": threshold, "marginal_yield": yield_threshold}, "checks": checks,
               "independent_validation_passed": iv_passed,
               "verdict": "趋稳" if converged and all(x == "pass" for x in checks.values())
               else "不可证明" if "not_assessable" in checks.values() else "未稳定"}
-    if any_discovery_only and not has_enough_screened:
+    if not rounds:
+        result["note"] = "尚未提供固定稳健检索式的饱和度轮次；q0→q* 的检索式迭代只用于优化 A2，不进入 B1/B2。"
+    elif any_discovery_only and not has_enough_screened:
         result["note"] = "B 维处于候选发现阶段——discovery candidates 不等于纳入项。GGR/DRR 不可评估直至完成筛选。"
     elif any_automated_screening:
         result["note"] = "B1 为 AI 自动初筛后的首轮增长率：可用于定位仍在扩张的检索策略，但不是人工确认的饱和结论；B2/B3 仍需独立路径和验证。"
@@ -805,7 +821,7 @@ def _input_evidence_table(report):
     run_log_provided = bool(artifacts.get("run-log", {}).get("provided"))
     run_log_depth = ctx.get("run_log_depth", "missing")
     run_log_valid = "schema 合格" if run_log_depth in ("valid", "valid_full") else ("字段不全" if run_log_depth == "shallow" else "否")
-    screening_decisions = ctx.get("search_rounds", [])
+    screening_decisions = ctx.get("saturation_rounds", [])
     screening_status = "discovery_only" if any(r.get("screening_status") == "discovery_only" for r in screening_decisions) else ("完整" if screening_decisions else "否")
     dedup_provided = bool(artifacts.get("deduplication-log", {}).get("provided"))
     dedup_depth = libh.get("dedup_log_depth", "missing")
@@ -1151,7 +1167,7 @@ def _search_iteration_section(report):
 
 
 def _writing_readiness_section(report):
-    """Give narrative-review workset advice without turning it into a seventh score."""
+    """Turn the A–F findings into concrete writing and workset advice."""
     ctx = report.get("context", {})
     review_type = normalize_review_type(ctx.get("review_type", ""))
     records = report.get("library_health", {}).get("records", 0) or 0
@@ -1159,9 +1175,7 @@ def _writing_readiness_section(report):
     if not isinstance(workset, dict):
         workset = {}
     threshold = int(ctx.get("writing_workset_large_library_threshold", 100))
-    lines = ["## 综合分析：写作可用性与工作集建议\n"]
-    lines.append("本节是跨维度的写作准备度建议，不新增评分，也不改变 A–F 的任何判定。"
-                 "A–F 表现良好说明证据库有价值；它不自动说明该库可以不经整理就直接写成一篇结构清晰的综述。\n")
+    lines = ["### 写作建议\n"]
     if review_type != "叙事综述":
         lines.append("当前综述类型不是叙事综述。仍可按需建立写作工作集；本次不对其规模作专门建议。")
         return "\n".join(lines)
@@ -1180,6 +1194,14 @@ def _writing_readiness_section(report):
         lines.append("建议保留完整库作为证据池，同时另建一个可回溯的工作集：按主题、论证角色、优先级和综合笔记挑选核心/对照/方法/争议/前沿文献；不要为了变小而删除原库。")
     else:
         lines.append(f"库含 {records} 篇记录。规模本身不构成问题；在起草前仍建议用主题、论证角色、优先级和综合笔记建立可回溯的写作工作集。")
+    rows = {row.get("subproject"): row for row in report.get("indicator_register", [])}
+    blockers = [row for row in rows.values() if row.get("meets_standard") == "fail"]
+    if blockers:
+        names = "、".join(f"{row.get('subproject')} {row.get('project_name')}" for row in blockers)
+        lines.append(f"当前不宜直接把完整库当作成稿依据：{names} 仍是写作前的阻断项。建议先补齐这些证据，再开始对争议、边界条件和跨主题关系做综合。")
+    else:
+        lines.append("当前没有自动判定为阻断的维度，可以进入写作准备；但仍应把未评估项转成明确的段落级证据任务，而不是在正文中默认它们已经成立。")
+    lines.append("写作时建议保留完整证据池，同时建立按主题、论证角色（基础方法、改进方法、对照、失败条件、应用案例）和优先级组织的工作集；每条核心论断至少链接到题录、摘要/全文证据和纳入理由。")
     return "\n".join(lines)
 
 def _priority_actions(report):
@@ -1201,52 +1223,51 @@ def _priority_actions(report):
     return "\n\n".join(parts) if parts else "未检测到阻断或警示项。"
 
 def _dimension_narrative(report):
+    """Explain what the evidence says about library quality and writing risk.
+
+    This is deliberately interpretive: the indicator table carries formulas and
+    evidence tiers; this section connects the findings to the reviewer's actual
+    decision about whether and how the library can support a manuscript.
+    """
     c, p, b, t, vbal, d, q, h = (report["coverage"], report["process"], report["balance"],
                                  report["topic_balance"], report["viewpoint_balance"], report["recency"], report["quality"],
                                  report["library_health"])
     lines = []
     a1_r = _fmt_pct(c["a1"].get("recall")); a1_h = _fmt_num(c["a1"].get("matched")); a1_t = _fmt_num(c["a1"].get("total"))
+    a2_r = _fmt_pct(c["a2"].get("recall")); a2_h = _fmt_num(c["a2"].get("matched")); a2_t = _fmt_num(c["a2"].get("total"))
     a3_lb = _fmt_num(c["a3"].get("deduplicated_candidate_lower_bound"))
-    lines.append(f"**A 覆盖**：基准集召回 {a1_r}（{a1_h}/{a1_t}），多源候选下界至少 {a3_lb} 篇——'至少有多少篇相关文献存在'，不是漏了多少。")
+    lines.append("### A 覆盖：已具备研究骨架，但不能把当前库当作穷尽性证据\n"
+                 f"已知基准文献召回为 {a1_r}（{a1_h}/{a1_t}），检索敏感度为 {a2_r}（{a2_h}/{a2_t}），并从多源快照获得至少 {a3_lb} 条去重候选。这说明库已经覆盖核心方法和主要应用入口，足以支撑问题域的初步结构；但仍存在基准漏项或验证集未完全命中的风险。因此，正文可以开始写技术路线和主题演进，但不能把“库中没有出现”解释为“该方向没有研究”，也不宜在综述摘要中声称全面覆盖。")
+
     rates = p.get("high_confidence_new_rates", [])
     ggr = ", ".join(f"{r:.3f}" for r in rates[-2:]) if len(rates) >= 2 else "缺数据"
-    lines.append(f"**B 饱和度**：最后两轮 GGR={ggr}（阈值<{p.get('thresholds',{}).get('new_rate','—')}）；{p.get('verdict','—')}。")
-    flags = t.get("flags", []); n_topics = len(t.get("topic_counts", {}))
-    auth_note = ""
-    author_conc = b.get("author_concentration", {})
-    if author_conc and author_conc.get("note"):
-        auth_note = f" 作者集中度：top-author {author_conc.get('top_author_share','—')}（{author_conc.get('top_author','')}: {author_conc.get('top_author_count','')}篇）。"
-    elif author_conc and author_conc.get("top_author_share") is not None:
-        auth_note = f" 作者集中度：top-author {author_conc.get('top_author_share','—')}（{author_conc.get('top_author','')}: {author_conc.get('top_author_count','')}篇）。"
-    vc = vbal.get("counts", {})
-    lines.append(f"**C 平衡**：{n_topics} 个预期主题，{'含空主题' if 'empty_topic' in flags else '全部有文献'}；来源集中度 {b.get('top_source_share','—')}（CV={_fmt_num(b.get('cv'))} Gini={_fmt_num(b.get('gini'))}）；观点为支持 {vc.get('supports_claim', 0)} / 质疑 {vc.get('challenges_claim', 0)} / 条件性 {vc.get('mixed_or_conditional', 0)}。{auth_note}")
-    lines.append(f"**D 时效**：近 {d.get('window_years','—')} 年占比 {_fmt_pct(d.get('recent_share'))}（{d.get('recent_records','—')}/{d.get('dated_records','—')} 标有日期）；预印本 {d.get('preprint_records','—')} 条。")
-    lines.append(f"**E 学术影响与来源背景**：h-core={_fmt_num(q.get('h_core'))}（{q.get('citation_records','—')} 条引用）；Tier-1 {_fmt_pct(q.get('tier1_rate'))}（{q.get('tier1_venues_configured','—')} venue）。仅作背景信号，不等于研究质量——真正的研究质量评估应使用与研究设计匹配的批判性评价工具。")
-    fc = h.get("field_completeness", {})
-    lines.append(f"**F 可用性**：核心元数据 {_fmt_pct(fc.get('title'))}；摘要 {_fmt_pct(fc.get('abstractNote'))}；DOI {_fmt_pct(fc.get('DOI'))}；全文获取率 {_fmt_pct(h.get('access_union_rate'))}（附件 {_fmt_pct(h.get('attachment_rate'))} / OA {_fmt_pct(h.get('open_link_rate'))}）；谱系率 {_fmt_pct(h.get('provenance_rate'))}。")
-    return "\n\n".join(lines)
+    b_verdict = p.get("verdict", "—")
+    lines.append("### B 饱和度：新增发现已下降，但检索是否可以停止取决于最后的独立证据\n"
+                 f"固定稳健检索式实际执行了 {p.get('saturation_round_count', 0)} 个饱和度轮次，最近两轮 GGR 为 {ggr}，路径完成度为 {_fmt_pct(p.get('pathway_completion'))}，独立验证为 {'已通过' if p.get('independent_validation_passed') is True else '未通过或未提供'}，综合判断为 {b_verdict}。当前库适合进入阶段性写作和缺口整理；若 B1 未通过或 B3 未完成，仍可能漏掉新近方法、失败报告或边界条件，写作应保留“检索截止时间”和“尚未证明饱和”的限定，并把高增长轮次暴露出的新增方向列为补检任务。")
 
-def _evidence_interpretation_section(rows):
-    """Move evidence-tier caveats out of the decision table without hiding them."""
-    automated = [row for row in rows if row[6] in ("automated-screening", "estimated", "partial_snapshot", "estimated_lower_bound")]
-    if not automated:
-        return ""
-    labels = {"automated-screening": "AI 自动初筛", "estimated": "估计", "partial_snapshot": "部分快照", "estimated_lower_bound": "估计下界"}
-    lines = ["## 证据状态说明\n",
-             "总表的判定已按同一阈值直接给出；证据状态只说明结果可被多大程度复核，不改写通过、警示或不通过。\n",
-             "| 指标 | 证据来源 | 如何升级 |",
-             "| --- | --- | --- |"]
-    for _, iid, name, _, verdict, _, status, _ in automated:
-        if status == "automated-screening":
-            upgrade = "人工抽样核验分类、筛选或锚点来源"
-        elif status == "partial_snapshot":
-            upgrade = "完成全部来源分页并固定去重快照"
-        elif status == "estimated_lower_bound":
-            upgrade = "保留来源、边界与去重规则；不可将下界当 Recall"
-        else:
-            upgrade = "补足原始记录和独立复算路径"
-        lines.append(f"| {iid} {name}（{verdict}） | {labels.get(status, status)} | {upgrade} |")
-    return "\n".join(lines)
+    flags = t.get("flags", []); n_topics = len(t.get("topic_counts", {}))
+    topic_summary = "、".join(f"{k}{v}篇" for k, v in t.get("topic_counts", {}).items()) or "未形成主题计数"
+    vc = vbal.get("counts", {})
+    source_share = _fmt_pct(b.get("top_source_share"))
+    lines.append("### C 平衡：主题覆盖和证据立场可以支撑综合，但要防止结构性偏斜\n"
+                 f"库被分为 {n_topics} 个主题（{topic_summary}），{'存在空主题或明显主题缺口' if 'empty_topic' in flags else '没有空主题'}；最大来源占比为 {source_share}。围绕中心主张，已有支持 {vc.get('supports_claim', 0)}、质疑 {vc.get('challenges_claim', 0)}、条件性 {vc.get('mixed_or_conditional', 0)} 条记录。由此看，库不只是单向罗列支持性论文，具备写比较和边界条件的基础；但主题数量均衡不等于证据内容均衡，正文仍应主动呈现反例、失败条件和不同来源的测量差异，尤其关注来源集中或作者集中带来的视角偏差。")
+
+    recent = _fmt_pct(d.get("recent_share")); dated = f"{d.get('recent_records','—')}/{d.get('dated_records','—')}"
+    d_checks = d.get("checks", {})
+    lines.append("### D 时效：近期文献比例可反映领域进展，但前沿与版本风险必须单独处理\n"
+                 f"近 {d.get('window_years','—')} 年文献占比为 {recent}（{dated}），来源新鲜度判定为 {d_checks.get('D1_search_freshness','—')}，前沿覆盖为 {d_checks.get('D3_frontier','—')}，版本关系判定为 {d_checks.get('D4_versions_preprints','—')}。这意味着库可以描述 2023 年以来的主要发展，但不能仅凭年份比例证明已经覆盖最新预印本、正式发表版本和快速变化的应用分支。写作时应逐条标明检索截止日，合并预印本/正式版关系，并单列最新但尚未稳定的方向。")
+
+    tier1 = _fmt_pct(q.get("tier1_rate"))
+    lines.append("### E 学术影响：引用结构能帮助确定背景文献，不能替代质量判断\n"
+                 f"库的 h-core 为 {_fmt_num(q.get('h_core'))}，引用数据覆盖 {_fmt_pct(q.get('citation_coverage_rate'))}，Tier-1 来源覆盖为 {tier1}。这些结果可以帮助安排基础方法、关键转折和高影响工作的叙述顺序，但不能据此把高被引论文写成高质量证据，也不能把低引用的新论文排除。研究质量仍应回到实验设计、数据集、比较基线、消融实验和可复现性。")
+
+    fc = h.get("field_completeness", {})
+    lines.append("### F 可用性：题录已经达到写作使用条件，但证据链完整性决定综合深度\n"
+                 f"核心元数据完整度为 {_fmt_pct(fc.get('title'))}，摘要覆盖 {_fmt_pct(fc.get('abstractNote'))}，全文获取率 {_fmt_pct(h.get('access_union_rate'))}，来源谱系率 {_fmt_pct(h.get('provenance_rate'))}；检索日志、筛选决定和去重/版本记录应作为正文引用和附录的依据。若这些字段均达到当前阈值，库可以支撑逐主题写作；若摘要、全文或纳入理由存在缺口，最容易出现的是只描述方法名称和指标、却无法比较适用条件与失败原因。当前优先补齐的不是更多重复题录，而是缺失全文、筛选理由、版本关系和可追溯的综合笔记。")
+
+    lines.append("### 综合判断\n"
+                 "综合 A–F，本库可以作为综述写作的证据池，但是否能直接支撑最终结论取决于覆盖和饱和度中尚未闭合的部分。最稳妥的写法是先形成主题—论证矩阵：每个主题至少安排代表性方法、改进方法、对照/质疑证据和应用边界；同时把 A/B 未闭合项写入检索补充计划。这样既能开始写作，也不会把阶段性库误包装成已经穷尽的最终库。")
+    return "\n\n".join(lines)
 
 def indicator_rows(report):
     """Generate indicator register rows from indicator-registry.json.
@@ -1333,18 +1354,27 @@ def indicator_rows(report):
         cur = (', '.join(f'{r:.4f}' for r in br[-2:]) if len(br) >= 2
                else (f'首轮 {br[-1]:.4f}（需第2轮确认趋稳）' if len(br) == 1 else '—'))
         return (chk(p, "B1_ggr"), cur, p.get("status"),
-                f"最后两轮 GGR 与阈值比较；{'已满足' if chk(p, 'B1_ggr') == 'pass' else '未满足或轮次不足'}。")
+                f"固定稳健检索式的饱和度轮次共 {p.get('saturation_round_count', 0)} 轮；最近两轮 GGR 与阈值比较，{'已满足' if chk(p, 'B1_ggr') == 'pass' else '未满足或轮次不足'}。")
 
     def _b2(d):
-        my = ctx.get('independent_pathways') or p.get('automated_pathway_yields', []) or p.get('source_marginal_yields', [])
+        my = p.get('saturation_pathway_yields', [])
         overlap_note = ("⚠ A3 快照与 B2 路径共享证据来源，B2 不作独立边际收益结论。"
                         if evidence_integrity.get("a3_b2_overlap") else "")
         evidence_status = "automated-screening" if p.get("status") == "automated-screening" else p.get("status")
-        auto_values = [row.get('yield') for row in my if isinstance(row, dict) and isinstance(row.get('yield'), (int, float))]
+        round_values = []
+        for saturation_round in ctx.get('saturation_rounds', []):
+            values = [row.get('yield') for row in (saturation_round.get('pathway_yields', []) or [])
+                      if isinstance(row, dict) and isinstance(row.get('yield'), (int, float))]
+            if values:
+                round_values.append(values)
+        auto_values = [value for values in round_values for value in values]
+        path_count = len({row.get('pathway') for row in my if isinstance(row, dict) and row.get('pathway')})
+        round_display = '; '.join(f'第{i + 1}轮 [{", ".join(f"{value:g}" for value in values)}]'
+                                  for i, values in enumerate(round_values)) or '—'
         return (chk(p, "B2_drr"),
-                f"{_fmt_num(len(my))} 条路径 | 初筛边际率 {auto_values or '—'}", evidence_status,
-                ("来源级初筛已完成；仍缺独立的非关键词路径。" if evidence_status == "automated-screening"
-                 else "独立路径边际率已按阈值比较。") + overlap_note)
+                f"固定稳健检索式 | {path_count} 条路径 | 各轮边际率 {round_display}", evidence_status,
+                ("固定稳健检索式的来源路径仍是自动初筛；不能替代独立引文/标准路径。" if evidence_status == "automated-screening"
+                 else "固定稳健检索式的独立路径边际率已按阈值比较。") + overlap_note)
 
     def _b3(d):
         bv = d["bv"]
@@ -1366,7 +1396,7 @@ def indicator_rows(report):
         opp = t.get("opposing_viewpoint_warning")
         if opp: desc += " （" + opp + "）"
         return (chk(t, "C1_topic_balance"),
-                f"{_fmt_num(len(tc))} 主题 | {'含空主题' if 'empty_topic' in tf else '无空主题'}",
+                f"主题数={_fmt_num(len(tc))} | Top={_fmt_pct(t.get('top_topic_share'))} | CV={_fmt_num(t.get('cv'))} | Gini={_fmt_num(t.get('gini'))} | Hn={_fmt_num(t.get('normalized_shannon'))}",
                 t.get("status"), desc)
 
     def _c2(d):
@@ -1382,8 +1412,16 @@ def indicator_rows(report):
 
     def _c3(d):
         cf = t.get('cross_source_flags')
+        cross = ctx.get('topic_source_counts', {}) or {}
+        source_counts = [len(counts) for counts in cross.values() if isinstance(counts, dict)]
+        source_shares = []
+        for counts in cross.values():
+            if isinstance(counts, dict) and counts and sum(counts.values()) > 0:
+                source_shares.append(max(counts.values()) / sum(counts.values()))
+        current = (f"主题数={len(cross)} | 每主题来源数={min(source_counts) if source_counts else '—'}–{max(source_counts) if source_counts else '—'} | "
+                   f"主题内最大来源占比={_fmt_pct(max(source_shares) if source_shares else None)}")
         return (chk(t, "C3_topic_source_balance"),
-                f"{'⚠ ' + str(len(cf)) + ' 主题来源不足' if cf else '—'}",
+                current,
                 t.get("status"),
                 f"{'需补来源：' + ', '.join(cf) if cf else '未提供 topic_source_counts。' if not ctx.get('topic_source_counts') else '各主题有独立来源。'}")
 
@@ -1704,7 +1742,6 @@ def write(report, out, artifact_paths=None):
     method_narrative = _method_narrative(report)
     search_iteration_section = _search_iteration_section(report)
     writing_readiness_section = _writing_readiness_section(report)
-    evidence_interpretation_section = _evidence_interpretation_section(rows)
 
     md = ["# 文献库评估报告\n"]
     # 1. 基本信息
@@ -1730,15 +1767,12 @@ def write(report, out, artifact_paths=None):
     md.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
     md.append("\n".join("| " + " | ".join(compact(cell) for cell in row) + " |" for row in rows))
     md.append("")
-    if evidence_interpretation_section:
-        md.append(evidence_interpretation_section)
-        md.append("")
-    # 5. 各维度分析
-    md.append("## 各维度分析\n"); md.append(_dimension_narrative(report)); md.append("")
-    # 6. 改进建议
-    md.append("## 改进建议\n"); md.append(_priority_actions(report)); md.append("")
-    # 7. 跨维度写作建议
+    # 5. Integrated dimension analysis and writing advice
+    md.append("## 各维度分析与写作建议\n"); md.append(_dimension_narrative(report)); md.append("")
+    # 6. Writing advice follows the six dimension judgments.
     md.append(writing_readiness_section); md.append("")
+    # 7. 改进建议
+    md.append("## 改进建议\n"); md.append(_priority_actions(report)); md.append("")
     # 8. 局限与声明
     md.append("## 局限与声明\n"); md.append("\n".join("- " + x for x in report["limitations"])); md.append("")
     (out / "audit.md").write_text("\n".join(md) + "\n", encoding="utf-8")
@@ -1944,9 +1978,11 @@ def main():
     if search_meta_path:
         try:
             sm = json.loads(pathlib.Path(search_meta_path).read_text(encoding="utf-8-sig"))
-            # Merge search_rounds only if not already provided via context
+            # Query optimization and fixed-query saturation are separate inputs.
             if "search_rounds" not in ctx or not ctx["search_rounds"]:
                 ctx["search_rounds"] = sm.get("search_rounds", ctx.get("search_rounds", []))
+            if "saturation_rounds" not in ctx or not ctx["saturation_rounds"]:
+                ctx["saturation_rounds"] = sm.get("saturation_rounds", ctx.get("saturation_rounds", []))
             if "source_marginal_yields" not in ctx or not ctx["source_marginal_yields"]:
                 ctx["source_marginal_yields"] = sm.get("source_marginal_yields", [])
             if "planned_pathways" not in ctx or not ctx["planned_pathways"]:

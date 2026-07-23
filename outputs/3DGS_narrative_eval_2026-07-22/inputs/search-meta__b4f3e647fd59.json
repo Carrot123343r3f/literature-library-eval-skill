@@ -144,70 +144,24 @@
       "iteration_id": "q0",
       "change_type": "initial",
       "change_description": "执行用户提供的初始检索式",
-      "change_source": "user_provided",
       "execution_date": "2026-07-20",
-      "queries": {
-        "db_OpenAlex": "(3D Gaussian Splatting OR 3DGS) AND (rendering OR reconstruction)"
-      },
-      "results": {
-        "dev_recall": 0.625,
-        "validation_recall": 0.5
-      },
       "decision": "continue"
     },
     {
       "iteration_id": "q1",
-      "parent_iteration": "q0",
       "change_type": "add_synonym",
       "change_description": "加入 dynamic 术语",
-      "change_source": "agent_refined",
       "execution_date": "2026-07-21",
-      "queries": {
-        "db_OpenAlex": "(3D Gaussian Splatting OR 3DGS) AND dynamic"
-      },
-      "results": {
-        "dev_recall": 0.75,
-        "validation_recall": 0.625
-      },
       "decision": "continue"
     },
     {
       "iteration_id": "q2",
-      "parent_iteration": "q1",
       "change_type": "modify_field",
       "change_description": "增加标题字段诊断",
-      "change_source": "agent_refined",
       "execution_date": "2026-07-22",
-      "queries": {
-        "db_OpenAlex": "title:(3D Gaussian Splatting OR 3DGS)"
-      },
-      "results": {
-        "dev_recall": 0.875,
-        "validation_recall": 0.75
-      },
       "decision": "a2_stop"
     }
   ],
-  "dev_set": [
-    {
-      "doi": "10.9999/3dgs.demo.dev1"
-    },
-    {
-      "doi": "10.9999/3dgs.demo.dev2"
-    },
-    {
-      "doi": "10.9999/3dgs.demo.dev3"
-    },
-    {
-      "doi": "10.9999/3dgs.demo.dev4"
-    }
-  ],
-  "validation_set": [
-    {
-      "doi": "10.9999/3dgs.demo.validation1"
-    }
-  ],
-  "dev_validation_overlap_check": true,
   "planned_pathways": [
     "db_boolean",
     "backward_citation",

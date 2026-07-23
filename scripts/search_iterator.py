@@ -118,7 +118,7 @@ def normalize_input(data):
     return adapted
 
 
-def validate(data, strict=False):
+def validate(data, strict=False, max_iterations=MAX_ITERATIONS):
     """Validate iterations against the search strategy protocol. Returns (errors, warnings)."""
     errors, warnings = [], []
 
@@ -201,8 +201,8 @@ def validate(data, strict=False):
             a2_stopped = None
 
         decisions = [it.get("decision") for it in iterations]
-        if decisions[-1] == "continue" and len(iterations) >= MAX_ITERATIONS:
-            warnings.append(f"Reached {MAX_ITERATIONS} iterations without stop decision — "
+        if decisions[-1] == "continue" and len(iterations) >= max_iterations:
+            warnings.append(f"Reached {max_iterations} iterations without stop decision — "
                            "review whether search can be further improved")
 
     # ── Pathway types ──
@@ -297,6 +297,8 @@ def main():
     vp = sp.add_parser("validate", help="Validate iterations.json against protocol")
     vp.add_argument("--iterations", required=True, help="iterations.json or search_meta.json file")
     vp.add_argument("--strict", action="store_true", help="Treat warnings as errors (non-zero exit)")
+    vp.add_argument("--max-iterations", type=int, default=MAX_ITERATIONS,
+                    help=f"Maximum allowed rounds before a stop-decision warning (default: {MAX_ITERATIONS})")
 
     tp = sp.add_parser("table", help="Generate comparison table from iterations.json")
     tp.add_argument("--iterations", required=True, help="iterations.json or search_meta.json file")
@@ -306,7 +308,7 @@ def main():
 
     if a.command == "validate":
         data = normalize_input(load_json(a.iterations))
-        errors, warnings = validate(data, strict=a.strict)
+        errors, warnings = validate(data, strict=a.strict, max_iterations=max(1, a.max_iterations))
         if errors:
             print(f"❌ {len(errors)} error(s):")
             for e in errors:

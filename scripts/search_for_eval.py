@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """多源候选发现/诊断性检索器：构造代表性检索式 → 在线执行 → 产出 A2 的诊断命中、B 的 discovery candidates、潜在新增清单。
 
-闭环：本脚本产出 → agent 把 search_rounds/queries 合并进 context.json → run_audit.py 计算 A2/B。
+闭环：本脚本产出 → agent 把 query versions/iterations 合并进 context.json 计算 A2；固定稳健检索式的实际饱和度另行写入 saturation_rounds，供 B1/B2 计算。
 定位：减少 A2/B 的 missing-input 比例，而非自动得出 A2 结论或 B 饱和证据。
 A2 只做稳定 ID 匹配（DOI/arXiv/OpenAlex ID），标题候选另存为人工核验参考。
 B 的 included_high=0 直至人工筛选确认——discovery candidates ≠ 纳入项。
@@ -13,7 +13,7 @@ Dev/validation set separation（v2）：
   独立验证集不参与检索式迭代——一旦用于调整检索式，就"烧掉"了独立性。
   --initial-query 保存用户提供的 q0，并以 q0-user 原样执行；未提供时才由 PICO/keywords 生成 ai_generated q0。
 
-DRR 可复算性：source_marginal_yields 中每条路径附带 candidates（候选数）、
+诊断路径可复算性：diagnostic_pathway_yields 中每条路径附带 candidates（候选数）、
 screened_high_confidence（高置信筛选数）、new_high_confidence（此前未发现的）和
 dedup_rule（去重规则），供第三方从 query-hits.json 独立复算 yield。
 
@@ -74,19 +74,27 @@ def build_queries(keywords, pico=None):
     若 pico 不为空：使用 PICO 要素构建检索式而非原始 keywords。
     """
     if pico and isinstance(pico, dict):
-        # Build from PICO decomposition
-        core = [pico.get("object", {}).get("term", ""), pico.get("technology", {}).get("term", "")]
-        core = [c for c in core if c]
-        if not core:
+        # Build progressively from all four engineering search units.  The
+        # first unit anchors the topic; each later unit adds one controlled
+        # constraint so every query remains an atomic refinement.
+        def unit_text(name):
+            value = pico.get(name, {})
+            if isinstance(value, dict):
+                value = value.get("term") or value.get("value") or ""
+            return str(value or "").strip()
+
+        units = [(name, unit_text(name)) for name in ("object", "technology", "performance", "context")]
+        units = [(name, value) for name, value in units if value]
+        if not units:
             return build_queries(keywords)  # fallback to keywords
-        primary = core[0].split(";")[0].strip()
+        primary = units[0][1].split(";")[0].strip()
         queries = [('q0-ai', f'"{primary}"')]
-        for term in core:
-            for t in term.split(";"):
-                t = t.strip()
-                if t and norm(t) not in {norm(q[1].replace('"','')) for q in queries}:
-                    queries.append((f'q{len(queries)}-add-term', f'"{primary}" {t}'))
-                    break
+        accumulated = [primary]
+        for name, value in units[1:]:
+            term = value.split(";")[0].strip()
+            if term and norm(term) not in {norm(x) for x in accumulated}:
+                accumulated.append(term)
+                queries.append((f'q{len(queries)}-add-{name}', ' '.join(f'"{x}"' for x in accumulated)))
             if len(queries) >= 4:
                 break
         queries.append((f'q{len(queries)}-title-field', f'title:"{primary}"'))
@@ -351,7 +359,7 @@ def main():
                               'core_before': lib_size + cumulative_screened, 'included_high': 0,
                               'screened_inclusions': auto_count, 'discovery_candidates': len(screened_keys),
                               'screening_status': first_run_status,
-                              'note': ('AI 初筛：标题同时命中核心概念与补充概念；仅用于首轮 B1 初评，需摘要/全文与人工抽查升级。'
+                              'note': ('AI 初筛：标题同时命中核心概念与补充概念；仅用于首轮候选诊断，不能作为 B1/B2 饱和结论，需摘要/全文与人工抽查升级。'
                                        if a.ai_provisional else '自动检索器产出的是发现候选，未经筛选不能计入 GGR 分子。')})
         cumulative_screened += auto_count
     discovery_ggr = round(discovery_candidate_count / lib_size, 4) if lib_size else None
@@ -416,15 +424,18 @@ def main():
         a2_evidence = "estimated"
         a2_note += f' 无独立验证集——A2 使用 {dev_source}，可能被高估（dev=val 复用）。建议补充独立验证集。'
 
-    json.dump({'queries': queries_record, 'search_rounds': search_rounds,
+    json.dump({'queries': queries_record,
+               # These are diagnostic query variants, not B saturation rounds.
+               'diagnostic_query_rounds': search_rounds,
+               'search_rounds': [],
+               'saturation_rounds': [],
                # Source-level database routes are complete, but a credible
                # saturation workflow still needs non-keyword discovery routes.
                'planned_pathways': [row['pathway'] for row in marginal] + [
                    'backward_citation_seeded', 'forward_citation_seeded',
                    'related_articles_seeded', 'standards_guidelines_review'
                ],
-               'source_marginal_yields': marginal,
-               'independent_pathways': marginal,
+               'diagnostic_pathway_yields': marginal,
                'a2': {'id_matched': a2_matched_id,
                       'title_candidates': a2_title_candidates,
                       'total_with_id': a2_total_with_id,
@@ -463,7 +474,7 @@ def main():
                'potential_additions_titles': [x['title'] for x in potential_add[:20]],
                'potential_additions_count': len(potential_add),
                'first_round_discovery_ggr': discovery_ggr,
-               'note': 'B 饱和度处于自动初筛阶段：B1 与来源级 B2 用 screened_inclusions 计算；它们不是人工确认的纳入文献。B3 仅报告流程启动与尚未满足的条件。'},
+               'note': '本输出只记录 q0→q* 的检索式诊断。固定稳健检索式的饱和度轮次需另行写入 saturation_rounds；B1/B2 不从每次关键词迭代计算。'},
               open(out / 'search_meta.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
     print(f'\n检索命中去重: {len(all_hits)} | A2 稳定ID: {a2_matched_id}/{a2_total_with_id}={a2_recall_id} | A2 标题候选: {a2_title_candidates}')
     if validation_set:

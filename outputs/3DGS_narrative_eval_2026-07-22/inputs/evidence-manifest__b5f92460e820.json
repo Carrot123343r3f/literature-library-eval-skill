@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.0",
+  "datasets": {
+    "dev": {
+      "role": "dev",
+      "path": "dev_set.json",
+      "source_routes": [
+        "OpenAlex"
+      ],
+      "used_tested_query": true,
+      "used_for_query_optimization": true,
+      "frozen_at": "2026-07-20T10:00:00+08:00"
+    },
+    "validation": {
+      "role": "validation",
+      "path": "validation_set.json",
+      "source_routes": [
+        "backward_citation",
+        "time_holdout"
+      ],
+      "used_tested_query": false,
+      "used_for_query_optimization": false,
+      "frozen_at": "2026-07-20T10:05:00+08:00"
+    },
+    "b3_validation": {
+      "role": "b3_validation",
+      "path": "b3_validation.json",
+      "source_routes": [
+        "expert_route"
+      ],
+      "used_tested_query": false,
+      "used_for_query_optimization": false,
+      "frozen_at": "2026-07-20T10:10:00+08:00"
+    }
+  },
+  "relationships": {
+    "a2_validation_dataset": "validation",
+    "b3_validation_dataset": "b3_validation",
+    "a3_source_ids": [
+      "OpenAlex",
+      "Crossref",
+      "arXiv"
+    ],
+    "b2_pathway_source_ids": [
+      "backward_citation",
+      "forward_citation",
+      "related_articles"
+    ]
+  }
+}

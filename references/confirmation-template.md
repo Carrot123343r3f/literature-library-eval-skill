@@ -56,7 +56,7 @@
 
 ### 2.2 数据源
 
-- **开放优先 + 在线补全**（推荐）：无用户锚点或检索式时，首轮通过 `run_initial_assessment.py` 自动建立多源候选锚点、生成 q0 + 原子变体，并给出 A1–A3/B1–B3 的初评。首轮和后续轮次使用相同判定：A1/A2/B1 直接按阈值输出，B2 提示独立路径尚缺，B3 在路径或独立验证未完成时直接判不通过；`automated-screening` 只说明证据来自自动初筛。它不完成引文追踪、标准/指南路径或正式筛选，首轮不能声称检索已趋稳。
+- **开放优先 + 在线补全**（推荐）：无用户锚点或检索式时，首轮通过 `run_initial_assessment.py` 自动建立多源候选锚点、生成 q0 + 原子变体，并给出 A1–A3 与检索式诊断。q0→q* 只用于优化检索式和 A2；固定稳健检索式的 `saturation_rounds` 未提供前，B1/B2 不可评估，B3 显示路径与独立验证缺口；`automated-screening` 只说明证据来自自动初筛。它不完成引文追踪、标准/指南路径或正式筛选，首轮不能声称检索已趋稳。
 - **仅离线/本地**：只用题录元数据 + 本地 pdf，不调在线 API（E 维标不可评估）
 - **仅指定来源**：严格按用户列出的来源
 
@@ -149,6 +149,6 @@
 | `standards` | 2.2/2.3 | 各项阈值（见 `engineering-standards.md`），默认按综述类型分层（叙事 A1≥0.75 / 系统 A1≥0.90 / 快速 A1≥0.60 / 伞式 A1≥0.90） | 总表·标准列 |
 | `tier1_venues` | 3.5 | Tier-1 venue 关键字列表 | E2 计算 |
 | `last_successful_search` | 执行时 | `{source: date}` 各来源检索日期 | D1 计算 |
-| `search_rounds` / `planned_pathways` / `source_marginal_yields` / `independent_validation_passed` | 执行时 | B 饱和度过程数据 | B1/B2/B3 计算 |
+| `search_iterations` / `saturation_rounds` / `planned_pathways` / `independent_validation_passed` | 执行时 | 检索式优化与固定稳健检索式的 B 饱和度过程数据 | A2/B1/B2/B3 计算 |
 
 未提供的字段 → 对应评估项标 `not_assessable`，报告如实说明缺失输入。

@@ -30,13 +30,17 @@
 
   "last_successful_search": {"openalex": "2026-07-18", "crossref": "2026-07-19", "ieee": "2026-07-19", "dblp": "2026-07-17"},
 
-  "search_rounds": [
-    {"pathway": "database", "completed": true, "core_before": 100, "included_high": 3},
-    {"pathway": "database", "completed": true, "core_before": 103, "included_high": 1},
-    {"pathway": "backward", "completed": true, "core_before": 104, "included_high": 1}
+  "search_iterations": [
+    {"iteration_id": "q0", "change_type": "initial", "decision": "continue"},
+    {"iteration_id": "q1", "change_type": "add_synonym", "decision": "a2_stop"}
+  ],
+  "saturation_rounds": [
+    {"query_id": "q1", "query_status": "frozen_robust", "completed": true, "core_before": 100, "included_high": 3,
+     "pathway_yields": [{"pathway": "backward", "completed": true, "yield": 0.01}]},
+    {"query_id": "q1", "query_status": "frozen_robust", "completed": true, "core_before": 103, "included_high": 1,
+     "pathway_yields": [{"pathway": "backward", "completed": true, "yield": 0.0}]}
   ],
   "planned_pathways": ["database", "backward", "forward"],
-  "source_marginal_yields": [{"yield": 0.02}, {"yield": 0.01}],
   "independent_validation_passed": true,
   "run_log_complete": true,
 
@@ -80,9 +84,10 @@
 | `taxonomy[].target_share` | C1 TVD（可选） | 可选 |
 | `topic_source_counts` | C3 主题-来源交叉 | 可选，缺失则 C3 标 not_assessable |
 | `viewpoint_framework` | C4 观点偏斜度 | 推荐；须包含中心主张、`records_assessed` 和支持/质疑/条件性计数。缺失时 C4 直接警示“未建立可审计分类”，而非从泛化情绪词臆测立场。 |
-| `search_rounds`（≥2 轮，含 `core_before`/`included_high`） | B1 GGR | B 维必需 |
+| `search_iterations`（q0→q*，仅检索式优化） | A2 诊断/可复现性 | 可选；不进入 B1/B2 |
+| `saturation_rounds`（固定稳健检索式，≥2 轮，含 `query_id`/`query_status=frozen_robust`/`core_before`/`included_high`） | B1 GGR；其中 `pathway_yields` 供 B2 DRR | B1/B2 必需 |
 | `planned_pathways` + rounds 的 `completed`/`pathway` | B3 路径完成 | B 维必需 |
-| `source_marginal_yields[]`（含 `pathway`/`candidates`/`screened_high_confidence`/`new_high_confidence`/`dedup_rule`/`yield`） | B2 DRR | B 维必需；原始字段供第三方从 query-hits.json 复算 |
+| `saturation_rounds[].pathway_yields[]`（含 `pathway`/`candidates`/`screened_high_confidence`/`new_high_confidence`/`dedup_rule`/`yield`） | B2 DRR | B 维必需；原始字段供第三方从 query-hits.json 复算 |
 | `independent_validation_passed` | B3 独立验证 | B 维必需 |
 | `last_successful_search` | D1 来源新鲜度 | D 维必需 |
 | `profile`（可控 ID：computer_ai / electronics_communications / mechanical_manufacturing / materials_chemical / biomedical_engineering / civil_infrastructure / energy_environment / aerospace_transportation；text 回退保留兼容） | D1/D2 窗口 | 推荐用可控 ID |

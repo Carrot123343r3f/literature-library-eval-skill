@@ -24,11 +24,7 @@
     "DOI": "10.9999/3dgs.demo.006"
   },
   {
-    "title": "4D Gaussian Splatting for Real-Time Dynamic Scene Rendering",
-    "DOI": "10.9999/3dgs.demo.007"
-  },
-  {
-    "title": "Deformable 3D Gaussians for Monocular Dynamic Reconstruction",
-    "DOI": "10.9999/3dgs.demo.008"
+    "title": "Known missing 3DGS benchmark item",
+    "DOI": "10.9999/3dgs.demo.missing"
   }
 ]

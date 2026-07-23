@@ -304,22 +304,23 @@ S3 确认完成（run-config.json 已输出）
 | `context.search_iterations` | array | 报告方法段——展示迭代比较表 |
 | `context.source_syntax_map` | object | A3——多源异构语法转换记录 |
 | `context.independent_pathways` | array | B2——五类路径的独立证据 |
-| `context.search_rounds` | array（已有，增强） | B1/B2—需带 `screening_status` 和 `pathway_type` |
+| `context.search_iterations` | array | q0→q* 检索式优化过程；只用于 A2/检索式选择，不进入 B1/B2 |
+| `context.saturation_rounds` | array | B1/B2—固定稳健检索式的实际饱和度轮次；需带 `query_id`、`query_status=frozen_robust`、`core_before`、`included_high`、`pathway_yields` |
 | `context.final_dedup_rule` | string | A3/F4——可复算的去重规则声明 |
 
 ## 10. 与现有 search_for_eval.py 的关系
 
 ## 10.1 无锚点、无检索式的首轮规则
 
-`run_initial_assessment.py` 是首轮默认编排器。它必须输出 A1–A3、B1–B3：候选锚点以稳定 ID 计算 A1；自动留出的验证集计算 A2；多源快照计算 A3；q0 与原子变体的自动初筛新增率计算 B1；不同数据库索引的来源级边际率作为 B2 初筛；B3 显示路径完成度与独立验证缺口。首轮与后续轮次按同一阈值输出：A1/A2/B1 直接给 pass/fail，B2 因尚非独立路径给 warning，B3 未完成路径或独立验证时给 fail。A1/A2/B1/B2 的证据状态为 `automated-screening`，A3 为 `partial_snapshot` 或 `estimated_lower_bound`；证据状态解释可复核性，不改写结论。它们用于决定下一步优先修什么，不用于声称检索充分、独立验证或最终饱和。
+`run_initial_assessment.py` 是首轮默认编排器。它必须输出 A1–A3、B1–B3：候选锚点以稳定 ID 计算 A1；自动留出的验证集计算 A2；多源快照计算 A3；q0 与原子变体只用于优化检索式和诊断 A2，不写入 B1/B2 饱和度轮次。B1/B2 必须等固定稳健检索式冻结后，按 `saturation_rounds` 的实际检索和筛选结果计算；首轮没有这类轮次时应为 `not_assessable`。B3 显示计划路径完成度与独立验证缺口。
 
 升级条件：A1 需锚点来源与相关性审查并冻结；A2 需真正独立的验证来源和冻结后的盲测；B1/B2 需摘要/全文筛选与人工抽查。B2/B3 的最终结论仍要求非关键词独立发现路径，首轮不会给出替代结论。
 
-`search_for_eval.py` 是**首轮诊断检索的脚本实现**：保留 q0，并在有可用术语时执行原子变体，把版本与过程记录写入 `search_meta.json`。它仍是协议的参考实现而非完整编排器。
+`search_for_eval.py` 是**首轮诊断检索的脚本实现**：保留 q0，并在有可用术语时执行原子变体，把版本与过程记录写入 `search_meta.json`。它不会把这些 query variants 当成 B1/B2 饱和度轮次；固定稳健检索式冻结后，需由后续流程写入 `saturation_rounds`。它仍是协议的参考实现而非完整编排器。
 
 | 脚本 | 角色 |
 |---|---|
-| `search_for_eval.py` | 多源首轮诊断 — q0 + 原子变体、候选发现与快速 A2/B1/B2 初评 |
+| `search_for_eval.py` | 多源首轮诊断 — q0 + 原子变体、候选发现与 A2 诊断；不计算 B1/B2 饱和度 |
 | `build_anchor_candidates.py` | 多源候选发现 — 产出待筛选 A1 候选与 A3 快照；它本身不能证明独立性，也不直接计入 A1 |
 | `search_iterator.py`（新增） | 多轮原子迭代管理器 — 生成比较表 + 追踪改动 |
 | `run_audit.py` | 消耗协议产出的 context 字段，无感知迭代细节 |

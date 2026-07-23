@@ -40,6 +40,8 @@ Imagine the useful version of this story. You bring a query that already reflect
 
 The report now carries that history: the query text, where it came from, which source ran it, when it ran, how many records it returned, what changed in each round, and the development/held-out validation results. If there is only one exploratory round, it says so plainly; it does not call an untested draft query “optimized.”
 
+The search decomposition has four keyword units: Object, Technology, Performance, and Context. The default iteration cap is 8 rounds; use `search_iterator.py validate --max-iterations N` for a more complex topic. The first automatic bundle produces at most 5 query versions (q0, progressive additions from the remaining PICO units, and one title-field variant); that is separate from the later multi-round cap.
+
 This matters because a query can look successful simply by rediscovering the papers used to tune it. The project therefore separates development evidence from a frozen, held-out validation set and records the separation in `evidence-manifest.json`. Different agents or threads are not, by themselves, evidence of independence.
 
 ### A different starting point

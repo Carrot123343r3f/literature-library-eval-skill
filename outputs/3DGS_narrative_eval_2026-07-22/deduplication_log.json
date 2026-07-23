@@ -1,0 +1,14 @@
+{
+  "exact_identifier_groups": [],
+  "uncertain_title_year_candidates": [],
+  "possible_version_families": [
+    {
+      "items": [
+        "3DGS01",
+        "3DGS01-preprint"
+      ],
+      "decision": "retain_both",
+      "reason": "预印本与会议正式版本保留版本关系但只计一项"
+    }
+  ]
+}
