@@ -233,15 +233,27 @@ def stability(context):
     rounds = context.get("search_rounds", [])
     # Only explicit, fully screened rounds may contribute to a saturation claim.
     screened_rounds = [x for x in rounds if x.get("screening_status") == "screened_complete"]
-    any_discovery_only = any(x.get("screening_status") == "discovery_only" for x in rounds)
+    discovery_rounds = [x for x in rounds if x.get("screening_status") == "discovery_only"]
+    any_discovery_only = bool(discovery_rounds)
     rates = [round(x["included_high"] / x["core_before"], 4) for x in screened_rounds
              if isinstance(x.get("core_before"), (int, float)) and x["core_before"] > 0
              and isinstance(x.get("included_high"), (int, float))]
     discovery_candidates_count = sum(x.get("discovery_candidates", 0) for x in rounds
                                      if x.get("screening_status") == "discovery_only")
+    candidate_ggr_rates = [round(x["discovery_candidates"] / x["core_before"], 4)
+                           for x in discovery_rounds
+                           if isinstance(x.get("core_before"), (int, float)) and x["core_before"] > 0
+                           and isinstance(x.get("discovery_candidates"), (int, float))]
+    candidate_yields = [x for x in context.get("source_marginal_yields", [])
+                        if isinstance(x, dict) and x.get("screening_status") == "discovery_only"
+                        and isinstance(x.get("yield"), (int, float))]
     paths = set(context.get("planned_pathways", []))
     done = {x.get("pathway") for x in rounds if x.get("completed")}
     complete = round(len(paths & done) / len(paths), 3) if paths else None
+    discovery_done = {x.get("pathway") for x in discovery_rounds if x.get("completed")}
+    discovery_planned = paths & {x.get("pathway") for x in discovery_rounds}
+    candidate_completion = (round(len(discovery_done & discovery_planned) / len(discovery_planned), 3)
+                            if discovery_planned else None)
     standards = context.get("standards", {})
     try:
         threshold = float(standards.get("b_ggr_threshold", 0.02))
@@ -296,6 +308,15 @@ def stability(context):
               else "fail" if iv_passed is False else "not_assessable"}
     result = {"status": "discovery_only" if any_discovery_only and not has_enough_screened else ("measured" if rounds else "not_assessable"),
               "high_confidence_new_rates": rates, "discovery_candidates_total": discovery_candidates_count,
+              "candidate_discovery": {
+                  "status": "candidate_discovery" if any_discovery_only else "not_assessable",
+                  "ggr_rates": candidate_ggr_rates,
+                  "pathway_yields": candidate_yields,
+                  "completed_pathways": len(discovery_done & discovery_planned),
+                  "planned_pathways": len(discovery_planned),
+                  "pathway_completion": candidate_completion,
+                  "candidates_total": discovery_candidates_count,
+              },
               "pathway_completion": complete, "source_marginal_yields": yields,
               "required_independent_pathways": required_pathways,
               "valid_independent_pathways": len(valid_pathways),
@@ -1046,6 +1067,7 @@ def indicator_rows(report):
     s = report.get("standards", {}); ctx = report.get("context", {})
     artifacts = report.get("artifacts", {})
     chk = lambda g, k: g.get("checks", {}).get(k, "not_assessable")
+    recency_checks = report["recency"]
     user_confirmed = s.get("confirmed_by_user", True)
     is_umbrella = ctx.get("review_type") == "伞式综述"
 
@@ -1061,9 +1083,11 @@ def indicator_rows(report):
         "a1m": s.get("a1_min_recall"), "a2m": s.get("a2_min_recall"),
         "br": p.get("high_confidence_new_rates", []),
         "bv": p.get("verdict", "—"),
+        "b_candidate": p.get("candidate_discovery", {}),
         "tc": t.get("topic_counts", {}), "tf": t.get("flags", []),
         "bs": b.get("top_source_share"), "bcv": b.get("cv"), "bg": b.get("gini"), "bsh": b.get("normalized_shannon"),
         "ds": d.get("recent_share"), "dy": d.get("window_years"),
+        "d_min": d.get("minimum_share"),
         "d_status": d.get("status"), "d_rec": d.get("recent_records"),
         "d_dated": d.get("dated_records"), "d_comp": d.get("year_completeness"),
         "d_pre": d.get("preprint_records"),
@@ -1111,18 +1135,32 @@ def indicator_rows(report):
 
     def _b1(d):
         br = d["br"]
-        cur = (', '.join(f'{r:.4f}' for r in br[-2:]) if len(br) >= 2
-               else (f'首轮 {br[-1]:.4f}（需第2轮确认趋稳）' if len(br) == 1 else '—'))
+        formal = (', '.join(f'{r:.4f}' for r in br[-2:]) if len(br) >= 2
+                  else (f'首轮 {br[-1]:.4f}（需第2轮确认趋稳）' if len(br) == 1
+                        else '已完成筛选轮次 0/2（尚无正式 GGR）'))
+        candidate_rates = d["b_candidate"].get("ggr_rates", [])
+        candidate = (', '.join(f'{rate:.4f}' for rate in candidate_rates)
+                     if candidate_rates else '未执行 AI 候选检索')
+        cur = f"正式 GGR：{formal}；AI 候选 GGR：{candidate}"
         return (chk(p, "B1_ggr"), cur, p.get("status"),
+                f"AI 候选 GGR=发现候选/轮次开始前核心库，只用于首轮补充和后续筛选排序，不能替代正式 GGR。"
                 f"B 趋稳仅在筛选决策真实、路径独立且多轮完成时才成立。"
                 f"GGR={', '.join(f'{r:.4f}' for r in br[-2:]) if len(br)>=2 else ('首轮 '+f'{br[-1]:.4f}'+'，需第2轮确认' if len(br)==1 else '需要至少两轮 search round')}。"
                 f"高置信新增/核心库。")
 
     def _b2(d):
         my = p.get('source_marginal_yields', [])
+        valid = p.get('valid_independent_pathways', 0)
+        required = p.get('required_independent_pathways', '—')
+        candidate_yields = d["b_candidate"].get("pathway_yields", [])
+        candidate = (', '.join(f"{x.get('pathway', '未命名')}={_fmt_pct(x.get('yield'))}"
+                               for x in candidate_yields)
+                     if candidate_yields else '未执行 AI 候选路径')
         return (chk(p, "B2_drr"),
-                f"{_fmt_num(len(my))} 条路径", p.get("status"),
-                f"DRR 只有在筛选确认后才有意义——发现候选不等于纳入项。边际收益：{my}。"
+                f"正式：已验证独立路径 {_fmt_num(valid)}/{_fmt_num(required)}；AI 候选路径发现率：{candidate}",
+                p.get("status"),
+                f"AI 候选路径发现率=该路径新候选/该路径候选，只用于首轮补充；正式 DRR 必须以筛选确认的纳入项复算。"
+                f"正式边际收益：{my}。"
                 f"新路径高置信文献/候选量。")
 
     def _b3(d):
@@ -1131,11 +1169,21 @@ def indicator_rows(report):
                    else "fail" if chk(p, "B3_pathway_completion") == "fail" or chk(p, "B3_independent_validation") == "fail"
                    else "not_assessable")
         iv_label = ('通过' if p.get('independent_validation_passed') is True
-                    else ('未通过' if p.get('independent_validation_passed') is False else '—'))
+                    else ('未通过' if p.get('independent_validation_passed') is False else '未提供'))
+        complete = p.get('pathway_completion')
+        pathway_label = (_fmt_pct(complete) if complete is not None
+                         else f"0/{_fmt_num(p.get('required_independent_pathways', '—'))}（未提供完成路径）")
+        candidate_b3 = d["b_candidate"]
+        candidate_planned = candidate_b3.get("planned_pathways", 0)
+        candidate_label = (f"{_fmt_num(candidate_b3.get('completed_pathways', 0))}/"
+                           f"{_fmt_num(candidate_planned)}"
+                           f"（候选 {_fmt_num(candidate_b3.get('candidates_total', 0))} 条）"
+                           if candidate_planned else "未执行 AI 候选检索")
         return (verdict,
-                f"路径 {_fmt_pct(p.get('pathway_completion'))} | 独立验证 {iv_label}",
+                f"正式路径 {pathway_label} | 独立验证 {iv_label}；AI 候选执行 {candidate_label}",
                 p.get("status"),
-                f"结论：**{bv}**。仅低 GGR/DRR 不够——需路径完成+独立验证+筛选真实同时成立。")
+                f"AI 候选执行率仅说明自动补充检索是否完成，不是独立验证。结论：**{bv}**。"
+                f"仅低 GGR/DRR 不够——需路径完成+独立验证+筛选真实同时成立。")
 
     def _c1(d):
         tc = d["tc"]; tf = d["tf"]
@@ -1168,31 +1216,37 @@ def indicator_rows(report):
     def _d1(d):
         dsrc = d["dsrc"]
         fdays = report.get('currency', {}).get('freshness_threshold_days', '—')
-        return (chk(d, "D1_search_freshness"),
-                "; ".join(f"{k}:{v['days_since']}天" for k,v in dsrc.items()) if dsrc else "—",
+        verdict = chk(recency_checks, "D1_search_freshness")
+        return (verdict,
+                "; ".join(f"{k}:{v['days_since']}天" for k,v in dsrc.items()) if dsrc else "有日期来源 0（未记录检索日期）",
                 report.get("currency", {}).get("status", "not_assessable"),
                 f"{len(dsrc)} 个来源有日期。"
-                f"{'存在过期来源。' if chk(d,'D1_search_freshness')=='warning' else '来源在新鲜度窗口内。'}")
+                f"{'存在过期来源。' if verdict=='warning' else '来源在新鲜度窗口内。'}")
 
     def _d2(d):
-        return (chk(d, "D2_recent_share"),
+        verdict = chk(recency_checks, "D2_recent_share")
+        return (verdict,
                 f"{_fmt_pct(d['ds'])}（{_fmt_num(d.get('d_rec'))}/{_fmt_num(d.get('d_dated'))} 有日期）",
                 d["d_status"],
                 f"近 {d['dy']} 年占比 {_fmt_pct(d['ds'])}。阈值按 profile：AI/通信 3年40%、常规 5年35%、基础设施 7年30%。"
-                f"{'低于阈值。' if chk(d,'D2_recent_share')=='warning' else '达标。'}"
+                f"{'低于阈值。' if verdict=='warning' else '达标。'}"
                 f"年份字段完整率 {_fmt_pct(d.get('d_comp'))}；<50% 时 D2 自动降级为 warning。")
 
     def _d3(d):
-        return (chk(d, "D3_frontier"),
-                ctx.get("frontier_coverage_verdict", "—"), d["d_status"],
+        verdict = chk(recency_checks, "D3_frontier")
+        return (verdict,
+                (ctx.get("frontier_coverage_verdict")
+                 if "frontier_coverage_verdict" in ctx else "独立前沿检索证据 0 条（未提供）"),
+                "measured" if verdict != "not_assessable" else "not_assessable",
                 "前沿覆盖需 context.frontier_coverage_verdict。近期发表不等于前沿覆盖。")
 
     def _d4(d):
         pre = d.get('d_pre', '—')
-        return (chk(d, "D4_versions_preprints"),
-                f"预印本 {_fmt_num(pre)} 条", d["d_status"],
+        verdict = chk(recency_checks, "D4_versions_preprints")
+        return (verdict,
+                f"预印本 {_fmt_num(pre)} 条", "measured" if verdict != "not_assessable" else "not_assessable",
                 f"{_fmt_num(pre)} 条预印本。"
-                f"{'未核验版本关系。' if chk(d,'D4_versions_preprints')=='not_assessable' else ''}")
+                f"{'未核验版本关系。' if verdict=='not_assessable' else ''}")
 
     def _e1(d):
         qh = d["qh"]
@@ -1302,14 +1356,16 @@ def indicator_rows(report):
         "A1": lambda d: f"阈值 ≥ {d['a1m']}" if d['a1m'] else "需配置 a1_min_recall",
         "A2": lambda d: f"阈值 ≥ {d['a2m']}" if d['a2m'] else "需配置 a2_min_recall",
         "A3": "至少两完整来源去重后的不重复候选数；只报告下界",
-        "B1": lambda d: f"最后两轮均 < {p.get('thresholds',{}).get('new_rate','—')}" if len(d['br']) >= 2 else "/",
-        "B2": lambda d: f"各路径均 < {p.get('thresholds',{}).get('marginal_yield','—')}" if len(p.get('source_marginal_yields',[])) >= 2 else "/",
-        "B3": lambda d: "路径完成且独立验证通过" if p.get('independent_validation_passed') is not None else '/',
+        "B1": lambda d: (f"正式：最后两轮均 < {p.get('thresholds',{}).get('new_rate','—')}；"
+                           "AI 候选层仅展示，不作趋稳判定"),
+        "B2": lambda d: (f"正式：各独立路径均 < {p.get('thresholds',{}).get('marginal_yield','—')}；"
+                           "AI 候选层仅展示，不作趋稳判定"),
+        "B3": lambda d: "正式：路径完成且独立验证通过；AI 候选层仅展示执行进度",
         "C1": "无空主题；Top≤0.70；CV≤0.80；Gini≤0.50；Shannon≥0.55",
         "C2": "Top≤0.80；CV≤1.00；Gini≤0.60；Shannon≥0.45",
         "C3": "每主题 ≥2 来源；单一来源 ≤0.80",
         "D1": lambda d: f"各来源距检索 ≤ {report.get('currency',{}).get('freshness_threshold_days','—')} 天",
-        "D2": lambda d: f"近 {d['dy'] or '—'} 年占比 ≥ {d.get('minimum_share','—')}",
+        "D2": lambda d: f"近 {d['dy'] or '—'} 年占比 ≥ {_fmt_pct(d.get('d_min'))}",
         "D3": lambda d: "/" if not ctx.get("frontier_coverage_verdict") else "前沿窗口有独立检索/Gold set",
         "D4": lambda d: "/" if not ctx.get("version_currency_verdict") else "预印本-正式版关系已核验",
         "E1": "报告 h-index；仅背景信号",
@@ -1465,6 +1521,9 @@ def write(report, out, artifact_paths=None):
     # leave the execution boundary.
     report["context"] = _public_value(report.get("context", {}))
     report["artifacts"] = _public_value(report.get("artifacts", {}))
+    # Rebind the rendering context after redaction.  Keeping the pre-redaction
+    # local reference here would leak absolute paths into audit.md/audit.html.
+    ctx = report["context"]
 
     (out / "audit.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 

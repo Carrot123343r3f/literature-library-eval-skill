@@ -53,6 +53,28 @@ def test_b_requires_explicit_screening_and_independent_pathways():
     assert result["checks"]["B3_pathway_completion"] == "fail"
 
 
+def test_discovery_layer_exposes_b_values_without_promoting_them_to_formal_b():
+    result = stability({
+        "review_type": "快速综述", "planned_pathways": ["openalex-first-round"],
+        "search_rounds": [{
+            "pathway": "openalex-first-round", "completed": True, "core_before": 100,
+            "included_high": 0, "discovery_candidates": 12,
+            "screening_status": "discovery_only",
+        }],
+        "source_marginal_yields": [{
+            "pathway": "broad-query", "candidates": 20, "new_discovery_candidates": 8,
+            "yield": 0.4, "screening_status": "discovery_only",
+        }],
+    })
+    candidate = result["candidate_discovery"]
+    assert candidate["status"] == "candidate_discovery"
+    assert candidate["ggr_rates"] == [0.12]
+    assert candidate["pathway_yields"][0]["yield"] == 0.4
+    assert candidate["pathway_completion"] == 1.0
+    assert result["checks"]["B1_ggr"] == "not_assessable"
+    assert result["checks"]["B2_drr"] == "not_assessable"
+
+
 def test_a2_uses_independent_validation_as_primary_value():
     with tempfile.TemporaryDirectory() as temp:
         root = pathlib.Path(temp)
@@ -126,19 +148,43 @@ def test_report_does_not_disclose_workspace_path_or_secret_context():
             "--context", str(context_path), "--out", str(out),
         ], check=True)
         public = (out / "audit.json").read_text(encoding="utf-8")
+        markdown = (out / "audit.md").read_text(encoding="utf-8")
         archived_context = next((out / "inputs").glob("context__*.json")).read_text(encoding="utf-8")
         assert "never-render-this" not in public
         assert str(ROOT) not in public
+        assert "never-render-this" not in markdown
+        assert str(ROOT) not in markdown
         assert "never-render-this" not in archived_context
         assert str(ROOT) not in archived_context
+
+
+def test_first_run_register_reports_d2_and_missing_b_d3_evidence_explicitly():
+    """A first-run report must distinguish a computed value from missing evidence."""
+    with tempfile.TemporaryDirectory() as temp:
+        out = pathlib.Path(temp) / "out"
+        subprocess.run([
+            sys.executable, str(ROOT / "scripts" / "run_audit.py"),
+            "--run-config", str(ROOT / "tests" / "run-config-test.json"),
+            "--gold", str(ROOT / "tests" / "gold.json"),
+            "--query-hits", str(ROOT / "tests" / "zero-hits.json"), "--out", str(out),
+        ], check=True)
+        audit = json.loads((out / "audit.json").read_text(encoding="utf-8"))
+        rows = {row["subproject"]: row for row in audit["indicator_register"]}
+        assert rows["D2"]["meets_standard"] == "pass"
+        assert "40.0%" in rows["D2"]["standard"]
+        assert "0/2" in rows["B1"]["current_status"]
+        assert "0/4" in rows["B2"]["current_status"]
+        assert "0" in rows["D3"]["current_status"]
 
 
 if __name__ == "__main__":
     test_threshold_boundary_is_inclusive()
     test_a2_recall_counts_items_not_identifiers()
     test_b_requires_explicit_screening_and_independent_pathways()
+    test_discovery_layer_exposes_b_values_without_promoting_them_to_formal_b()
     test_a2_uses_independent_validation_as_primary_value()
     test_config_requires_nested_review_fields_and_boolean_consent()
     test_collector_requires_persisted_consent_and_source_allowlist()
     test_report_does_not_disclose_workspace_path_or_secret_context()
+    test_first_run_register_reports_d2_and_missing_b_d3_evidence_explicitly()
     print("Security and contract tests: PASSED")

@@ -232,6 +232,13 @@ with tempfile.TemporaryDirectory() as temp:
     assert b1 == "not_assessable", f"B1 should be not_assessable for discovery_only, got {b1}"
     assert b2 == "not_assessable", f"B2 should be not_assessable for discovery_only, got {b2}"
     assert proc["verdict"] != "趋稳", f"Verdict should not be 趋稳 for discovery_only, got {proc['verdict']}"
+    candidate = proc["candidate_discovery"]
+    assert candidate["ggr_rates"] == [0.12]
+    assert candidate["pathway_yields"][0]["yield"] == 0.12
+    rows = {row["subproject"]: row for row in audit["indicator_register"]}
+    assert "AI 候选 GGR：0.1200" in rows["B1"]["current_status"]
+    assert "AI 候选路径发现率" in rows["B2"]["current_status"]
+    assert "AI 候选执行 1/1" in rows["B3"]["current_status"]
 
 print("B discovery_only guard: PASSED")
 
