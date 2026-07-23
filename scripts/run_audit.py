@@ -1897,7 +1897,7 @@ def main():
             if not a.allow_out_of_scope:
                 print(f"ERROR: scope_status={scope_status}, allowed_assessment_level={allowed_level} — refusing to run full A-F.")
                 print("  Use --allow-out-of-scope to force (report will carry permanent caveats),")
-                print("  or use --mode metadata-health / --mode search-design for downgraded service.")
+                print("  For out-of-scope topics, use the intake protocol's metadata-health or search-design downgrade flow; this command does not run full A-F.")
                 p.exit(1)
             else:
                 print("WARNING: scope_status=out_of_scope but --allow-out-of-scope active — continuing with permanent caveats in report.")

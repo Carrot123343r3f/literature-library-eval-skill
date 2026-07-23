@@ -40,7 +40,7 @@
     },
     "automation": {
       "type": "object",
-      "description": "v1.0: allow_search is informational only. allowed_sources/stop_conditions/allow_query_refinement are declared for forward compatibility but not yet enforced by scripts.",
+      "description": "Search consent and source/refinement controls. search_for_eval.py enforces these controls when --run-config is supplied; direct CLI use is treated as explicit user action.",
       "required": ["allow_search"],
       "properties": {
         "allow_search": {"type": "boolean"},
@@ -59,6 +59,7 @@
         "query_hits": {"type": ["string", "null"], "description": "query-hits.json from search_for_eval.py. Produced by: search_for_eval.py. Supports: A2. Missing → A2 not_assessable."},
         "query_plan": {"type": ["string", "null"], "description": "query-plan.json. Produced by: manual/agent. Supports: F1 traceability."},
         "source_snapshot": {"type": ["string", "null"], "description": "Collector snapshot for A3. Produced by: collect_open_sources.py. Supports: A3. Missing → A3 not_assessable."},
+        "evidence_manifest": {"type": ["string", "null"], "description": "Evidence-isolation manifest. Produced by: evidence collection/first-run workflow. Supports: A2/B3 independence and A3/B2 evidence reuse checks."},
         "screening_decisions": {"type": ["string", "null"], "description": "Screening decisions for B/F5. Produced by: manual/agent. Supports: B GGR/DRR, F5 traceability. Missing → B discovery_only, F5 provenance-only."},
         "deduplication_log": {"type": ["string", "null"], "description": "Dedup/version log. Produced by: normalize_candidates.py. Supports: F4. Missing → F4 not_assessable (version candidates)."},
         "search_meta": {"type": ["string", "null"], "description": "search_meta.json from search_for_eval.py. Produced by: search_for_eval.py. Supports: A2 sensitivity, B discovery candidates."},
@@ -107,6 +108,10 @@
         "formats": {"type": "array", "items": {"type": "string"}, "default": ["md", "html", "json"]},
         "include_standards_appendix": {"type": "boolean", "default": true}
       }
+    },
+    "context": {
+      "type": ["object", "string", "null"],
+      "description": "Optional resolved assessment context object or path used by search_for_eval.py."
     },
     "generated_by": {"type": "string", "description": "Agent name or session ID"},
     "generated_at": {"type": "string", "format": "date-time"}

@@ -40,6 +40,10 @@ The iterations.json schema:
 import argparse, json, sys, pathlib
 from collections import Counter
 sys.stdout.reconfigure(encoding='utf-8')
+try:
+    from stable_ids import stable_ids
+except ImportError:  # pragma: no cover
+    from scripts.stable_ids import stable_ids
 
 ALLOWED_CHANGE_TYPES = {
     "initial",           # First round — no prior query exists
@@ -59,6 +63,15 @@ A2_STOP_DELTA = 0.03  # Two consecutive rounds with validation_recall increase <
 def load_json(path):
     with open(path, encoding='utf-8') as f:
         return json.load(f)
+
+
+def stable_item_ids(items):
+    """Return all stable identifiers, not only DOI, for overlap checks."""
+    ids = set()
+    for item in items:
+        if isinstance(item, dict):
+            ids.update(stable_ids(item))
+    return ids
 
 
 def normalize_input(data):
@@ -104,6 +117,7 @@ def normalize_input(data):
             "iteration_id": iteration_id,
             "parent_iteration": row.get("parent_iteration"),
             "change_type": change_type,
+            "changed_units": row.get("changed_units", [] if change_type == "initial" else None),
             "change_description": row.get("change_description", row.get("note", "")),
             "change_source": row.get("change_source", "search_for_eval.py"),
             "queries": queries,
@@ -134,11 +148,9 @@ def validate(data, strict=False, max_iterations=MAX_ITERATIONS):
                         "(evidence status: estimated)")
     else:
         # Check overlap
-        dev_dois = {e.get("doi", "").lower() for e in dev if e.get("doi")}
-        val_dois = {e.get("doi", "").lower() for e in val if e.get("doi")}
-        overlap = dev_dois & val_dois
+        overlap = stable_item_ids(dev) & stable_item_ids(val)
         if overlap:
-            errors.append(f"Dev/validation sets overlap on {len(overlap)} DOI(s): {sorted(overlap)[:5]}")
+            errors.append(f"Dev/validation sets overlap on {len(overlap)} stable identifier(s): {sorted(overlap)[:5]}")
         if not data.get("dev_validation_overlap_check"):
             warnings.append("dev_validation_overlap_check not explicitly declared")
 
@@ -178,6 +190,9 @@ def validate(data, strict=False, max_iterations=MAX_ITERATIONS):
             parent = it.get("parent_iteration")
             if not parent and i > 0:
                 warnings.append(f"{it_id}: non-initial iteration has no parent_iteration")
+            changed_units = it.get("changed_units")
+            if not isinstance(changed_units, list) or len(changed_units) != 1:
+                errors.append(f"{it_id}: non-initial iteration must declare exactly one changed_units entry")
 
         # Required fields
         for field in ("change_description", "change_source", "queries", "execution_date", "results"):

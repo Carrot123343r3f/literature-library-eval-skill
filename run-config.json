@@ -36,6 +36,7 @@
     "query_hits": "outputs/3DGS_narrative_eval_2026-07-22/search_r1/query-hits.json",
     "query_plan": null,
     "source_snapshot": null,
+    "evidence_manifest": "outputs/3DGS_narrative_eval_2026-07-22/evidence-manifest.json",
     "screening_decisions": null,
     "deduplication_log": null,
     "search_meta": "outputs/3DGS_narrative_eval_2026-07-22/search_r1/search_meta.json",

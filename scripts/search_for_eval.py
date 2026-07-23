@@ -158,8 +158,9 @@ def hit_key(item):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__.split('\n')[0])
-    p.add_argument('--library', required=True, help='题录 JSON（判断在库内）')
-    p.add_argument('--context', required=True, help='context.json（读 keywords/profile）')
+    p.add_argument('--run-config', help='run-config.json；提供时强制执行自动检索授权和来源白名单')
+    p.add_argument('--library', help='题录 JSON（判断在库内）')
+    p.add_argument('--context', help='context.json（读 keywords/profile）')
     p.add_argument('--benchmark', help='A1 基准集 JSON；当 --dev-set 和 --gold 均未提供时复用为 dev_set')
     p.add_argument('--gold', help='A2 gold set JSON（若需要独立于 benchmark；v2 建议使用 --dev-set + --validation-set）')
     p.add_argument('--dev-set', help='[v2] 开发集 JSON — 用于迭代检索式（多次使用）')
@@ -170,10 +171,63 @@ def main():
                    help='首轮 AI 主导模式：开发/验证集和自动筛选结果均标 automated-screening，而非 measured')
     p.add_argument('--sources', default='auto',
                    help='首轮开放来源：auto（按 profile 选 OpenAlex+Crossref，并按需加 arXiv/Europe PMC），或逗号列表')
-    p.add_argument('--out', required=True)
+    p.add_argument('--out', help='输出目录')
     p.add_argument('--max-per-query', type=int, default=50,
                    help='每来源/检索式最大记录数；达到上限时标记为 partial snapshot')
     a = p.parse_args()
+
+    # A run-config is the single source of truth for automated-search consent.
+    # Direct CLI invocation remains supported, but is treated as an explicit
+    # user action and does not silently inherit a config from the cwd.
+    rc = None
+    rc_base = pathlib.Path.cwd()
+    if a.run_config:
+        rc_path = pathlib.Path(a.run_config).resolve()
+        try:
+            rc = json.loads(rc_path.read_text(encoding='utf-8-sig'))
+        except (OSError, json.JSONDecodeError) as exc:
+            p.error(f'cannot read --run-config: {exc}')
+        rc_base = rc_path.parent
+        automation = rc.get('automation', {}) if isinstance(rc, dict) else {}
+        if automation.get('allow_search') is not True:
+            p.error('automation.allow_search must be true before online search is executed')
+
+        def resolve_config_path(value):
+            if not value:
+                return None
+            path = pathlib.Path(value)
+            return str(path if path.is_absolute() else (rc_base / path).resolve())
+
+        library_cfg = rc.get('library', {})
+        if not a.library:
+            a.library = resolve_config_path(library_cfg.get('path'))
+        if not a.context:
+            context_cfg = rc.get('context')
+            if isinstance(context_cfg, str):
+                a.context = resolve_config_path(context_cfg)
+        if not a.out:
+            a.out = resolve_config_path((rc.get('output') or {}).get('out_dir'))
+        allowed = [str(x).casefold() for x in automation.get('allowed_sources', []) if str(x).strip()]
+        if allowed:
+            requested = None if a.sources == 'auto' else [x.strip().casefold() for x in a.sources.split(',') if x.strip()]
+            selected = requested or allowed
+            disallowed = sorted(set(selected) - set(allowed))
+            if disallowed:
+                p.error(f'sources not allowed by run-config: {", ".join(disallowed)}')
+            a.sources = ','.join(selected)
+    if not a.library:
+        p.error('--library is required (or provide run-config with library.path)')
+    if not a.out:
+        p.error('--out is required (or provide output.out_dir in run-config)')
+
+    if rc and not a.context and isinstance(rc.get('context'), dict):
+        resolved_context_dir = pathlib.Path(a.out) / '.tmp'
+        resolved_context_dir.mkdir(parents=True, exist_ok=True)
+        resolved_context = resolved_context_dir / 'resolved-context.json'
+        resolved_context.write_text(json.dumps(rc['context'], ensure_ascii=False, indent=2), encoding='utf-8')
+        a.context = str(resolved_context)
+    if not a.context:
+        p.error('--context is required (or provide context in run-config)')
 
     library = json.load(open(a.library, encoding='utf-8-sig'))
     ctx = json.load(open(a.context, encoding='utf-8-sig'))
@@ -228,6 +282,8 @@ def main():
     core_terms = [k.lower() for k in keywords[:3]]
     initial_query = a.initial_query or ctx.get('initial_query') or ctx.get('user_query')
     queries = refine_user_q0(initial_query, keywords) if initial_query else build_queries(keywords, pico)
+    if rc and (rc.get('automation') or {}).get('allow_query_refinement') is False:
+        queries = queries[:1]
     if pico:
         # Use PICO terms for core terms when available
         pico_core = []
@@ -289,18 +345,23 @@ def main():
         query_id = 'q0' if label in ('q0-user', 'q0-ai') else label.split('-', 1)[0]
         if label == 'q0-user':
             origin, change_type, change_description = 'user_provided', 'initial', 'Preserve and execute the user-provided q0.'
+            changed_units = []
         elif label == 'q0-ai':
             origin, change_type, change_description = 'ai_generated', 'initial', 'AI-generated initial diagnostic query from the supplied keywords/PICO.'
+            changed_units = []
         elif label.endswith('title-field'):
             origin, change_type, change_description = 'agent_refined', 'modify_field', 'Restrict the same concept to the title field for a narrow diagnostic comparison.'
+            changed_units = ['field:title']
         else:
             origin, change_type, change_description = 'agent_refined', 'add_synonym', 'Add one supplemental term to q0 for an atomic diagnostic comparison.'
+            changed_units = ['synonym_group:diagnostic_variant']
         for record in queries_record[-len(sources):]:
             record['origin'] = origin
         search_iterations.append({
             'iteration_id': query_id,
             'parent_iteration': None if query_id == 'q0' else 'q0',
             'change_type': change_type,
+            'changed_units': changed_units,
             'change_description': change_description,
             'change_source': 'multi-source diagnostic search',
             'queries': per_source_queries,

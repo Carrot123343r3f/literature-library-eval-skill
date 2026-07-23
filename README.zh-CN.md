@@ -70,6 +70,8 @@ AI 会协助你：
 
 已有 `run-config.json` 时可以直接运行 `python scripts/run_audit.py --run-config run-config.json`；若未传 `--out`，脚本使用配置中的 `output.out_dir`。`search_iterator.py` 也可以直接检查首轮 `search_meta.json`，但缺少开发集或独立验证集时仍会明确报告证据不足。
 
+进行在线检索时建议传入 `--run-config run-config.json`。此模式会强制检查 `automation.allow_search`、`allowed_sources` 和 `allow_query_refinement`；不传配置的直接命令行调用视为用户明确发起的检索。
+
 验证集不要求用户逐篇提供：AI 可以从综述、标准、引文网络和时间留出路径构建候选验证集，再冻结后评估检索式。验证集的来源、冻结时间和是否接触过检索式会写入 `evidence-manifest.json`；不同 subagent/线程不自动等于独立证据。
 
 对于叙事综述，报告还会给出“写作工作集”建议。一个 1000 篇的库可以在 A–F 上很强，却仍不适合直接拿来写作；正确做法是保留完整证据池，再建立按主题、论证角色、优先级和综合笔记组织的可回溯工作集，而不是删除原库。
