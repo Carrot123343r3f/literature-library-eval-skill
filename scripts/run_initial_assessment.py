@@ -43,7 +43,7 @@ def main():
         "--min-dev", args.min_dev)
     run(script_dir, "search_for_eval.py", "--library", args.library, "--context", args.context,
         "--dev-set", evidence_dir / "ai-dev-set.json", "--validation-set", evidence_dir / "ai-validation-set.json",
-        "--ai-provisional", "--out", search_dir, "--max-per-query", args.max_per_query)
+        "--ai-provisional", "--allow-partial", "--out", search_dir, "--max-per-query", args.max_per_query)
     run(script_dir, "run_audit.py", "--library", args.library, "--context", args.context,
         "--benchmark", evidence_dir / "ai-benchmark.json", "--benchmark-evidence-status", "automated-screening",
         "--gold", evidence_dir / "ai-validation-set.json", "--query-hits", search_dir / "query-hits.json",

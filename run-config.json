@@ -26,7 +26,7 @@
   "automation": {
     "allow_search": true,
     "allow_query_refinement": true,
-    "allowed_sources": ["openalex", "semantic_scholar", "arxiv", "crossref"],
+    "allowed_sources": ["openalex", "arxiv", "crossref"],
     "stop_conditions": ["validation_recall达标且连续两轮无改善", "GGR连续两轮≤b_ggr_threshold且DRR≤b_drr_threshold且独立路径完成"]
   },
   "evidence_inputs": {

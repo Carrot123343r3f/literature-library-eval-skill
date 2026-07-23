@@ -106,7 +106,8 @@
       "properties": {
         "language": {"type": "string", "default": "zh-CN"},
         "formats": {"type": "array", "items": {"type": "string"}, "default": ["md", "html", "json"]},
-        "include_standards_appendix": {"type": "boolean", "default": true}
+        "include_standards_appendix": {"type": "boolean", "default": true},
+        "out_dir": {"type": "string", "minLength": 1}
       }
     },
     "context": {

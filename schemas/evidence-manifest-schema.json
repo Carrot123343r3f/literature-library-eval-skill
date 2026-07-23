@@ -32,6 +32,10 @@
     "dataset": {
       "type": "object",
       "required": ["role", "source_routes", "used_tested_query", "used_for_query_optimization", "frozen_at"],
+      "anyOf": [
+        {"required": ["item_ids"], "properties": {"item_ids": {"minItems": 1}}},
+        {"required": ["path"], "properties": {"path": {"type": "string", "minLength": 1}}}
+      ],
       "properties": {
         "role": {"type": "string", "enum": ["seed", "dev", "validation", "benchmark", "b3_validation", "pathway"]},
         "path": {"type": ["string", "null"]},

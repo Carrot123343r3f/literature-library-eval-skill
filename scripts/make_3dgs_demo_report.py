@@ -91,8 +91,8 @@ context = {
     "dev_validation_overlap_check": True,
     "search_iterations": [
         {"iteration_id": "q0", "change_type": "initial", "change_description": "执行用户提供的初始检索式", "change_source": "user_provided", "execution_date": "2026-07-20", "queries": {"db_OpenAlex": "(3D Gaussian Splatting OR 3DGS) AND (rendering OR reconstruction)"}, "results": {"dev_recall": 0.625, "validation_recall": 0.50}, "decision": "continue"},
-        {"iteration_id": "q1", "parent_iteration": "q0", "change_type": "add_synonym", "change_description": "加入 dynamic 术语", "change_source": "agent_refined", "execution_date": "2026-07-21", "queries": {"db_OpenAlex": "(3D Gaussian Splatting OR 3DGS) AND dynamic"}, "results": {"dev_recall": 0.75, "validation_recall": 0.625}, "decision": "continue"},
-        {"iteration_id": "q2", "parent_iteration": "q1", "change_type": "modify_field", "change_description": "增加标题字段诊断", "change_source": "agent_refined", "execution_date": "2026-07-22", "queries": {"db_OpenAlex": "title:(3D Gaussian Splatting OR 3DGS)"}, "results": {"dev_recall": 0.875, "validation_recall": 0.75}, "decision": "a2_stop"},
+        {"iteration_id": "q1", "parent_iteration": "q0", "change_type": "add_synonym", "changed_units": ["synonym_group:dynamic"], "change_description": "加入 dynamic 术语", "change_source": "agent_refined", "execution_date": "2026-07-21", "queries": {"db_OpenAlex": "(3D Gaussian Splatting OR 3DGS) AND dynamic"}, "results": {"dev_recall": 0.75, "validation_recall": 0.625}, "decision": "continue"},
+        {"iteration_id": "q2", "parent_iteration": "q1", "change_type": "modify_field", "changed_units": ["field:title"], "change_description": "增加标题字段诊断", "change_source": "agent_refined", "execution_date": "2026-07-22", "queries": {"db_OpenAlex": "title:(3D Gaussian Splatting OR 3DGS)"}, "results": {"dev_recall": 0.875, "validation_recall": 0.75}, "decision": "a2_stop"},
     ],
     "saturation_rounds": [
         {"round_id": "sat-r1", "query_id": "q2", "query_status": "frozen_robust", "completed": True, "core_before": 12, "included_high": 1, "screening_status": "screened", "pathway_yields": [{"pathway": "db_boolean", "completed": True, "yield": 0.04}, {"pathway": "backward_citation", "completed": True, "yield": 0.03}, {"pathway": "forward_citation", "completed": True, "yield": 0.01}, {"pathway": "related_articles", "completed": True, "yield": 0.02}, {"pathway": "standards_guidelines", "completed": True, "yield": 0.00}]},
@@ -147,9 +147,9 @@ snapshot = {"sources": {
     "arXiv": {"status": "complete", "items": [{"DOI": x["DOI"], "title": x["title"]} for x in library[1:6]]},
 }}
 evidence_manifest = {"schema_version": "1.0", "datasets": {
-    "dev": {"role": "dev", "path": "dev_set.json", "source_routes": ["OpenAlex"], "used_tested_query": True, "used_for_query_optimization": True, "frozen_at": "2026-07-20T10:00:00+08:00"},
-    "validation": {"role": "validation", "path": "validation_set.json", "source_routes": ["backward_citation", "time_holdout"], "used_tested_query": False, "used_for_query_optimization": False, "frozen_at": "2026-07-20T10:05:00+08:00"},
-    "b3_validation": {"role": "b3_validation", "path": "b3_validation.json", "source_routes": ["expert_route"], "used_tested_query": False, "used_for_query_optimization": False, "frozen_at": "2026-07-20T10:10:00+08:00"},
+    "dev": {"role": "dev", "path": "dev_set.json", "item_ids": [f"doi:{x['DOI']}" for x in library[:3]], "source_routes": ["OpenAlex"], "used_tested_query": True, "used_for_query_optimization": True, "frozen_at": "2026-07-20T10:00:00+08:00"},
+    "validation": {"role": "validation", "path": "validation_set.json", "item_ids": [f"doi:{x['DOI']}" for x in library[3:6]], "source_routes": ["backward_citation", "time_holdout"], "used_tested_query": False, "used_for_query_optimization": False, "frozen_at": "2026-07-20T10:05:00+08:00"},
+    "b3_validation": {"role": "b3_validation", "path": "b3_validation.json", "item_ids": [f"doi:{x['DOI']}" for x in library[6:7]], "source_routes": ["expert_route"], "used_tested_query": False, "used_for_query_optimization": False, "frozen_at": "2026-07-20T10:10:00+08:00"},
 }, "relationships": {"a2_validation_dataset": "validation", "b3_validation_dataset": "b3_validation", "a3_source_ids": ["OpenAlex", "Crossref", "arXiv"], "b2_pathway_source_ids": ["backward_citation", "forward_citation", "related_articles"]}}
 
 files = {

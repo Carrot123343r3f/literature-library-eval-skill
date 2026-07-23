@@ -33,7 +33,9 @@ def _read_items(entry, base_dir):
         data = json.loads(path.read_text(encoding="utf-8-sig"))
     except (OSError, json.JSONDecodeError):
         return []
-    return data if isinstance(data, list) else data.get("items", [])
+    if isinstance(data, list):
+        return data
+    return data.get("items", []) if isinstance(data, dict) else []
 
 
 def inspect_manifest(manifest, manifest_path=None):
@@ -73,8 +75,11 @@ def inspect_manifest(manifest, manifest_path=None):
         result["errors"].append(f"Dev/validation overlap: {len(overlap)} stable identifier(s)")
 
     if val:
+        validation_items = _read_items(val, base_dir)
+        if not validation_items:
+            result["errors"].append("Validation dataset has no readable item_ids or records")
         independent = not bool(val.get("used_tested_query")) and not bool(val.get("used_for_query_optimization"))
-        result["a2_validation_independent"] = independent and not bool(overlap)
+        result["a2_validation_independent"] = independent and not bool(overlap) and bool(validation_items)
         if val.get("used_tested_query"):
             result["errors"].append("Validation set was discovered by the tested query")
         if val.get("used_for_query_optimization"):

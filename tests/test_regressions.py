@@ -2,6 +2,7 @@ import unittest
 
 from scripts.evidence_isolation import inspect_manifest
 from scripts.run_audit import _validate_run_config
+from scripts.search_for_eval import resolve_query_inputs
 from scripts.search_iterator import validate
 
 
@@ -38,6 +39,29 @@ class RegressionTests(unittest.TestCase):
         result = inspect_manifest(manifest)
         self.assertEqual(result["status"], "invalid")
         self.assertEqual(result["dev_validation_overlap_count"], 1)
+
+    def test_manifest_rejects_metadata_only_validation_dataset(self):
+        result = inspect_manifest({
+            "datasets": {"validation": {
+                "used_tested_query": False,
+                "used_for_query_optimization": False,
+                "source_routes": ["holdout"],
+                "frozen_at": "2026-07-23T00:00:00Z",
+            }},
+            "relationships": {},
+        })
+        self.assertEqual(result["status"], "invalid")
+
+    def test_run_config_research_question_fills_missing_search_keywords(self):
+        keywords, pico = resolve_query_inputs(
+            {"search_decomposition": {"pico": {
+                "object": {"value": "industrial defects", "source": "user_provided"},
+                "technology": {"value": "vision inspection", "source": "user_provided"},
+            }}},
+            {"project": {"research_question": "industrial defect detection"}},
+        )
+        self.assertEqual(keywords, ["industrial defect detection"])
+        self.assertEqual(pico["object"]["term"], "industrial defects")
 
     def test_iterator_rejects_multi_unit_change(self):
         data = {

@@ -1928,6 +1928,11 @@ def main():
         if ev.get("evidence_manifest") and not a.evidence_manifest: a.evidence_manifest = _resolve(ev["evidence_manifest"])
 
         if not a.context:
+            context_cfg = rc.get("context")
+            if isinstance(context_cfg, str):
+                a.context = _resolve(context_cfg)
+        if not a.context:
+            configured_context = rc.get("context") if isinstance(rc.get("context"), dict) else {}
             ctx_from_rc = {
                 "review_type": rc.get("project", {}).get("review_type", ""),
                 "profile": (rc.get("project", {}).get("engineering_profile", [None]) or [None])[0] if rc.get("project", {}).get("engineering_profile") else "",
@@ -1937,10 +1942,13 @@ def main():
                 "scope_status": scope_status,
                 "viewpoint_framework": (rc.get("assessment_context", {}) or {}).get("viewpoint_framework", {}),
             }
+            ctx_from_rc = {**configured_context, **ctx_from_rc}
+            # Preserve structured context values while allowing canonical
+            # project fields and user standards to override duplicates.
             user_stds = rc.get("standards", {}).get("user_overrides", {})
             confirmed = rc.get("standards", {}).get("confirmed_by_user", False)
             if user_stds:
-                ctx_from_rc["standards"] = dict(user_stds)
+                ctx_from_rc.setdefault("standards", {}).update(user_stds)
             ctx_from_rc.setdefault("standards", {})["confirmed_by_user"] = confirmed
             # write as resolved-config for manifest
             resolved_dir = pathlib.Path(a.out) / ".tmp"
