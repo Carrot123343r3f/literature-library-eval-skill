@@ -1,0 +1,103 @@
+{
+  "sources": {
+    "OpenAlex": {
+      "status": "complete",
+      "items": [
+        {
+          "DOI": "10.9999/3dgs.demo.001",
+          "title": "Gaussian Splatting for Real-Time Radiance Field Rendering"
+        },
+        {
+          "DOI": "10.9999/3dgs.demo.002",
+          "title": "Mip-Splatting: Alias-free 3D Gaussian Splatting"
+        },
+        {
+          "DOI": "10.9999/3dgs.demo.003",
+          "title": "2D Gaussian Splatting for Geometrically Accurate Radiance Fields"
+        },
+        {
+          "DOI": "10.9999/3dgs.demo.004",
+          "title": "Compact 3D Gaussian Splatting with Structured Pruning"
+        },
+        {
+          "DOI": "10.9999/3dgs.demo.005",
+          "title": "Scaffold-GS: Structured 3D Gaussians for View-Adaptive Rendering"
+        },
+        {
+          "DOI": "10.9999/3dgs.demo.006",
+          "title": "Efficient Gaussian Splatting under a Mobile Memory Budget"
+        },
+        {
+          "DOI": "10.9999/3dgs.demo.007",
+          "title": "4D Gaussian Splatting for Real-Time Dynamic Scene Rendering"
+        },
+        {
+          "DOI": "10.9999/3dgs.demo.008",
+          "title": "Deformable 3D Gaussians for Monocular Dynamic Reconstruction"
+        }
+      ]
+    },
+    "Crossref": {
+      "status": "complete",
+      "items": [
+        {
+          "DOI": "10.9999/3dgs.demo.005",
+          "title": "Scaffold-GS: Structured 3D Gaussians for View-Adaptive Rendering"
+        },
+        {
+          "DOI": "10.9999/3dgs.demo.006",
+          "title": "Efficient Gaussian Splatting under a Mobile Memory Budget"
+        },
+        {
+          "DOI": "10.9999/3dgs.demo.007",
+          "title": "4D Gaussian Splatting for Real-Time Dynamic Scene Rendering"
+        },
+        {
+          "DOI": "10.9999/3dgs.demo.008",
+          "title": "Deformable 3D Gaussians for Monocular Dynamic Reconstruction"
+        },
+        {
+          "DOI": "10.9999/3dgs.demo.009",
+          "title": "Gaussian Flow Fields for Long-Horizon Dynamic View Synthesis"
+        },
+        {
+          "DOI": "10.9999/3dgs.demo.010",
+          "title": "StreetGaussian: Street-View Reconstruction with 3D Gaussians"
+        },
+        {
+          "DOI": "10.9999/3dgs.demo.011",
+          "title": "Gaussian-SLAM: Photo-Realistic Dense Mapping with Gaussian Primitives"
+        },
+        {
+          "DOI": "10.9999/3dgs.demo.012",
+          "title": "Gaussian Avatars for Real-Time Digital Human Rendering"
+        }
+      ]
+    },
+    "arXiv": {
+      "status": "complete",
+      "items": [
+        {
+          "DOI": "10.9999/3dgs.demo.002",
+          "title": "Mip-Splatting: Alias-free 3D Gaussian Splatting"
+        },
+        {
+          "DOI": "10.9999/3dgs.demo.003",
+          "title": "2D Gaussian Splatting for Geometrically Accurate Radiance Fields"
+        },
+        {
+          "DOI": "10.9999/3dgs.demo.004",
+          "title": "Compact 3D Gaussian Splatting with Structured Pruning"
+        },
+        {
+          "DOI": "10.9999/3dgs.demo.005",
+          "title": "Scaffold-GS: Structured 3D Gaussians for View-Adaptive Rendering"
+        },
+        {
+          "DOI": "10.9999/3dgs.demo.006",
+          "title": "Efficient Gaussian Splatting under a Mobile Memory Budget"
+        }
+      ]
+    }
+  }
+}

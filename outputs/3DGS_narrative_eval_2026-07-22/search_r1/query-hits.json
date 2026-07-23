@@ -1,0 +1,50 @@
+[
+  {
+    "title": "Gaussian Splatting for Real-Time Radiance Field Rendering",
+    "DOI": "10.9999/3dgs.demo.001",
+    "openalex_id": "W_DEMO_00",
+    "source": "OpenAlex"
+  },
+  {
+    "title": "Mip-Splatting: Alias-free 3D Gaussian Splatting",
+    "DOI": "10.9999/3dgs.demo.002",
+    "openalex_id": "W_DEMO_01",
+    "source": "OpenAlex"
+  },
+  {
+    "title": "2D Gaussian Splatting for Geometrically Accurate Radiance Fields",
+    "DOI": "10.9999/3dgs.demo.003",
+    "openalex_id": "W_DEMO_02",
+    "source": "OpenAlex"
+  },
+  {
+    "title": "Compact 3D Gaussian Splatting with Structured Pruning",
+    "DOI": "10.9999/3dgs.demo.004",
+    "openalex_id": "W_DEMO_03",
+    "source": "OpenAlex"
+  },
+  {
+    "title": "Scaffold-GS: Structured 3D Gaussians for View-Adaptive Rendering",
+    "DOI": "10.9999/3dgs.demo.005",
+    "openalex_id": "W_DEMO_04",
+    "source": "OpenAlex"
+  },
+  {
+    "title": "Efficient Gaussian Splatting under a Mobile Memory Budget",
+    "DOI": "10.9999/3dgs.demo.006",
+    "openalex_id": "W_DEMO_05",
+    "source": "OpenAlex"
+  },
+  {
+    "title": "4D Gaussian Splatting for Real-Time Dynamic Scene Rendering",
+    "DOI": "10.9999/3dgs.demo.007",
+    "openalex_id": "W_DEMO_06",
+    "source": "OpenAlex"
+  },
+  {
+    "title": "Gaussian Rendering for Robotics",
+    "DOI": "10.9999/3dgs.demo.new.01",
+    "openalex_id": "W_DEMO_NEW_01",
+    "source": "OpenAlex"
+  }
+]

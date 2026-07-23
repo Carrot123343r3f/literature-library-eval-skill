@@ -1,0 +1,82 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-07-23T05:09:07.583999+00:00",
+  "run_audit_version": "model-x-2026-07-21",
+  "git_commit": "23b00e57d98ed5e3518cd2ce08caeb8f8272bdb7",
+  "run_audit_sha256": "704ac22046278747420d359e0dfd4bf6984308ad1f5ec9beb408a33cb9e2ba52",
+  "python_version": "3.13.5",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "review_type": "叙事综述",
+  "standards_applied": {
+    "confirmed_by_user": true,
+    "a1_min_recall": 0.75,
+    "a2_min_recall": 0.7,
+    "f_access_rate": 0.6,
+    "f_provenance_rate": 0.85,
+    "f_core_metadata_rate": 0.9,
+    "f_abstract_rate": 0.8,
+    "d_freshness_days": 30,
+    "b_ggr_threshold": 0.02,
+    "b_drr_threshold": 0.05,
+    "balance_top_share_warning": 0.8,
+    "balance_cv_warning": 1.0,
+    "balance_gini_warning": 0.6,
+    "balance_shannon_low_warning": 0.45,
+    "balance_shannon_high_warning": 0.95,
+    "topic_top_share_warning": 0.7,
+    "topic_cv_warning": 0.8,
+    "topic_gini_warning": 0.5,
+    "topic_shannon_low_warning": 0.55,
+    "topic_target_tvd_warning": 0.25,
+    "topic_min_sources": 2,
+    "topic_source_top_share_warning": 0.8,
+    "viewpoint_min_classified_fraction": 0.5,
+    "viewpoint_max_dominant_share": 0.9,
+    "viewpoint_min_counterevidence": 3
+  },
+  "record_source_paths": false,
+  "input_files": {
+    "benchmark": {
+      "provided": true,
+      "sha256": "86a5401fad44f6b7d18f41acd2beafb497e8fcd1c8517dac9d45bd9eacba65fd",
+      "copied_to": "inputs\\benchmark__86a5401fad44.json",
+      "source_filename": "gold_set.json"
+    },
+    "context": {
+      "provided": true,
+      "sha256": "d8febebc9fa6f5254dd0093a0ef7ae1b43d7071a67138c5462fe2b21f22d391b",
+      "copied_to": "inputs\\context__d8febebc9fa6.json",
+      "source_filename": "resolved-config.json"
+    },
+    "evidence-manifest": {
+      "provided": true,
+      "sha256": "8a1982770f342925a68d0fb80bee17569a3cf8dc0854a87f7a9ca40bf644754b",
+      "copied_to": "inputs\\evidence-manifest__8a1982770f34.json",
+      "source_filename": "evidence-manifest.json"
+    },
+    "gold": {
+      "provided": true,
+      "sha256": "86a5401fad44f6b7d18f41acd2beafb497e8fcd1c8517dac9d45bd9eacba65fd",
+      "copied_to": "inputs\\gold__86a5401fad44.json",
+      "source_filename": "gold_set.json"
+    },
+    "library": {
+      "provided": true,
+      "sha256": "6898e203b17b3bf4d78382a246020bc4c0b4c01e3851b3ee4f48b57488ecac69",
+      "source_filename": "library.json",
+      "copied_to": "inputs\\library__6898e203b17b.json"
+    },
+    "query-hits": {
+      "provided": true,
+      "sha256": "da6a3ceff738e9f82adfb9106be8de4d14df2f5348aa354237654775dc3d0afe",
+      "copied_to": "inputs\\query-hits__da6a3ceff738.json",
+      "source_filename": "query-hits.json"
+    },
+    "search-meta": {
+      "provided": true,
+      "sha256": "a682d511a2208ff291608fd6073ef88638962faf7b51fdf22dc1bccdc2b379b9",
+      "copied_to": "inputs\\search-meta__a682d511a220.json",
+      "source_filename": "search_meta.json"
+    }
+  }
+}

@@ -1,6 +1,8 @@
-# 首次确认模板
+# 后续确认模板（不是固定首轮开场）
 
-**给 AI 的指令**：首次调用时，用**一条消息**完成以下确认。根据用户已提供的信息跳过已知项、推断智能默认值，只问缺失的。按四个批次组织，每批用加粗标题；逐批逐项确认，推荐项放第一个并标注"(推荐)"。确认后不中断常规工作。
+> 首轮开场必须使用 `intake-protocol.md` 的“固定首轮开场”，一次最多三个问题。本文件仅用于首轮后按需补充信息；其中的历史格式/连接选项不代表当前脚本具备直接导入能力。
+
+**给 AI 的指令**：首轮之后才使用本模板。根据用户已提供的信息跳过已知项，只问当前流程确实需要的缺口；一次最多三个问题。不要把本文件的全部批次一次性展示给用户。
 
 ---
 
@@ -35,12 +37,10 @@
 
 **要收集的**：库在哪、什么格式、大约多少条
 
-**常见场景**：
-- Zotero 本地客户端（已配 MCP → 自动检测 `mcpServers.zotero`；需确认 Zotero 正在运行）
-- Zotero Web API（有 library ID + API key → `pyzotero` 直连）
-- Zotero 导出 BibTeX/CSV 文件
-- 本地 PDF 目录（按子方向分类，文件名含 arXiv ID / DOI）
-- 纯题录 CSV / JSON / RIS 文件
+**当前可执行的场景**：
+- JSON 题录文件（完整支持；供 `run_audit.py` 直接读取）
+- Zotero/BibTeX/CSV/RIS/PDF 目录（可由 AI 协助整理、规范化为 JSON；不是脚本的直接导入器）
+- 只有题目（可先构建检索与候选锚点计划，A–F 会如实保留缺失项）
 
 **智能默认**：若 MCP 或环境变量已配 Zotero→自动推荐；否则问路径。
 
@@ -56,7 +56,7 @@
 
 ### 2.2 数据源
 
-- **开放优先 + 在线补全**（推荐）：OpenAlex / Semantic Scholar / arXiv / Crossref / Europe PMC；可用时启用已配 Zotero/MCP；对抽样子集调在线 API 补引用数与 venue。**首次使用会通过 `search_for_eval.py` 自主执行一轮检索**，产出 A2 检索式灵敏度（实测）和 B 饱和度首轮 GGR（初始值）。
+- **开放优先 + 在线补全**（推荐）：无用户锚点或检索式时，首轮通过 `run_initial_assessment.py` 自动建立多源候选锚点、生成 q0 + 原子变体，并给出 A1–A3 与检索式诊断。q0→q* 只用于优化检索式和 A2；固定稳健检索式的 `saturation_rounds` 未提供前，B1/B2 不可评估，B3 显示路径与独立验证缺口；`automated-screening` 只说明证据来自自动初筛。它不完成引文追踪、标准/指南路径或正式筛选，首轮不能声称检索已趋稳。
 - **仅离线/本地**：只用题录元数据 + 本地 pdf，不调在线 API（E 维标不可评估）
 - **仅指定来源**：严格按用户列出的来源
 
@@ -149,6 +149,6 @@
 | `standards` | 2.2/2.3 | 各项阈值（见 `engineering-standards.md`），默认按综述类型分层（叙事 A1≥0.75 / 系统 A1≥0.90 / 快速 A1≥0.60 / 伞式 A1≥0.90） | 总表·标准列 |
 | `tier1_venues` | 3.5 | Tier-1 venue 关键字列表 | E2 计算 |
 | `last_successful_search` | 执行时 | `{source: date}` 各来源检索日期 | D1 计算 |
-| `search_rounds` / `planned_pathways` / `source_marginal_yields` / `independent_validation_passed` | 执行时 | B 饱和度过程数据 | B1/B2/B3 计算 |
+| `search_iterations` / `saturation_rounds` / `planned_pathways` / `independent_validation_passed` | 执行时 | 检索式优化与固定稳健检索式的 B 饱和度过程数据 | A2/B1/B2/B3 计算 |
 
 未提供的字段 → 对应评估项标 `not_assessable`，报告如实说明缺失输入。

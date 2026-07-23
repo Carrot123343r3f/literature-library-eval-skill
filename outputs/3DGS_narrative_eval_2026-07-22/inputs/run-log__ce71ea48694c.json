@@ -1,0 +1,31 @@
+{
+  "queries": [
+    {
+      "source": "OpenAlex",
+      "query": "(3D Gaussian Splatting OR 3DGS) AND (rendering OR reconstruction)",
+      "fields": "title,abstract,doi,publication_year",
+      "date": "2026-07-20",
+      "filters": "language:en;year:2023-2026",
+      "result_count": 86,
+      "completion_status": "complete"
+    },
+    {
+      "source": "OpenAlex",
+      "query": "(3D Gaussian Splatting OR 3DGS) AND dynamic",
+      "fields": "title,abstract,doi,publication_year",
+      "date": "2026-07-21",
+      "filters": "language:en;year:2023-2026",
+      "result_count": 54,
+      "completion_status": "complete"
+    },
+    {
+      "source": "OpenAlex",
+      "query": "title:(3D Gaussian Splatting OR 3DGS)",
+      "fields": "title,abstract,doi,publication_year",
+      "date": "2026-07-22",
+      "filters": "language:en;year:2023-2026",
+      "result_count": 31,
+      "completion_status": "complete"
+    }
+  ]
+}

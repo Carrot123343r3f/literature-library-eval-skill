@@ -1,0 +1,208 @@
+{
+  "queries": [
+    {
+      "query_id": "q0",
+      "origin": "user_provided",
+      "query": "(3D Gaussian Splatting OR 3DGS) AND (rendering OR reconstruction)",
+      "source": "OpenAlex",
+      "date": "2026-07-20",
+      "hits": 86,
+      "status": "complete"
+    },
+    {
+      "query_id": "q1",
+      "origin": "agent_refined",
+      "query": "(3D Gaussian Splatting OR 3DGS) AND dynamic",
+      "source": "OpenAlex",
+      "date": "2026-07-21",
+      "hits": 54,
+      "status": "complete"
+    },
+    {
+      "query_id": "q2",
+      "origin": "agent_refined",
+      "query": "title:(3D Gaussian Splatting OR 3DGS)",
+      "source": "OpenAlex",
+      "date": "2026-07-22",
+      "hits": 31,
+      "status": "complete"
+    }
+  ],
+  "search_rounds": [],
+  "saturation_rounds": [
+    {
+      "round_id": "sat-r1",
+      "query_id": "q2",
+      "query_status": "frozen_robust",
+      "completed": true,
+      "core_before": 12,
+      "included_high": 1,
+      "screening_status": "screened",
+      "pathway_yields": [
+        {
+          "pathway": "db_boolean",
+          "completed": true,
+          "yield": 0.04
+        },
+        {
+          "pathway": "backward_citation",
+          "completed": true,
+          "yield": 0.03
+        },
+        {
+          "pathway": "forward_citation",
+          "completed": true,
+          "yield": 0.01
+        },
+        {
+          "pathway": "related_articles",
+          "completed": true,
+          "yield": 0.02
+        },
+        {
+          "pathway": "standards_guidelines",
+          "completed": true,
+          "yield": 0.0
+        }
+      ]
+    },
+    {
+      "round_id": "sat-r2",
+      "query_id": "q2",
+      "query_status": "frozen_robust",
+      "completed": true,
+      "core_before": 13,
+      "included_high": 0,
+      "screening_status": "screened",
+      "pathway_yields": [
+        {
+          "pathway": "db_boolean",
+          "completed": true,
+          "yield": 0.01
+        },
+        {
+          "pathway": "backward_citation",
+          "completed": true,
+          "yield": 0.0
+        },
+        {
+          "pathway": "forward_citation",
+          "completed": true,
+          "yield": 0.01
+        },
+        {
+          "pathway": "related_articles",
+          "completed": true,
+          "yield": 0.0
+        },
+        {
+          "pathway": "standards_guidelines",
+          "completed": true,
+          "yield": 0.0
+        }
+      ]
+    },
+    {
+      "round_id": "sat-r3",
+      "query_id": "q2",
+      "query_status": "frozen_robust",
+      "completed": true,
+      "core_before": 13,
+      "included_high": 0,
+      "screening_status": "screened",
+      "pathway_yields": [
+        {
+          "pathway": "db_boolean",
+          "completed": true,
+          "yield": 0.0
+        },
+        {
+          "pathway": "backward_citation",
+          "completed": true,
+          "yield": 0.0
+        },
+        {
+          "pathway": "forward_citation",
+          "completed": true,
+          "yield": 0.0
+        },
+        {
+          "pathway": "related_articles",
+          "completed": true,
+          "yield": 0.0
+        },
+        {
+          "pathway": "standards_guidelines",
+          "completed": true,
+          "yield": 0.0
+        }
+      ]
+    }
+  ],
+  "search_iterations": [
+    {
+      "iteration_id": "q0",
+      "change_type": "initial",
+      "change_description": "执行用户提供的初始检索式",
+      "execution_date": "2026-07-20",
+      "decision": "continue"
+    },
+    {
+      "iteration_id": "q1",
+      "change_type": "add_synonym",
+      "change_description": "加入 dynamic 术语",
+      "execution_date": "2026-07-21",
+      "decision": "continue"
+    },
+    {
+      "iteration_id": "q2",
+      "change_type": "modify_field",
+      "change_description": "增加标题字段诊断",
+      "execution_date": "2026-07-22",
+      "decision": "a2_stop"
+    }
+  ],
+  "planned_pathways": [
+    "db_boolean",
+    "backward_citation",
+    "forward_citation",
+    "related_articles",
+    "standards_guidelines"
+  ],
+  "independent_pathways": [
+    {
+      "pathway": "db_boolean",
+      "completed": true,
+      "yield": 0.04
+    },
+    {
+      "pathway": "backward_citation",
+      "completed": true,
+      "yield": 0.03
+    },
+    {
+      "pathway": "forward_citation",
+      "completed": true,
+      "yield": 0.01
+    },
+    {
+      "pathway": "related_articles",
+      "completed": true,
+      "yield": 0.02
+    },
+    {
+      "pathway": "standards_guidelines",
+      "completed": true,
+      "yield": 0.0
+    }
+  ],
+  "dev_recall": 0.875,
+  "dev_recall_total": 8,
+  "validation_recall": 0.75,
+  "validation_recall_total": 8,
+  "validation_source": "冻结的外部时间留出集",
+  "a2_evidence_status": "measured",
+  "initial_query_origin": "user_provided",
+  "first_round_discovery_ggr": 0.25,
+  "potential_additions_count": 8
+}

@@ -1,4 +1,4 @@
-# 默认阈值（模型 X，A1–A3、B1–B3、C1–C3、D1–D4、E1–E2、F1–F6，共 21 子项）
+# 默认阈值（模型 X，A1–A3、B1–B3、C1–C4、D1–D4、E1–E2、F1–F6，共 22 子项）
 
 **所有阈值均为参考值，不代表文献库的真实质量；pass/warning/fail 是自动化诊断提示，具体判断需结合研究问题与领域惯例做人工裁决。**
 
@@ -35,7 +35,10 @@
   "topic_shannon_low_warning": 0.55,
   "topic_target_tvd_warning": 0.25,
   "topic_min_sources": 2,
-  "topic_source_top_share_warning": 0.80
+  "topic_source_top_share_warning": 0.80,
+  "viewpoint_min_classified_fraction": 0.50,
+  "viewpoint_max_dominant_share": 0.90,
+  "viewpoint_min_counterevidence": 3
 }
 ```
 
@@ -105,5 +108,6 @@
 **伞式专用评估子项**（见 [indicator-dictionary.md](indicator-dictionary.md)）：
 
 - **A4 综述类型确认**：库内文献中综述/survey 论文的占比与确认方法
-- **C4 综述间覆盖分布**：纳入综述的子主题、方法学类型、检索窗口分布
+- **C4 观点偏斜度**：先声明中心主张；分类覆盖至少 50%，对可争议主张要求单方方向性证据 ≤90%、反方至少 3 篇。单边只提示补检，不判失败。
+- **C5 综述间覆盖分布**：纳入综述的子主题、方法学类型、检索窗口分布
 - **F7 综述质量评估就绪度**：全文获取（AMSTAR-2/ROBIS 前提）+ 综述质量评估标注状态

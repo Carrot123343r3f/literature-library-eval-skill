@@ -1,0 +1,17 @@
+{
+  "first_round_discovery_rate": 0.1,
+  "discovery_candidate_count": 1,
+  "included_high": 0,
+  "ggr_status": "not_assessable_until_screened",
+  "additions": [
+    {
+      "DOI": "10.1145/3326362",
+      "arxiv": "",
+      "title": "Dynamic Graph CNN for Learning on Point Clouds",
+      "openalex_id": "https://openalex.org/W2979750740",
+      "cited_by_count": 6802,
+      "year": 2019,
+      "query_label": "q0-user"
+    }
+  ]
+}

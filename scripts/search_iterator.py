@@ -10,6 +10,7 @@ produced by AI-assisted search rounds and validates protocol compliance:
 
 Usage:
     python search_iterator.py validate --iterations iterations.json
+    python search_iterator.py validate --iterations search_meta.json
     python search_iterator.py table --iterations iterations.json --output comparison.md
 
 The iterations.json schema:
@@ -39,6 +40,10 @@ The iterations.json schema:
 import argparse, json, sys, pathlib
 from collections import Counter
 sys.stdout.reconfigure(encoding='utf-8')
+try:
+    from stable_ids import stable_ids
+except ImportError:  # pragma: no cover
+    from scripts.stable_ids import stable_ids
 
 ALLOWED_CHANGE_TYPES = {
     "initial",           # First round — no prior query exists
@@ -60,7 +65,74 @@ def load_json(path):
         return json.load(f)
 
 
-def validate(data, strict=False):
+def stable_item_ids(items):
+    """Return all stable identifiers, not only DOI, for overlap checks."""
+    ids = set()
+    for item in items:
+        if isinstance(item, dict):
+            ids.update(stable_ids(item))
+    return ids
+
+
+def normalize_input(data):
+    """Accept the search_meta.json emitted by search_for_eval.py.
+
+    The iterator keeps its richer iterations.json contract for hand-curated
+    rounds, but first-round diagnostics should be inspectable without a
+    manual copy/paste bridge.  Missing dev/validation sets remain missing and
+    are reported by validate(); this adapter does not manufacture evidence.
+    """
+    if data.get("iterations"):
+        return data
+
+    rounds = data.get("search_iterations") or data.get("search_rounds") or []
+    if not rounds:
+        return data
+
+    query_rows = data.get("queries") or []
+    by_label = {}
+    for row in query_rows:
+        label = row.get("label") or row.get("query_id")
+        if label:
+            by_label.setdefault(label, []).append(row)
+
+    normalized = []
+    for index, row in enumerate(rounds):
+        iteration_id = row.get("iteration_id") or row.get("pathway") or f"v{index + 1}"
+        # search_for_eval labels query executions (q0/q1), while its
+        # search_rounds use pathway labels (openalex-first-round).  If there
+        # is no exact label match, retain the recorded query executions rather
+        # than emitting an invalid empty iteration.
+        query_rows_for_iteration = by_label.get(iteration_id) or query_rows
+        queries = {
+            (q.get("source") or f"source_{n + 1}"): q.get("query", "")
+            for n, q in enumerate(query_rows_for_iteration)
+        }
+        change_type = row.get("change_type") or ("initial" if index == 0 else "add_synonym")
+        results = dict(row.get("results") or {})
+        for key in ("core_before", "included_high", "discovery_candidates", "dev_recall", "validation_recall"):
+            if key in row and key not in results:
+                results[key] = row[key]
+        normalized.append({
+            "iteration_id": iteration_id,
+            "parent_iteration": row.get("parent_iteration"),
+            "change_type": change_type,
+            "changed_units": row.get("changed_units", [] if change_type == "initial" else None),
+            "change_description": row.get("change_description", row.get("note", "")),
+            "change_source": row.get("change_source", "search_for_eval.py"),
+            "queries": queries,
+            "execution_date": row.get("execution_date") or (query_rows_for_iteration[0].get("date") if query_rows_for_iteration else None),
+            "results": results,
+            "failures": row.get("failures", []),
+            "decision": row.get("decision", "continue"),
+        })
+
+    adapted = dict(data)
+    adapted["iterations"] = normalized
+    return adapted
+
+
+def validate(data, strict=False, max_iterations=MAX_ITERATIONS):
     """Validate iterations against the search strategy protocol. Returns (errors, warnings)."""
     errors, warnings = [], []
 
@@ -76,13 +148,28 @@ def validate(data, strict=False):
                         "(evidence status: estimated)")
     else:
         # Check overlap
-        dev_dois = {e.get("doi", "").lower() for e in dev if e.get("doi")}
-        val_dois = {e.get("doi", "").lower() for e in val if e.get("doi")}
-        overlap = dev_dois & val_dois
+        overlap = stable_item_ids(dev) & stable_item_ids(val)
         if overlap:
-            errors.append(f"Dev/validation sets overlap on {len(overlap)} DOI(s): {sorted(overlap)[:5]}")
+            errors.append(f"Dev/validation sets overlap on {len(overlap)} stable identifier(s): {sorted(overlap)[:5]}")
         if not data.get("dev_validation_overlap_check"):
             warnings.append("dev_validation_overlap_check not explicitly declared")
+
+    # ── Procedural isolation manifest ──
+    evidence = data.get("evidence_manifest", {})
+    if evidence:
+        validation_meta = evidence.get("datasets", {}).get("validation", {})
+        if validation_meta.get("used_tested_query"):
+            errors.append("evidence_manifest: validation set was discovered by the tested query")
+        if validation_meta.get("used_for_query_optimization"):
+            errors.append("evidence_manifest: validation set was exposed to query optimization")
+        if not validation_meta.get("frozen_at"):
+            warnings.append("evidence_manifest: validation set has no frozen_at timestamp")
+        relationships = evidence.get("relationships", {})
+        if (relationships.get("a2_validation_dataset") and
+                relationships.get("a2_validation_dataset") == relationships.get("b3_validation_dataset")):
+            warnings.append("evidence_manifest: A2 and B3 reuse the same validation dataset")
+        if set(relationships.get("a3_source_ids", [])) & set(relationships.get("b2_pathway_source_ids", [])):
+            warnings.append("evidence_manifest: A3 and B2 share evidence source IDs")
 
     # ── Iterations ──
     iterations = data.get("iterations", [])
@@ -103,6 +190,9 @@ def validate(data, strict=False):
             parent = it.get("parent_iteration")
             if not parent and i > 0:
                 warnings.append(f"{it_id}: non-initial iteration has no parent_iteration")
+            changed_units = it.get("changed_units")
+            if not isinstance(changed_units, list) or len(changed_units) != 1:
+                errors.append(f"{it_id}: non-initial iteration must declare exactly one changed_units entry")
 
         # Required fields
         for field in ("change_description", "change_source", "queries", "execution_date", "results"):
@@ -126,8 +216,8 @@ def validate(data, strict=False):
             a2_stopped = None
 
         decisions = [it.get("decision") for it in iterations]
-        if decisions[-1] == "continue" and len(iterations) >= MAX_ITERATIONS:
-            warnings.append(f"Reached {MAX_ITERATIONS} iterations without stop decision — "
+        if decisions[-1] == "continue" and len(iterations) >= max_iterations:
+            warnings.append(f"Reached {max_iterations} iterations without stop decision — "
                            "review whether search can be further improved")
 
     # ── Pathway types ──
@@ -220,18 +310,20 @@ def main():
     sp = p.add_subparsers(dest="command")
 
     vp = sp.add_parser("validate", help="Validate iterations.json against protocol")
-    vp.add_argument("--iterations", required=True, help="iterations.json file")
+    vp.add_argument("--iterations", required=True, help="iterations.json or search_meta.json file")
     vp.add_argument("--strict", action="store_true", help="Treat warnings as errors (non-zero exit)")
+    vp.add_argument("--max-iterations", type=int, default=MAX_ITERATIONS,
+                    help=f"Maximum allowed rounds before a stop-decision warning (default: {MAX_ITERATIONS})")
 
     tp = sp.add_parser("table", help="Generate comparison table from iterations.json")
-    tp.add_argument("--iterations", required=True, help="iterations.json file")
+    tp.add_argument("--iterations", required=True, help="iterations.json or search_meta.json file")
     tp.add_argument("--output", help="Output markdown file (stdout if omitted)")
 
     a = p.parse_args()
 
     if a.command == "validate":
-        data = load_json(a.iterations)
-        errors, warnings = validate(data, strict=a.strict)
+        data = normalize_input(load_json(a.iterations))
+        errors, warnings = validate(data, strict=a.strict, max_iterations=max(1, a.max_iterations))
         if errors:
             print(f"❌ {len(errors)} error(s):")
             for e in errors:
@@ -251,7 +343,7 @@ def main():
                 sys.exit(1)
 
     elif a.command == "table":
-        data = load_json(a.iterations)
+        data = normalize_input(load_json(a.iterations))
         table = generate_comparison_table(data)
         matrix = generate_pathway_matrix(data)
         output = table + "\n\n" + matrix if matrix else table

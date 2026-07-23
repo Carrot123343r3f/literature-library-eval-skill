@@ -49,7 +49,7 @@ Five parameters, none a substitute for the others: Top-share, CV, Gini, Shannon 
 
 Profile-aware: AI/communications (3 years, 40%), mechanical/materials (5 years, 35%), civil/energy/aerospace (7 years, 30%). D2 degrades to warning when year completeness <50% — the numerator cannot hide missing data.
 
-### E · Impact Signals — Background context only
+### E · Impact & Bibliometric Context — Background context only
 
 h-core and Tier-1 venue coverage. No hard thresholds. High citations ≠ high quality. Actual research quality assessment requires design-appropriate critical appraisal tools.
 

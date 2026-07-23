@@ -1,0 +1,443 @@
+[
+  {
+    "DOI": "10.1016/j.media.2017.07.005",
+    "arxiv": "",
+    "title": "A survey on deep learning in medical image analysis",
+    "openalex_id": "https://openalex.org/W2592929672",
+    "cited_by_count": 14617,
+    "year": 2017,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1186/s40537-019-0197-0",
+    "arxiv": "",
+    "title": "A survey on Image Data Augmentation for Deep Learning",
+    "openalex_id": "https://openalex.org/W2954996726",
+    "cited_by_count": 12611,
+    "year": 2019,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1016/j.neuroimage.2011.09.015",
+    "arxiv": "",
+    "title": "FSL",
+    "openalex_id": "https://openalex.org/W2977883299",
+    "cited_by_count": 11946,
+    "year": 2011,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1186/1758-2946-4-17",
+    "arxiv": "",
+    "title": "Avogadro: an advanced semantic chemical editor, visualization, and analysis platform",
+    "openalex_id": "https://openalex.org/W2028046413",
+    "cited_by_count": 10482,
+    "year": 2012,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1145/3326362",
+    "arxiv": "",
+    "title": "Dynamic Graph CNN for Learning on Point Clouds",
+    "openalex_id": "https://openalex.org/W2979750740",
+    "cited_by_count": 6802,
+    "year": 2019,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1109/tmi.2014.2377694",
+    "arxiv": "",
+    "title": "The Multimodal Brain Tumor Image Segmentation Benchmark (BRATS)",
+    "openalex_id": "https://openalex.org/W1641498739",
+    "cited_by_count": 6606,
+    "year": 2014,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1038/nmat2614",
+    "arxiv": "",
+    "title": "Emerging applications of stimuli-responsive polymer materials",
+    "openalex_id": "https://openalex.org/W2141947008",
+    "cited_by_count": 5660,
+    "year": 2010,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1145/3592433",
+    "arxiv": "",
+    "title": "3D Gaussian Splatting for Real-Time Radiance Field Rendering",
+    "openalex_id": "https://openalex.org/W4385318467",
+    "cited_by_count": 4667,
+    "year": 2023,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.2478/s11534-011-0096-2",
+    "arxiv": "",
+    "title": "Gwyddion: an open-source software for SPM data analysis",
+    "openalex_id": "https://openalex.org/W2022315563",
+    "cited_by_count": 4441,
+    "year": 2011,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1016/j.media.2016.10.004",
+    "arxiv": "",
+    "title": "Efficient multi-scale 3D CNN with fully connected CRF for accurate brain lesion segmentation",
+    "openalex_id": "https://openalex.org/W2301358467",
+    "cited_by_count": 3531,
+    "year": 2016,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1109/access.2019.2935192",
+    "arxiv": "",
+    "title": "Wireless Communications Through Reconfigurable Intelligent Surfaces",
+    "openalex_id": "https://openalex.org/W2968810373",
+    "cited_by_count": 3374,
+    "year": 2019,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1093/mnras/stx721",
+    "arxiv": "",
+    "title": "The clustering of galaxies in the completed SDSS-III Baryon Oscillation Spectroscopic Survey: cosmological analysis of the DR12 galaxy sample",
+    "openalex_id": "https://openalex.org/W2501864044",
+    "cited_by_count": 3149,
+    "year": 2017,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1039/c4nr01600a",
+    "arxiv": "",
+    "title": "Science and technology roadmap for graphene, related two-dimensional crystals, and hybrid systems",
+    "openalex_id": "https://openalex.org/W2024227324",
+    "cited_by_count": 3027,
+    "year": 2014,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1051/0004-6361/201220873",
+    "arxiv": "",
+    "title": "LOFAR: The LOw-Frequency ARray",
+    "openalex_id": "https://openalex.org/W2147626801",
+    "cited_by_count": 2698,
+    "year": 2013,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1561/2200000056",
+    "arxiv": "",
+    "title": "An Introduction to Variational Autoencoders",
+    "openalex_id": "https://openalex.org/W2948978827",
+    "cited_by_count": 2538,
+    "year": 2019,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1038/s41524-019-0221-0",
+    "arxiv": "",
+    "title": "Recent advances and applications of machine learning in solid-state materials science",
+    "openalex_id": "https://openalex.org/W2968923792",
+    "cited_by_count": 2431,
+    "year": 2019,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1098/rstb.2001.0915",
+    "arxiv": "",
+    "title": "A probabilistic atlas and reference system for the human brain: International Consortium for Brain Mapping (ICBM)",
+    "openalex_id": "https://openalex.org/W2143895814",
+    "cited_by_count": 2412,
+    "year": 2001,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1007/s10915-022-01939-z",
+    "arxiv": "",
+    "title": "Scientific Machine Learning Through Physics–Informed Neural Networks: Where we are and What’s Next",
+    "openalex_id": "https://openalex.org/W4288039037",
+    "cited_by_count": 2412,
+    "year": 2022,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.62906/bs.book.181",
+    "arxiv": "",
+    "title": "Inorganic Chemistry: Principles of Structure and Reactivity",
+    "openalex_id": "https://openalex.org/W4403733501",
+    "cited_by_count": 2395,
+    "year": 2024,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1038/nphoton.2015.201",
+    "arxiv": "",
+    "title": "Spin–orbit interactions of light",
+    "openalex_id": "https://openalex.org/W933184662",
+    "cited_by_count": 2250,
+    "year": 2015,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1016/j.acha.2010.04.005",
+    "arxiv": "",
+    "title": "Wavelets on graphs via spectral graph theory",
+    "openalex_id": "https://openalex.org/W2158787690",
+    "cited_by_count": 2219,
+    "year": 2010,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1523/jneurosci.2177-05.2005",
+    "arxiv": "",
+    "title": "Molecular, Structural, and Functional Characterization of Alzheimer's Disease: Evidence for a Relationship between Default Activity, Amyloid, and Memory",
+    "openalex_id": "https://openalex.org/W2158592797",
+    "cited_by_count": 2157,
+    "year": 2005,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1109/tpami.2020.3008413",
+    "arxiv": "",
+    "title": "Event-Based Vision: A Survey",
+    "openalex_id": "https://openalex.org/W3040838455",
+    "cited_by_count": 2084,
+    "year": 2020,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1002/qua.24481",
+    "arxiv": "",
+    "title": "Jaguar: A high‐performance quantum chemistry software program with strengths in life and materials sciences",
+    "openalex_id": "https://openalex.org/W2000815209",
+    "cited_by_count": 1801,
+    "year": 2013,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1038/s41524-017-0056-5",
+    "arxiv": "",
+    "title": "Machine learning in materials informatics: recent applications and prospects",
+    "openalex_id": "https://openalex.org/W2963784900",
+    "cited_by_count": 1792,
+    "year": 2017,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1038/s41586-019-1631-3",
+    "arxiv": "",
+    "title": "Resolving the fibrotic niche of human liver cirrhosis at single-cell level",
+    "openalex_id": "https://openalex.org/W2979595830",
+    "cited_by_count": 1754,
+    "year": 2019,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1109/tip.2007.911828",
+    "arxiv": "",
+    "title": "Sparse Representation for Color Image Restoration",
+    "openalex_id": "https://openalex.org/W2114122776",
+    "cited_by_count": 1734,
+    "year": 2007,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.3390/rs12101662",
+    "arxiv": "",
+    "title": "A Spatial-Temporal Attention-Based Method and a New Dataset for Remote Sensing Image Change Detection",
+    "openalex_id": "https://openalex.org/W3027225766",
+    "cited_by_count": 1731,
+    "year": 2020,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1038/s41467-022-29939-5",
+    "arxiv": "",
+    "title": "E(3)-equivariant graph neural networks for data-efficient and accurate interatomic potentials",
+    "openalex_id": "https://openalex.org/W4225405705",
+    "cited_by_count": 1718,
+    "year": 2022,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1021/acsnano.7b07460",
+    "arxiv": "",
+    "title": "Metallic Ti<sub>3</sub>C<sub>2</sub>T<sub><i>x</i></sub> MXene Gas Sensors with Ultrahigh Signal-to-Noise Ratio",
+    "openalex_id": "https://openalex.org/W2785184816",
+    "cited_by_count": 1653,
+    "year": 2018,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1371/journal.pbio.0050008",
+    "arxiv": "",
+    "title": "Large-Scale Mapping and Validation of Escherichia coli Transcriptional Regulation from a Compendium of Expression Profiles",
+    "openalex_id": "https://openalex.org/W2044525257",
+    "cited_by_count": 1651,
+    "year": 2007,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1109/tpami.2010.147",
+    "arxiv": "",
+    "title": "SIFT Flow: Dense Correspondence across Scenes and Its Applications",
+    "openalex_id": "https://openalex.org/W2090518410",
+    "cited_by_count": 1615,
+    "year": 2010,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1088/1367-2630/16/9/095002",
+    "arxiv": "",
+    "title": "Germanene: a novel two-dimensional germanium allotrope akin to graphene and silicene",
+    "openalex_id": "https://openalex.org/W2031985211",
+    "cited_by_count": 1593,
+    "year": 2014,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1103/revmodphys.81.387",
+    "arxiv": "",
+    "title": "Artificial Brownian motors: Controlling transport on the nanoscale",
+    "openalex_id": "https://openalex.org/W2069327268",
+    "cited_by_count": 1586,
+    "year": 2009,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1088/1367-2630/11/11/115012",
+    "arxiv": "",
+    "title": "Plasma medicine: an introductory review",
+    "openalex_id": "https://openalex.org/W2167347711",
+    "cited_by_count": 1581,
+    "year": 2009,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1038/s41596-022-00710-w",
+    "arxiv": "",
+    "title": "Using MetaboAnalyst 5.0 for LC–HRMS spectra processing, multi-omics integration and covariate adjustment of global metabolomics data",
+    "openalex_id": "https://openalex.org/W4283017342",
+    "cited_by_count": 1526,
+    "year": 2022,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1186/s13059-020-1926-6",
+    "arxiv": "",
+    "title": "Eleven grand challenges in single-cell data science",
+    "openalex_id": "https://openalex.org/W3005127469",
+    "cited_by_count": 1445,
+    "year": 2020,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1002/smll.200500006",
+    "arxiv": "",
+    "title": "Synthesis, Properties, and Applications of Iron Nanoparticles",
+    "openalex_id": "https://openalex.org/W1845242231",
+    "cited_by_count": 1425,
+    "year": 2005,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1523/jneurosci.0333-10.2010",
+    "arxiv": "",
+    "title": "Functional Connectivity and Brain Networks in Schizophrenia",
+    "openalex_id": "https://openalex.org/W2041951497",
+    "cited_by_count": 1415,
+    "year": 2010,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1088/2040-8978/19/1/013001",
+    "arxiv": "",
+    "title": "Roadmap on structured light",
+    "openalex_id": "https://openalex.org/W2550557946",
+    "cited_by_count": 1340,
+    "year": 2016,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1038/lsa.2016.133",
+    "arxiv": "",
+    "title": "Ultrafast laser processing of materials: from science to industry",
+    "openalex_id": "https://openalex.org/W2514605621",
+    "cited_by_count": 1335,
+    "year": 2016,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1016/j.apsadv.2021.100112",
+    "arxiv": "",
+    "title": "Systematic and collaborative approach to problem solving using X-ray photoelectron spectroscopy",
+    "openalex_id": "https://openalex.org/W3166170553",
+    "cited_by_count": 1330,
+    "year": 2021,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1007/s11692-009-9055-x",
+    "arxiv": "",
+    "title": "Advances in Geometric Morphometrics",
+    "openalex_id": "https://openalex.org/W1995980194",
+    "cited_by_count": 1320,
+    "year": 2009,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1094/pdis-03-15-0340-fe",
+    "arxiv": "",
+    "title": "Plant Disease Detection by Imaging Sensors – Parallels and Specific Demands for Precision Agriculture and Plant Phenotyping",
+    "openalex_id": "https://openalex.org/W2103959917",
+    "cited_by_count": 1307,
+    "year": 2015,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1561/2200000071",
+    "arxiv": "",
+    "title": "An Introduction to Deep Reinforcement Learning",
+    "openalex_id": "https://openalex.org/W3100366369",
+    "cited_by_count": 1266,
+    "year": 2018,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1016/j.optlaseng.2018.04.019",
+    "arxiv": "",
+    "title": "Phase shifting algorithms for fringe projection profilometry: A review",
+    "openalex_id": "https://openalex.org/W2804654620",
+    "cited_by_count": 1263,
+    "year": 2018,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1038/s41377-021-00658-8",
+    "arxiv": "",
+    "title": "Augmented reality and virtual reality displays: emerging technologies and future perspectives",
+    "openalex_id": "https://openalex.org/W3209992943",
+    "cited_by_count": 1246,
+    "year": 2021,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1103/revmodphys.82.3121",
+    "arxiv": "",
+    "title": "The Galactic Center massive black hole and nuclear star cluster",
+    "openalex_id": "https://openalex.org/W2016598507",
+    "cited_by_count": 1228,
+    "year": 2010,
+    "query_label": "q0-user"
+  },
+  {
+    "DOI": "10.1038/s41578-022-00460-x",
+    "arxiv": "",
+    "title": "End-to-end design of wearable sensors",
+    "openalex_id": "https://openalex.org/W4286560842",
+    "cited_by_count": 1182,
+    "year": 2022,
+    "query_label": "q0-user"
+  }
+]

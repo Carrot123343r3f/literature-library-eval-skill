@@ -2,8 +2,8 @@
 
 ## Pipeline
 
-> **Current state (v1.0)**: Steps 1–2, 6–9 are fully implemented in code.
-> Steps 3–5 are partially automated (single-round diagnostic search,
+> **Current implementation**: Steps 1–2, 6–9 are implemented in code.
+> Steps 3–5 are partly automated (first-run q0/atomic diagnostics,
 > automated candidate dedup) but rely on AI agent orchestration in
 > conversation for multi-round iteration, cross-database queries,
 > citation tracking, and formal screening. A one-shot end-to-end
@@ -48,9 +48,14 @@ User Intake (run-config.json)
 | `run-config-schema.json` | Single source of truth for evaluation inputs | ✅ |
 | `search-strategy-protocol.md` | Query iteration protocol | ✅ |
 | `indicator-registry.json` | Machine-readable indicator definitions | ✅ |
-| `search_for_eval.py` | Single-round diagnostic search | ✅ |
+| `run_initial_assessment.py` | No-anchor/no-query first-run orchestration; outputs A1–A3/B1–B3 with direct verdicts and explicit evidence tiers | ✅ |
+| `prepare_first_run_evidence.py` | Candidate-anchor auto-screening and deterministic dev/holdout preparation | ✅ |
+| `search_for_eval.py` | Profile-aware multi-source q0 + atomic-variant diagnostic search | ✅ |
 | `search_iterator.py` | Multi-round iteration validator | ✅ |
+| `evidence_isolation.py` | Evidence-set provenance and leakage checks | ✅ |
+| `collect_open_sources.py` | Open-source candidate snapshot collection | 🔧 |
 | `normalize_candidates.py` | Identifier dedup + version grouping | ✅ |
+| `validate_registry.py` | Validate a real audit output against the indicator registry | ✅ |
 | `run_audit.py` | A–F computation + report generation | ✅ |
 | `build_query_plan.py` | Cross-database query plan from PICO | 📋 |
 | `execute_search.py` | Multi-source search with pagination | 📋 |
@@ -63,9 +68,12 @@ User Intake (run-config.json)
 ## Data Contracts
 
 - **run-config.json**: Single entry point, validated against schema, relative paths resolved against config directory
+- **run-config execution**: `python scripts/run_audit.py --run-config run-config.json` uses `output.out_dir` when `--out` is omitted; explicit `--out` still overrides it
 - **search_meta.json**: Bridge between search execution and audit computation
+- **search_iterator.py** accepts either the curated `iterations.json` contract or the first-round `search_meta.json` emitted by `search_for_eval.py`; absent dev/validation evidence is still reported as a validation error/warning
 - **audit.json**: Machine-readable output with full indicator register
 - **manifest.json**: sha256, git commit, Python version — every input accounted for
+- **evidence-manifest.json**: dataset roles, source routes, freeze state, and A2/B3 + A3/B2 evidence reuse checks
 
 ## Extension Points
 
@@ -74,3 +82,7 @@ User Intake (run-config.json)
 3. **New indicators**: Add to indicator-registry.json → update run_audit.py → update report
 4. **New output formats**: Extend `write()` in run_audit.py
 5. **New review types**: Add threshold row + schema enum value
+
+## Agent-assisted evidence isolation
+
+The recommended workflow uses four procedural roles: Dataset Builder, Query Optimizer, Blind Evaluator, and Audit Agent. They may be separate threads, but independence is established by frozen artifacts and access boundaries, not memory separation alone. `evidence-manifest.json` is the machine-readable handoff contract.

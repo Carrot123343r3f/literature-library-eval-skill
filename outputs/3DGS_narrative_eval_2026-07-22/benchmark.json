@@ -1,0 +1,30 @@
+[
+  {
+    "title": "Gaussian Splatting for Real-Time Radiance Field Rendering",
+    "DOI": "10.9999/3dgs.demo.001"
+  },
+  {
+    "title": "Mip-Splatting: Alias-free 3D Gaussian Splatting",
+    "DOI": "10.9999/3dgs.demo.002"
+  },
+  {
+    "title": "2D Gaussian Splatting for Geometrically Accurate Radiance Fields",
+    "DOI": "10.9999/3dgs.demo.003"
+  },
+  {
+    "title": "Compact 3D Gaussian Splatting with Structured Pruning",
+    "DOI": "10.9999/3dgs.demo.004"
+  },
+  {
+    "title": "Scaffold-GS: Structured 3D Gaussians for View-Adaptive Rendering",
+    "DOI": "10.9999/3dgs.demo.005"
+  },
+  {
+    "title": "Efficient Gaussian Splatting under a Mobile Memory Budget",
+    "DOI": "10.9999/3dgs.demo.006"
+  },
+  {
+    "title": "Known missing 3DGS benchmark item",
+    "DOI": "10.9999/3dgs.demo.missing"
+  }
+]

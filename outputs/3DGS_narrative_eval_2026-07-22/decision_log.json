@@ -1,0 +1,76 @@
+{
+  "decisions": [
+    {
+      "item_id": "3DGS01",
+      "decision": "include",
+      "reason": "与主题基础表示与渲染直接相关，摘要提供可比较的实验或系统信息。",
+      "reviewer": "demo-reviewer"
+    },
+    {
+      "item_id": "3DGS02",
+      "decision": "include",
+      "reason": "与主题基础表示与渲染直接相关，摘要提供可比较的实验或系统信息。",
+      "reviewer": "demo-reviewer"
+    },
+    {
+      "item_id": "3DGS03",
+      "decision": "include",
+      "reason": "与主题基础表示与渲染直接相关，摘要提供可比较的实验或系统信息。",
+      "reviewer": "demo-reviewer"
+    },
+    {
+      "item_id": "3DGS04",
+      "decision": "include",
+      "reason": "与主题压缩与加速直接相关，摘要提供可比较的实验或系统信息。",
+      "reviewer": "demo-reviewer"
+    },
+    {
+      "item_id": "3DGS05",
+      "decision": "include",
+      "reason": "与主题压缩与加速直接相关，摘要提供可比较的实验或系统信息。",
+      "reviewer": "demo-reviewer"
+    },
+    {
+      "item_id": "3DGS06",
+      "decision": "include",
+      "reason": "与主题压缩与加速直接相关，摘要提供可比较的实验或系统信息。",
+      "reviewer": "demo-reviewer"
+    },
+    {
+      "item_id": "3DGS07",
+      "decision": "include",
+      "reason": "与主题动态场景与4D直接相关，摘要提供可比较的实验或系统信息。",
+      "reviewer": "demo-reviewer"
+    },
+    {
+      "item_id": "3DGS08",
+      "decision": "include",
+      "reason": "与主题动态场景与4D直接相关，摘要提供可比较的实验或系统信息。",
+      "reviewer": "demo-reviewer"
+    },
+    {
+      "item_id": "3DGS09",
+      "decision": "include",
+      "reason": "与主题动态场景与4D直接相关，摘要提供可比较的实验或系统信息。",
+      "reviewer": "demo-reviewer"
+    },
+    {
+      "item_id": "3DGS10",
+      "decision": "include",
+      "reason": "与主题应用与系统直接相关，摘要提供可比较的实验或系统信息。",
+      "reviewer": "demo-reviewer"
+    },
+    {
+      "item_id": "3DGS11",
+      "decision": "include",
+      "reason": "与主题应用与系统直接相关，摘要提供可比较的实验或系统信息。",
+      "reviewer": "demo-reviewer"
+    },
+    {
+      "item_id": "3DGS12",
+      "decision": "include",
+      "reason": "与主题应用与系统直接相关，摘要提供可比较的实验或系统信息。",
+      "reviewer": "demo-reviewer"
+    }
+  ]
+}

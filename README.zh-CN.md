@@ -1,24 +1,25 @@
 # 工程文献库审计
 
 <p align="center">
-  <strong>大多数综述在动笔之前就已经失败了。</strong>
+  <strong>一篇综述写成文字之前，先是一条证据链。</strong>
 </p>
 
 <p align="center">
-  不是因为写得不好，而是因为文献库本身就不完整——检索不可复现、看似饱和只是单一数据库的假象、主题均衡只是没收录对立证据。
-  <em>在写综述之前做一次结构审计，比写完被推翻省几个月的时间。</em>
+  它始于一份文献库、一条检索轨迹，以及一个常被推迟的问题：“这些证据真的撑得起我准备写下的论证吗？”
+  <em>在投入数月写作之前回答它，代价最低。</em>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/tests-18%20tests%20passing-22c55e" alt="Tests">
   <img src="https://img.shields.io/badge/license-MIT-3b82f6" alt="License">
-  <img src="https://img.shields.io/badge/indicators-21%20(%2B3%20umbrella)-8b5cf6" alt="Indicators">
+  <img src="https://img.shields.io/badge/indicators-22%20(%2B3%20umbrella)-8b5cf6" alt="Indicators">
   <img src="https://img.shields.io/badge/platform-Claude%20%7C%20Codex-6366f1" alt="Platform">
 </p>
 
 ---
 
 ## 这是什么
+
+这个项目审计的不只是文献库，也审计**产生这份文献库的检索策略**。一组论文不能脱离检索式、数据库、执行日期和筛选决策而被判断为“充分”。
 
 **工程文献库审计**是一个综述准备度诊断工具——在写综述之前，验证你的文献库和检索过程是否具备支撑一篇可信综述的结构性证据。它不帮你写综述，不给一个模糊的综合分，它告诉你：能支撑什么、还缺什么、以及为什么。
 
@@ -30,56 +31,79 @@
 - 只搜了一个数据库，觉得够了——换一个数据库才发现完全是另一批论文
 - 写完了再去检查检索是否完整——发现晚了，证据基础根本撑不住结论
 
-**这是结构性浪费。** 综述写作流程应该从一次结构检查开始，而不是在结尾才发现问题。
+**这些返工本可避免。** 先检查证据结构，再打磨综述文字，往往更省时间。
 
-### 它怎么解决
+### 换一个起点
 
-在动笔**之前**跑一次审计。一条命令（或跟 AI 说一句话），你就能得到：
+在动笔**之前**跑一次审计。你可以直接对 AI 说一句话，得到：
 
 - 按优先级排列的待修复项——阻断项排在最前面
 - 六个独立维度的准备度——没有总分可以掩盖致命短板
 - 每个输入都以 sha256 哈希记录——审计可复现
 - 缺失的输入标为 `not_assessable` 而非隐藏——*"这是最便宜的修复方式"*
+- 检索式 q0、每次原子改动与首轮诊断会进入报告——检索不再是黑箱
 
-## 三分钟开始
+## 快速开始
 
 ```text
 使用 literature-library-eval 评估我的文献库，
 判断它能否支撑"工业视觉缺陷检测的跨产线迁移"的系统综述。
 ```
 
-AI 会自动：
+AI 会协助你：
 
 1. 确认研究问题、综述类型、工程领域和边界（一次最多三个问题）
-2. 接受你的文献库（Zotero 导出/JSON，或者让 AI 设计检索策略）
-3. 执行检索、计算指标、生成审计包
+2. 接受你的文献库（当前脚本完整支持 JSON；Zotero、BibTeX、RIS、CSV 可先由 AI 协助规范化为 JSON）
+3. 执行可用的诊断检查，协助迭代检索，计算指标并生成审计包
 
-**当前 v1.0 自动化程度：**
+你不需要先准备 JSON Schema、Gold set 或去重日志。先告诉 AI 研究问题和文献库位置即可；缺少的证据会在报告中明确列出，并给出最低成本的补充方式。
+
+如果你没有 seminal papers 和检索式，首轮也不会留白：系统会自动建立多源候选锚点、生成 q0 和原子变体，并给出 A1–A3 与检索式诊断。q0→q* 只用于检索式优化和 A2；固定稳健检索式的 `saturation_rounds` 未提供前，B1/B2 显示为不可评估，B3 继续显示路径与独立验证缺口。`automated-screening` 只标注证据来源，不能被包装成“检索已饱和”。
+
+**当前实现状态：**
 
 | 状态 | 环节 |
 |:---:|---|
-| ✅ 已自动化 | 审计计算（`run_audit.py`）、单轮诊断检索（`search_for_eval.py`）、候选去重（`normalize_candidates.py`）、迭代验证（`search_iterator.py`）、报告生成 |
-| 🔧 半自动 | 多轮检索迭代、跨数据库检索、引文追踪、正式筛选——由 AI agent 在对话中手动编排 |
-| 📋 规划中 | 端到端一键编排（`run_full_audit.py`，计划 v2.0） |
+| ✅ 已自动化 | 审计计算、无锚点/无检索式的一键首轮 A1–A3/B1–B3 初评（`run_initial_assessment.py`）、OpenAlex + Crossref（按领域补 arXiv/Europe PMC）的 q0 + 原子变体、多源候选锚点发现、迭代记录验证、报告生成 |
+| 🔧 半自动 | 中心主张下的 C4 观点分类与反向补检、多轮检索迭代、引文追踪、标准/指南路径与正式筛选——由 AI agent 在对话中手动编排 |
+| 📋 规划中 | 端到端一键编排（`run_full_audit.py`）；项目仍在迭代，尚未定稿 |
+
+已有 `run-config.json` 时可以直接运行 `python scripts/run_audit.py --run-config run-config.json`；若未传 `--out`，脚本使用配置中的 `output.out_dir`。`search_iterator.py` 也可以直接检查首轮 `search_meta.json`，但缺少开发集或独立验证集时仍会明确报告证据不足。
+
+进行在线检索时建议传入 `--run-config run-config.json`。此模式会强制检查 `automation.allow_search`、`allowed_sources` 和 `allow_query_refinement`；不传配置的直接命令行调用视为用户明确发起的检索。
+
+验证集只应在最终查询冻结后使用：传入 `--frozen-query --validation-set ...`；首轮机械留出初评使用 `--ai-provisional`。单一来源可以运行，但 A3 与来源独立性结论会按协议降级；来源请求失败时默认返回非零状态，确认接受部分结果后再加 `--allow-partial`。
+
+验证集不要求用户逐篇提供：AI 可以从综述、标准、引文网络和时间留出路径构建候选验证集，再冻结后评估检索式。验证集的来源、冻结时间和是否接触过检索式会写入 `evidence-manifest.json`；不同 subagent/线程不自动等于独立证据。
+
+对于叙事综述，报告还会给出“写作工作集”建议。一个 1000 篇的库可以在 A–F 上很强，却仍不适合直接拿来写作；正确做法是保留完整证据池，再建立按主题、论证角色、优先级和综合笔记组织的可回溯工作集，而不是删除原库。
+
+### 检索式不再是报告里的黑箱
+
+你带来的检索式会被保留为 **q0**，而不是被 AI 悄悄替换。后续优化只能做可解释的原子改动，例如补一个同义词、增加一个缩写、调整一个字段或新增一个来源；每轮都必须重新执行并留下结果。
+
+报告会把 q0 与后续版本并列展示：检索式原文、来源、执行日期、命中数、执行状态、每轮改动，以及开发集和独立验证集的召回结果。若当前只有首轮探索，它会明确写出“尚未完成优化”，不会把一次试跑包装成稳健策略。
+
+检索分解固定包含 4 个关键词单元：Object（研究对象）、Technology（技术）、Performance（性能/评价）和 Context（应用/场景）。默认迭代上限为 8 轮；可用 `search_iterator.py validate --max-iterations N` 为复杂课题提高上限。首轮自动构建最多生成 5 个版本（q0、逐步加入其余 PICO 单元的变体、一个标题字段变体），这与后续最多 8 轮的人工/agent 迭代不是同一个概念。
+
+这也是为了避免循环论证：用于调词的开发集不能同时充当最终验证集。Dataset Builder 通过留出的综述、标准、引文或时间路径构建并冻结候选验证集；Query Optimizer 无权读取它；Blind Evaluator 只在最终检索式冻结后评估它。隔离的是证据流程，而不只是不同 agent 的“记忆”。
 
 ```text
 输入确认 → 范围建模 → 检索计划 → 多源检索 → 去重 → 筛选 → 迭代优化 → A–F 计算 → 审计包
    ✅          ✅          🔧         🔧       ✅       🔧         🔧           ✅         ✅
 ```
 
-→ [查看示例报告](example-report.md)
-
 ## 六维框架
 
-21 个指标（伞式综述 24 个）。六个维度平级，不合成总分。任何一维的致命短板都不能被其他维度掩盖。
+22 个指标（伞式综述 25 个）。六个维度平级，不合成总分。任何一维的致命短板都不能被其他维度掩盖。
 
 | 维 | 问题 | 衡量什么 |
 |:---:|---|---|
 | **A · 覆盖** | 已知必收录文献找回来了吗？ | 基准集召回、检索式灵敏度、多源候选下界 |
 | **B · 饱和度** | 检索还在继续增长吗？ | GGR、DRR、独立路径完成 + 独立验证 |
-| **C · 平衡** | 主题和来源偏斜了吗？ | Top-share、CV、Gini、Shannon 熵、作者集中度、对立观点 |
+| **C · 平衡** | 主题、来源或观点偏斜了吗？ | Top-share、CV、Gini、Shannon 熵、作者集中度、观点偏斜度（支持/质疑/条件性证据） |
 | **D · 时效** | 文献库是否反映当前研究状态？ | 来源新鲜度、近年比例（按领域自适应）、前沿覆盖 |
-| **E · 影响信号** | 核心引用和领域渠道覆盖了吗？ | h-core、Tier-1 覆盖（*仅背景信号——不是质量裁决*） |
+| **E · 学术影响与来源背景** | 核心引用和领域渠道的结构背景如何？ | h-core、Tier-1 覆盖（*仅背景信号——不是质量裁决*） |
 | **F · 可用性** | 能实际用来写综述吗？ | 检索可复跑、摘要覆盖率、全文获取率、去重、可追溯、撤稿核查 |
 
 → [方法学全文](docs/methodology.md) · [指标注册表](schemas/indicator-registry.json) · [标准说明书](references/user-standards-guide.md)
@@ -152,28 +176,26 @@ git clone https://github.com/Carrot123343r3f/literature-library-eval-skill.git \
 
 | 依赖 | 用途 |
 |---|---|
-| Python 3.10+ | `run_audit.py`、`search_for_eval.py`、`search_iterator.py` |
+| Python 3.10+ | 所有命令行脚本 |
 | 互联网 | OpenAlex、Crossref、arXiv 等开放 API |
 | **无需 API key** | 全部数据来源为开放获取 |
-
-**开发依赖：** `pip install -r requirements-dev.txt` 安装 `pytest` 和 `jsonschema`，用于运行测试套件。
 
 ## 文档
 
 | 读者 | 资源 |
 |---|---|
-| **新用户** | [README.zh-CN.md](README.zh-CN.md) · [快速开始](#三分钟开始) · [示例报告](example-report.md) |
+| **新用户** | [README.zh-CN.md](README.zh-CN.md) · [快速开始](#快速开始) |
 | **深度了解** | [方法学](docs/methodology.md) · [架构](docs/architecture.md) · [输出说明](docs/outputs.md) |
 | **集成** | [集成指南](docs/integrations.md) · Zotero / 数据库 / 配套 skill |
 | **标准参考** | [用户标准说明书](references/user-standards-guide.md) · [指标注册表](schemas/indicator-registry.json) |
 | **AI Agent** | [SKILL.md](SKILL.md) · [输入协议](references/intake-protocol.md) · [检索协议](references/search-strategy-protocol.md) |
-| **开发者** | [run-config-schema.json](schemas/run-config-schema.json) · [架构](docs/architecture.md) · [tests/](tests/) |
+| **开发者** | [run-config-schema.json](schemas/run-config-schema.json) · [架构](docs/architecture.md) · [指标注册表](schemas/indicator-registry.json) |
 
 ## 路线图
 
 | 阶段 | 内容 | 状态 |
 |---|---|---|
-| v1.0 | 核心 A–F（21+3 指标）、CLI、5 种综述类型、9 个工程 profile | ✅ 当前 |
+| v1.0 | 核心 A–F（22+3 指标）、CLI、5 种综述类型、9 个工程 profile | ✅ 当前 |
 | v1.x | BibTeX/RIS/CSV 导入、Scopus/WoS/IEEE 适配器、Crossref/Semantic Scholar | 🔜 下一步 |
 | v2.0 | `run_full_audit.py`——端到端编排（搜→筛→评→报一键执行） | 📋 规划中 |
 | 未来 | `review-manuscript-audit`——PRISMA 合规、引用完整性、研究质量工具匹配 | 💡 计划中 |

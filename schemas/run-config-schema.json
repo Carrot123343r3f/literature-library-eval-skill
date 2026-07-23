@@ -40,7 +40,7 @@
     },
     "automation": {
       "type": "object",
-      "description": "v1.0: allow_search is informational only. allowed_sources/stop_conditions/allow_query_refinement are declared for forward compatibility but not yet enforced by scripts.",
+      "description": "Search consent and source/refinement controls. search_for_eval.py enforces these controls when --run-config is supplied; direct CLI use is treated as explicit user action.",
       "required": ["allow_search"],
       "properties": {
         "allow_search": {"type": "boolean"},
@@ -52,16 +52,44 @@
     "evidence_inputs": {
       "type": "object",
       "properties": {
-        "benchmark": {"type": ["string", "null"], "description": "A1 baseline file path. Produced by: manual/agent. Supports: A1."},
+        "benchmark": {"type": ["string", "null"], "description": "Frozen, relevance-screened A1 benchmark path. Candidate anchors alone do not support measured A1."},
+        "anchor_candidates": {"type": ["string", "null"], "description": "Candidate A1 anchors from build_anchor_candidates.py; screen and freeze before using as benchmark."},
         "gold": {"type": ["string", "null"], "description": "A2 gold set file path. Produced by: manual/agent. Supports: A2."},
         "query_log": {"type": ["string", "null"], "description": "Run-log file. Produced by: user or search_for_eval.py. Supports: F1. Missing → F1 not_assessable."},
         "query_hits": {"type": ["string", "null"], "description": "query-hits.json from search_for_eval.py. Produced by: search_for_eval.py. Supports: A2. Missing → A2 not_assessable."},
         "query_plan": {"type": ["string", "null"], "description": "query-plan.json. Produced by: manual/agent. Supports: F1 traceability."},
         "source_snapshot": {"type": ["string", "null"], "description": "Collector snapshot for A3. Produced by: collect_open_sources.py. Supports: A3. Missing → A3 not_assessable."},
+        "evidence_manifest": {"type": ["string", "null"], "description": "Evidence-isolation manifest. Produced by: evidence collection/first-run workflow. Supports: A2/B3 independence and A3/B2 evidence reuse checks."},
         "screening_decisions": {"type": ["string", "null"], "description": "Screening decisions for B/F5. Produced by: manual/agent. Supports: B GGR/DRR, F5 traceability. Missing → B discovery_only, F5 provenance-only."},
         "deduplication_log": {"type": ["string", "null"], "description": "Dedup/version log. Produced by: normalize_candidates.py. Supports: F4. Missing → F4 not_assessable (version candidates)."},
         "search_meta": {"type": ["string", "null"], "description": "search_meta.json from search_for_eval.py. Produced by: search_for_eval.py. Supports: A2 sensitivity, B discovery candidates."},
         "failed_sources": {"type": "array", "items": {"type": "string"}, "description": "Names of sources that failed during collection. Produced by: all collectors. Supports: A2/A3 partial_snapshot downgrade."}
+      }
+    },
+    "assessment_context": {
+      "type": "object",
+      "description": "Optional structured context for balance diagnostics.",
+      "properties": {
+        "viewpoint_framework": {
+          "type": "object",
+          "description": "C4 viewpoint-balance input. Declare a focal claim before classifying evidence stance.",
+          "properties": {
+            "claim": {"type": "string"},
+            "contested": {"type": "boolean", "default": true},
+            "counts": {
+              "type": "object",
+              "properties": {
+                "supports_claim": {"type": "integer", "minimum": 0},
+                "challenges_claim": {"type": "integer", "minimum": 0},
+                "mixed_or_conditional": {"type": "integer", "minimum": 0},
+                "unclassified": {"type": "integer", "minimum": 0}
+              }
+            },
+            "records_assessed": {"type": "integer", "minimum": 0, "description": "Size of the deduplicated record pool used for stance classification."},
+            "classification_method": {"type": "string"},
+            "sample_verified": {"type": ["integer", "null"], "minimum": 0}
+          }
+        }
       }
     },
     "standards": {
@@ -78,8 +106,13 @@
       "properties": {
         "language": {"type": "string", "default": "zh-CN"},
         "formats": {"type": "array", "items": {"type": "string"}, "default": ["md", "html", "json"]},
-        "include_standards_appendix": {"type": "boolean", "default": true}
+        "include_standards_appendix": {"type": "boolean", "default": true},
+        "out_dir": {"type": "string", "minLength": 1}
       }
+    },
+    "context": {
+      "type": ["object", "string", "null"],
+      "description": "Optional resolved assessment context object or path used by search_for_eval.py."
     },
     "generated_by": {"type": "string", "description": "Agent name or session ID"},
     "generated_at": {"type": "string", "format": "date-time"}

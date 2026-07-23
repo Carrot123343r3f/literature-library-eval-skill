@@ -1,0 +1,36 @@
+{
+  "search_decomposition": {
+    "pico": {
+      "object": {
+        "value": "3D scene representations, radiance fields, point clouds, Gaussian primitives",
+        "source": "user_provided"
+      },
+      "technology": {
+        "value": "3D Gaussian Splatting, differentiable rendering, real-time rendering, novel view synthesis",
+        "source": "user_provided"
+      },
+      "performance": {
+        "value": "rendering quality (PSNR/SSIM/LPIPS), rendering speed (FPS), training efficiency, memory footprint",
+        "source": "profile"
+      },
+      "context_field": {
+        "value": "computer vision, computer graphics, novel view synthesis, scene reconstruction, SLAM, dynamic scenes, 4D reconstruction, digital humans, autonomous driving",
+        "source": "profile"
+      }
+    }
+  },
+  "search_iterations": [],
+  "notes": "3DGS 由 Kerbl et al. (SIGGRAPH 2023) 提出，是快速发展的新兴领域。评估覆盖 2023 年至今的全部衍生工作。",
+  "review_type": "narrative",
+  "profile": "计算机与AI",
+  "year_start": null,
+  "year_end": 2026,
+  "languages": [
+    "en"
+  ],
+  "scope_status": "in_scope",
+  "viewpoint_framework": {},
+  "standards": {
+    "confirmed_by_user": true
+  }
+}

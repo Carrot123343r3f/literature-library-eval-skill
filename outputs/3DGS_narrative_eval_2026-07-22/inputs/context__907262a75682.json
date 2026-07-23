@@ -1,0 +1,180 @@
+{
+  "research_question": "3D Gaussian Splatting 在表示、效率、动态场景和工程应用中的进展是什么？",
+  "review_type": "叙事综述",
+  "profile": "计算机与AI",
+  "library_name": "3DGS synthetic demonstration library",
+  "year_start": 2023,
+  "year_end": 2026,
+  "languages": [
+    "en"
+  ],
+  "initial_query": "(3D Gaussian Splatting OR 3DGS) AND (rendering OR reconstruction)",
+  "keywords": [
+    "3D Gaussian Splatting",
+    "3DGS",
+    "dynamic scenes",
+    "real-time rendering"
+  ],
+  "taxonomy": [
+    {
+      "name": "基础表示与渲染",
+      "records": 3,
+      "target_share": 0.25,
+      "opposing_viewpoint": false
+    },
+    {
+      "name": "压缩与加速",
+      "records": 3,
+      "target_share": 0.25,
+      "opposing_viewpoint": true
+    },
+    {
+      "name": "动态场景与4D",
+      "records": 3,
+      "target_share": 0.25,
+      "opposing_viewpoint": true
+    },
+    {
+      "name": "应用与系统",
+      "records": 3,
+      "target_share": 0.25,
+      "opposing_viewpoint": false
+    }
+  ],
+  "topic_source_counts": {
+    "基础表示与渲染": {
+      "ACM Digital Library": 1,
+      "arXiv": 1,
+      "IEEE Xplore": 1
+    },
+    "压缩与加速": {
+      "OpenAlex": 1,
+      "ACM Digital Library": 1,
+      "arXiv": 1
+    },
+    "动态场景与4D": {
+      "IEEE Xplore": 1,
+      "OpenAlex": 1,
+      "arXiv": 1
+    },
+    "应用与系统": {
+      "ACM Digital Library": 1,
+      "IEEE Xplore": 1,
+      "OpenAlex": 1
+    }
+  },
+  "viewpoint_framework": {
+    "claim": "结构化压缩是否在保持视图质量的同时显著降低 3DGS 的资源开销？",
+    "contested": true,
+    "records_assessed": 12,
+    "counts": {
+      "supports_claim": 5,
+      "challenges_claim": 3,
+      "mixed_or_conditional": 2,
+      "unclassified": 2
+    },
+    "classification_method": "题名+摘要双人规则初筛，抽样 4/12 条人工核验",
+    "sample_verified": 4
+  },
+  "frontier_coverage_verdict": "pass",
+  "search_rounds": [
+    {
+      "pathway": "q0",
+      "completed": true,
+      "core_before": 12,
+      "included_high": 1,
+      "discovery_candidates": 4,
+      "screening_status": "screened"
+    },
+    {
+      "pathway": "q1-add-dynamic",
+      "completed": true,
+      "core_before": 13,
+      "included_high": 1,
+      "discovery_candidates": 3,
+      "screening_status": "screened"
+    },
+    {
+      "pathway": "q2-title-field",
+      "completed": true,
+      "core_before": 14,
+      "included_high": 0,
+      "discovery_candidates": 1,
+      "screening_status": "screened"
+    }
+  ],
+  "planned_pathways": [
+    "db_boolean",
+    "backward_citation",
+    "forward_citation",
+    "related_articles",
+    "standards_guidelines"
+  ],
+  "independent_pathways": [
+    {
+      "pathway": "db_boolean",
+      "completed": true,
+      "yield": 0.04
+    },
+    {
+      "pathway": "backward_citation",
+      "completed": true,
+      "yield": 0.03
+    },
+    {
+      "pathway": "forward_citation",
+      "completed": true,
+      "yield": 0.01
+    },
+    {
+      "pathway": "related_articles",
+      "completed": true,
+      "yield": 0.02
+    },
+    {
+      "pathway": "standards_guidelines",
+      "completed": true,
+      "yield": 0.0
+    }
+  ],
+  "search_query_versions": [
+    {
+      "query_id": "q0",
+      "origin": "user_provided",
+      "query": "(3D Gaussian Splatting OR 3DGS) AND (rendering OR reconstruction)",
+      "source": "OpenAlex",
+      "date": "2026-07-20",
+      "hits": 86,
+      "status": "complete"
+    },
+    {
+      "query_id": "q1",
+      "origin": "agent_refined",
+      "query": "(3D Gaussian Splatting OR 3DGS) AND dynamic",
+      "source": "OpenAlex",
+      "date": "2026-07-21",
+      "hits": 54,
+      "status": "complete"
+    },
+    {
+      "query_id": "q2",
+      "origin": "agent_refined",
+      "query": "title:(3D Gaussian Splatting OR 3DGS)",
+      "source": "OpenAlex",
+      "date": "2026-07-22",
+      "hits": 31,
+      "status": "complete"
+    }
+  ],
+  "search_initial_query_origin": "user_provided",
+  "standards": {
+    "a1_min_recall": 0.75,
+    "a2_min_recall": 0.7,
+    "f_abstract_rate": 0.8,
+    "f_access_rate": 0.6,
+    "f_provenance_rate": 0.85,
+    "b_ggr_threshold": 0.02,
+    "b_drr_threshold": 0.05,
+    "confirmed_by_user": true
+  }
+}

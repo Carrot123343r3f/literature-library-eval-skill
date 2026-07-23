@@ -1,0 +1,302 @@
+[
+  {
+    "key": "3DGS01",
+    "DOI": "10.9999/3dgs.demo.001",
+    "title": "Gaussian Splatting for Real-Time Radiance Field Rendering",
+    "creators": [
+      {
+        "firstName": "Demo",
+        "lastName": "Author1"
+      }
+    ],
+    "date": "2023-06-15",
+    "publicationTitle": "ACM Digital Library",
+    "abstractNote": "This synthetic demonstration record studies 基础表示与渲染 in 3D Gaussian Splatting. It reports reconstruction quality, rendering speed, memory or temporal stability under a defined evaluation protocol.",
+    "url": "https://example.org/3dgs-demo-01",
+    "open_access_url": "https://example.org/3dgs-demo-01/pdf",
+    "attachments": [
+      {
+        "path": "attachments/3dgs-demo-01.pdf"
+      }
+    ],
+    "source": "ACM Digital Library",
+    "collection": "3DGS研究/示例库",
+    "topic": "基础表示与渲染",
+    "cited_by_count": 12800,
+    "screening_status": "included"
+  },
+  {
+    "key": "3DGS02",
+    "DOI": "10.9999/3dgs.demo.002",
+    "title": "Mip-Splatting: Alias-free 3D Gaussian Splatting",
+    "creators": [
+      {
+        "firstName": "Demo",
+        "lastName": "Author2"
+      }
+    ],
+    "date": "2023-06-15",
+    "publicationTitle": "arXiv",
+    "abstractNote": "This synthetic demonstration record studies 基础表示与渲染 in 3D Gaussian Splatting. It reports reconstruction quality, rendering speed, memory or temporal stability under a defined evaluation protocol.",
+    "url": "https://example.org/3dgs-demo-02",
+    "open_access_url": "https://example.org/3dgs-demo-02/pdf",
+    "attachments": [
+      {
+        "path": "attachments/3dgs-demo-02.pdf"
+      }
+    ],
+    "source": "arXiv",
+    "collection": "3DGS研究/示例库",
+    "topic": "基础表示与渲染",
+    "cited_by_count": 920,
+    "screening_status": "included"
+  },
+  {
+    "key": "3DGS03",
+    "DOI": "10.9999/3dgs.demo.003",
+    "title": "2D Gaussian Splatting for Geometrically Accurate Radiance Fields",
+    "creators": [
+      {
+        "firstName": "Demo",
+        "lastName": "Author3"
+      }
+    ],
+    "date": "2024-06-15",
+    "publicationTitle": "IEEE Xplore",
+    "abstractNote": "This synthetic demonstration record studies 基础表示与渲染 in 3D Gaussian Splatting. It reports reconstruction quality, rendering speed, memory or temporal stability under a defined evaluation protocol.",
+    "url": "https://example.org/3dgs-demo-03",
+    "open_access_url": "https://example.org/3dgs-demo-03/pdf",
+    "attachments": [
+      {
+        "path": "attachments/3dgs-demo-03.pdf"
+      }
+    ],
+    "source": "IEEE Xplore",
+    "collection": "3DGS研究/示例库",
+    "topic": "基础表示与渲染",
+    "cited_by_count": 1450,
+    "screening_status": "included"
+  },
+  {
+    "key": "3DGS04",
+    "DOI": "10.9999/3dgs.demo.004",
+    "title": "Compact 3D Gaussian Splatting with Structured Pruning",
+    "creators": [
+      {
+        "firstName": "Demo",
+        "lastName": "Author4"
+      }
+    ],
+    "date": "2024-06-15",
+    "publicationTitle": "OpenAlex",
+    "abstractNote": "This synthetic demonstration record studies 压缩与加速 in 3D Gaussian Splatting. It reports reconstruction quality, rendering speed, memory or temporal stability under a defined evaluation protocol.",
+    "url": "https://example.org/3dgs-demo-04",
+    "open_access_url": "https://example.org/3dgs-demo-04/pdf",
+    "attachments": [
+      {
+        "path": "attachments/3dgs-demo-04.pdf"
+      }
+    ],
+    "source": "OpenAlex",
+    "collection": "3DGS研究/示例库",
+    "topic": "压缩与加速",
+    "cited_by_count": 380,
+    "screening_status": "included"
+  },
+  {
+    "key": "3DGS05",
+    "DOI": "10.9999/3dgs.demo.005",
+    "title": "Scaffold-GS: Structured 3D Gaussians for View-Adaptive Rendering",
+    "creators": [
+      {
+        "firstName": "Demo",
+        "lastName": "Author5"
+      }
+    ],
+    "date": "2024-06-15",
+    "publicationTitle": "ACM Digital Library",
+    "abstractNote": "This synthetic demonstration record studies 压缩与加速 in 3D Gaussian Splatting. It reports reconstruction quality, rendering speed, memory or temporal stability under a defined evaluation protocol.",
+    "url": "https://example.org/3dgs-demo-05",
+    "open_access_url": "",
+    "attachments": [
+      {
+        "path": "attachments/3dgs-demo-05.pdf"
+      }
+    ],
+    "source": "ACM Digital Library",
+    "collection": "3DGS研究/示例库",
+    "topic": "压缩与加速",
+    "cited_by_count": 510,
+    "screening_status": "included"
+  },
+  {
+    "key": "3DGS06",
+    "DOI": "10.9999/3dgs.demo.006",
+    "title": "Efficient Gaussian Splatting under a Mobile Memory Budget",
+    "creators": [
+      {
+        "firstName": "Demo",
+        "lastName": "Author6"
+      }
+    ],
+    "date": "2025-06-15",
+    "publicationTitle": "arXiv",
+    "abstractNote": "This synthetic demonstration record studies 压缩与加速 in 3D Gaussian Splatting. It reports reconstruction quality, rendering speed, memory or temporal stability under a defined evaluation protocol.",
+    "url": "https://example.org/3dgs-demo-06",
+    "open_access_url": "https://example.org/3dgs-demo-06/pdf",
+    "attachments": [
+      {
+        "path": "attachments/3dgs-demo-06.pdf"
+      }
+    ],
+    "source": "arXiv",
+    "collection": "3DGS研究/示例库",
+    "topic": "压缩与加速",
+    "cited_by_count": 96,
+    "screening_status": "included"
+  },
+  {
+    "key": "3DGS07",
+    "DOI": "10.9999/3dgs.demo.007",
+    "title": "4D Gaussian Splatting for Real-Time Dynamic Scene Rendering",
+    "creators": [
+      {
+        "firstName": "Demo",
+        "lastName": "Author7"
+      }
+    ],
+    "date": "2024-06-15",
+    "publicationTitle": "IEEE Xplore",
+    "abstractNote": "This synthetic demonstration record studies 动态场景与4d in 3D Gaussian Splatting. It reports reconstruction quality, rendering speed, memory or temporal stability under a defined evaluation protocol.",
+    "url": "https://example.org/3dgs-demo-07",
+    "open_access_url": "https://example.org/3dgs-demo-07/pdf",
+    "attachments": [
+      {
+        "path": "attachments/3dgs-demo-07.pdf"
+      }
+    ],
+    "source": "IEEE Xplore",
+    "collection": "3DGS研究/示例库",
+    "topic": "动态场景与4D",
+    "cited_by_count": 760,
+    "screening_status": "included"
+  },
+  {
+    "key": "3DGS08",
+    "DOI": "10.9999/3dgs.demo.008",
+    "title": "Deformable 3D Gaussians for Monocular Dynamic Reconstruction",
+    "creators": [
+      {
+        "firstName": "Demo",
+        "lastName": "Author8"
+      }
+    ],
+    "date": "2024-06-15",
+    "publicationTitle": "OpenAlex",
+    "abstractNote": "This synthetic demonstration record studies 动态场景与4d in 3D Gaussian Splatting. It reports reconstruction quality, rendering speed, memory or temporal stability under a defined evaluation protocol.",
+    "url": "https://example.org/3dgs-demo-08",
+    "open_access_url": "https://example.org/3dgs-demo-08/pdf",
+    "attachments": [
+      {
+        "path": "attachments/3dgs-demo-08.pdf"
+      }
+    ],
+    "source": "OpenAlex",
+    "collection": "3DGS研究/示例库",
+    "topic": "动态场景与4D",
+    "cited_by_count": 430,
+    "screening_status": "included"
+  },
+  {
+    "key": "3DGS09",
+    "DOI": "10.9999/3dgs.demo.009",
+    "title": "Gaussian Flow Fields for Long-Horizon Dynamic View Synthesis",
+    "creators": [
+      {
+        "firstName": "Demo",
+        "lastName": "Author9"
+      }
+    ],
+    "date": "2025-06-15",
+    "publicationTitle": "arXiv",
+    "abstractNote": "This synthetic demonstration record studies 动态场景与4d in 3D Gaussian Splatting. It reports reconstruction quality, rendering speed, memory or temporal stability under a defined evaluation protocol.",
+    "url": "https://example.org/3dgs-demo-09",
+    "open_access_url": "https://example.org/3dgs-demo-09/pdf",
+    "attachments": [
+      {
+        "path": "attachments/3dgs-demo-09.pdf"
+      }
+    ],
+    "source": "arXiv",
+    "collection": "3DGS研究/示例库",
+    "topic": "动态场景与4D",
+    "cited_by_count": 88,
+    "screening_status": "included"
+  },
+  {
+    "key": "3DGS10",
+    "DOI": "10.9999/3dgs.demo.010",
+    "title": "StreetGaussian: Street-View Reconstruction with 3D Gaussians",
+    "creators": [
+      {
+        "firstName": "Demo",
+        "lastName": "Author10"
+      }
+    ],
+    "date": "2024-06-15",
+    "publicationTitle": "ACM Digital Library",
+    "abstractNote": "This synthetic demonstration record studies 应用与系统 in 3D Gaussian Splatting. It reports reconstruction quality, rendering speed, memory or temporal stability under a defined evaluation protocol.",
+    "url": "https://example.org/3dgs-demo-10",
+    "open_access_url": "https://example.org/3dgs-demo-10/pdf",
+    "attachments": [],
+    "source": "ACM Digital Library",
+    "collection": "3DGS研究/示例库",
+    "topic": "应用与系统",
+    "cited_by_count": 610,
+    "screening_status": "included"
+  },
+  {
+    "key": "3DGS11",
+    "DOI": "10.9999/3dgs.demo.011",
+    "title": "Gaussian-SLAM: Photo-Realistic Dense Mapping with Gaussian Primitives",
+    "creators": [
+      {
+        "firstName": "Demo",
+        "lastName": "Author11"
+      }
+    ],
+    "date": "2024-06-15",
+    "publicationTitle": "IEEE Xplore",
+    "abstractNote": "This synthetic demonstration record studies 应用与系统 in 3D Gaussian Splatting. It reports reconstruction quality, rendering speed, memory or temporal stability under a defined evaluation protocol.",
+    "url": "https://example.org/3dgs-demo-11",
+    "open_access_url": "https://example.org/3dgs-demo-11/pdf",
+    "attachments": [],
+    "source": "IEEE Xplore",
+    "collection": "3DGS研究/示例库",
+    "topic": "应用与系统",
+    "cited_by_count": 275,
+    "screening_status": "included_with_caveat"
+  },
+  {
+    "key": "3DGS12",
+    "DOI": "10.9999/3dgs.demo.012",
+    "title": "Gaussian Avatars for Real-Time Digital Human Rendering",
+    "creators": [
+      {
+        "firstName": "Demo",
+        "lastName": "Author12"
+      }
+    ],
+    "date": "2025-06-15",
+    "publicationTitle": "OpenAlex",
+    "abstractNote": "This synthetic demonstration record studies 应用与系统 in 3D Gaussian Splatting. It reports reconstruction quality, rendering speed, memory or temporal stability under a defined evaluation protocol.",
+    "url": "https://example.org/3dgs-demo-12",
+    "open_access_url": "https://example.org/3dgs-demo-12/pdf",
+    "attachments": [],
+    "source": "OpenAlex",
+    "collection": "3DGS研究/示例库",
+    "topic": "应用与系统",
+    "cited_by_count": 132,
+    "screening_status": "included_with_caveat"
+  }
+]

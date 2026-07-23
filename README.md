@@ -1,17 +1,16 @@
 # Engineering Literature Library Audit
 
 <p align="center">
-  <strong>Most literature reviews fail before the writing begins.</strong>
+  <strong>A review begins long before the first sentence.</strong>
 </p>
 
 <p align="center">
-  They fail when the library is incomplete, the search cannot be reproduced, or apparent saturation is only an artifact of one database. An audit that runs <em>before</em> you write saves months of rework — and a manuscript that cannot be defended.
+  It begins with a library, a search trail, and a quiet question: “Can this evidence really carry the argument I am about to make?” This project helps answer that question <em>before</em> months of writing make the answer expensive.
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/tests-18%20tests%20passing-22c55e" alt="Tests">
   <img src="https://img.shields.io/badge/license-MIT-3b82f6" alt="License">
-  <img src="https://img.shields.io/badge/indicators-21%20(%2B3%20umbrella)-8b5cf6" alt="Indicators">
+  <img src="https://img.shields.io/badge/indicators-22%20(%2B3%20umbrella)-8b5cf6" alt="Indicators">
   <img src="https://img.shields.io/badge/platform-Claude%20%7C%20Codex-6366f1" alt="Platform">
 </p>
 
@@ -19,9 +18,11 @@
 
 ## What This Is
 
+This project audits both the library **and the search strategy that produced it**. A collection of papers cannot be judged separately from the query, databases, dates, and decisions that determined what could enter it.
+
 **Engineering Literature Library Audit** is an evidence-readiness diagnostic for engineering reviews. It does not write your review. It does not assign one opaque score. It shows what your library can support, what it cannot yet support, and why — before you invest months in a manuscript.
 
-### The Problem
+### A familiar scene
 
 Every researcher knows this feeling:
 
@@ -31,26 +32,41 @@ Every researcher knows this feeling:
 - You searched one database thoroughly — but another would have surfaced entirely different papers.
 - You wrote the review first, checked completeness later — and found out too late that the evidence base was never solid.
 
-**This is structural waste.** The review-writing process should start with a structural check, not end with one.
+**This is avoidable rework.** A review is stronger when its evidence is checked before its prose is polished.
 
-### How This Fixes It
+### The part that used to disappear: the search
 
-Run the audit **before** writing. In one command (or one conversation with an AI agent), you get:
+Imagine the useful version of this story. You bring a query that already reflects weeks of domain thinking. The system preserves it as **q0**, rather than silently replacing it. It tests that starting point, makes only one explainable change at a time, and keeps the original beside every later version.
+
+The report now carries that history: the query text, where it came from, which source ran it, when it ran, how many records it returned, what changed in each round, and the development/held-out validation results. If there is only one exploratory round, it says so plainly; it does not call an untested draft query “optimized.”
+
+The search decomposition has four keyword units: Object, Technology, Performance, and Context. The default iteration cap is 8 rounds; use `search_iterator.py validate --max-iterations N` for a more complex topic. The first automatic bundle produces at most 5 query versions (q0, progressive additions from the remaining PICO units, and one title-field variant); that is separate from the later multi-round cap.
+
+This matters because a query can look successful simply by rediscovering the papers used to tune it. The project therefore separates development evidence from a frozen, held-out validation set and records the separation in `evidence-manifest.json`. Different agents or threads are not, by themselves, evidence of independence.
+
+### A different starting point
+
+Run the audit **before** writing. In one conversation with an AI agent, you get:
 
 - A prioritized list of exactly what needs fixing — blocking items first
 - Six independent dimensions of readiness — no single score hides a fatal flaw
 - Every input accounted for with sha256 hashes — the audit is reproducible
 - Missing inputs are flagged as `not_assessable`, not hidden — *"here's the cheapest way to fix this"*
+- A readable search-strategy record — q0, query versions, source/date/hits, atomic changes, and validation evidence
 
 ## Quickstart
 
-**Current capability** (v1.0): The audit computation engine, single-round diagnostic search, and iteration compliance validation are production-ready. The AI agent orchestrates the multi-step pipeline in conversation — search, screen, iterate, compute, report. A one-shot end-to-end CLI orchestrator (`run_full_audit.py`) is planned for v2.0.
+**Current capability**: The audit engine, no-anchor/no-query first-run orchestration, multi-source q0 + atomic-variant diagnostics, and iteration-record validation are implemented. `run_initial_assessment.py` produces A1–A3 and B1–B3 in the same table and against the same thresholds used later: A1/A2/B1 show direct pass/fail results, B2 warns that source-level screening is not yet independent-path evidence, and B3 fails until pathways and independent validation are complete. `automated-screening` identifies the evidence tier rather than replacing the verdict. Independent verification, citation/standards pathways, and full screening still require later work.
+
+The diagnostic search preserves a supplied q0 and records OpenAlex + Crossref execution (with arXiv or Europe PMC when profile-relevant) plus transparent atomic variants in the report. It can discover candidate A1 anchors when none are supplied, but candidates require relevance screening and a frozen provenance record before they count as a measured benchmark. For narrative reviews, the report also separates a strong evidence pool from a manageable writing workset: a large library should be retained, then curated by topic and argumentative role rather than cut down destructively.
 
 | Status | Step |
 | :---: | --- |
-| ✅ Automated | Audit computation (`run_audit.py`), single-round diagnostic search (`search_for_eval.py`), candidate dedup (`normalize_candidates.py`), iteration validation (`search_iterator.py`), report generation |
-| 🔧 Semi-automated | Multi-round iteration, cross-database search, citation tracking, formal screening — orchestrated by AI agent in conversation |
+| ✅ Automated | Audit computation (`run_audit.py`), profile-aware multi-source q0 + atomic-variant diagnostic (`search_for_eval.py`), multi-source candidate-anchor discovery (`build_anchor_candidates.py`), candidate dedup, iteration validation, report generation |
+| 🔧 Semi-automated | Multi-round iteration, citation tracking, standards/guidelines pathways, formal screening — orchestrated by AI agent in conversation |
 | 📋 Planned | End-to-end one-shot orchestrator (`run_full_audit.py`, v2.0) |
+
+Users do not need to provide every validation paper. A Dataset Builder can construct a challenge set from reviews, standards, citation paths, and held-out time/source routes, then freeze it before query optimization. `evidence-manifest.json` records provenance, freezing, and leakage checks; separate subagents or threads alone do not establish independence.
 
 ```text
 使用 literature-library-eval 评估我的文献库，
@@ -61,21 +77,21 @@ The AI will:
 
 1. Confirm your research question, review type, domain, and boundaries (max 3 questions)
 2. Accept your library — Zotero-exported JSON (Zotero → Better BibTeX JSON or CSL JSON export). BibTeX/RIS/CSV direct import and Zotero API integration are on the v1.x roadmap
-3. Execute single-round diagnostic search, help you iterate the query, compute all A–F indicators, and produce the audit package
+3. Run the available diagnostic checks, help you iterate the query, compute the A–F indicators, and produce the audit package
 
-→ [View example report](example-report.md)
+With an existing `run-config.json`, run `python scripts/run_audit.py --run-config run-config.json`; when `--out` is omitted, the configured `output.out_dir` is used. `search_iterator.py` can also inspect the first-round `search_meta.json` emitted by `search_for_eval.py`, while still reporting missing development or independent validation evidence.
 
 ## Six-Dimension Framework
 
-21 indicators. 24 for umbrella reviews. No composite score. Every dimension stands alone — a perfect A1 cannot hide a broken F1.
+22 indicators. 25 for umbrella reviews. No composite score. Every dimension stands alone — a perfect A1 cannot hide a broken F1.
 
 | Dim | Question | What we measure |
 |:---:|---|---|
 | **A · Coverage** | Did we find the known must-include works? | Benchmark recall, search sensitivity, multi-source lower bound |
 | **B · Saturation** | Is the search still growing? | GGR, DRR, pathway completion + independent validation |
-| **C · Balance** | Are topics and sources skewed? | Top-share, CV, Gini, Shannon entropy, author concentration, opposing viewpoints |
+| **C · Balance** | Are topics, sources, or viewpoints skewed? | Top-share, CV, Gini, Shannon entropy, author concentration, and claim-level support/challenge/conditional evidence |
 | **D · Recency** | Does the library reflect the current state? | Source freshness, recent-share (profile-aware), frontier coverage |
-| **E · Impact** | Are core citations and venues covered? | h-core, Tier-1 venue coverage *(background signals only)* |
+| **E · Impact & Bibliometric Context** | What is the citation and venue context? | h-core, Tier-1 venue coverage *(background signals only)* |
 | **F · Usability** | Can you actually write the review? | Query reproducibility, abstract/fulltext access, dedup, provenance, retraction checks |
 
 → [Full methodology](docs/methodology.md) · [Indicator registry](schemas/indicator-registry.json) · [Standards guide](references/user-standards-guide.md)
@@ -148,28 +164,26 @@ git clone https://github.com/Carrot123343r3f/literature-library-eval-skill.git \
 
 | Dependency | Why |
 |---|---|
-| Python 3.10+ | `run_audit.py`, `search_for_eval.py`, `search_iterator.py` |
+| Python 3.10+ | All command-line scripts |
 | Internet access | OpenAlex, Crossref, arXiv (open-access APIs) |
 | **No API keys** | All data sources are open-access |
-
-**Development:** `pip install -r requirements-dev.txt` adds `pytest` and `jsonschema` for running the test suite.
 
 ## Documentation
 
 | Audience | Resources |
 |---|---|
-| **New users** | [README.zh-CN.md](README.zh-CN.md) · [Quickstart](#quickstart) · [Example report](example-report.md) |
+| **New users** | [README.zh-CN.md](README.zh-CN.md) · [Quickstart](#quickstart) |
 | **Deep dive** | [Methodology](docs/methodology.md) · [Architecture](docs/architecture.md) · [Outputs](docs/outputs.md) |
 | **Integration** | [Integrations](docs/integrations.md) · [Zotero / databases / companion skills](docs/integrations.md) |
 | **Standards** | [User standards guide](references/user-standards-guide.md) · [Indicator registry](schemas/indicator-registry.json) |
 | **AI Agents** | [SKILL.md](SKILL.md) · [Intake protocol](references/intake-protocol.md) · [Search protocol](references/search-strategy-protocol.md) |
-| **Developers** | [run-config-schema.json](schemas/run-config-schema.json) · [Architecture](docs/architecture.md) · [tests/](tests/) |
+| **Developers** | [run-config-schema.json](schemas/run-config-schema.json) · [Architecture](docs/architecture.md) · [Indicator registry](schemas/indicator-registry.json) |
 
 ## Roadmap
 
 | Phase | What | Status |
 |---|---|---|
-| v1.0 | Core A–F (21+3 indicators), CLI, 5 review types, 9 engineering profiles | ✅ Current |
+| v1.0 | Core A–F (22+3 indicators), CLI, 5 review types, 9 engineering profiles | ✅ Current |
 | v1.x | BibTeX/RIS/CSV import, Scopus/WoS/IEEE adapters, Crossref/Semantic Scholar API | 🔜 Next |
 | v2.0 | `run_full_audit.py` — end-to-end orchestrator (search→screen→audit→report) | 📋 Planned |
 | Future | `review-manuscript-audit` — PRISMA compliance, citation integrity, study quality tool matching | 💡 Planned |

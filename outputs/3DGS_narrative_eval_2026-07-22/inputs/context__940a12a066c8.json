@@ -1,0 +1,14 @@
+{
+  "review_type": "narrative",
+  "profile": "计算机与AI",
+  "year_start": null,
+  "year_end": 2026,
+  "languages": [
+    "en"
+  ],
+  "scope_status": "in_scope",
+  "viewpoint_framework": {},
+  "standards": {
+    "confirmed_by_user": true
+  }
+}
