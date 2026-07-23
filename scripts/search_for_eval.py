@@ -21,6 +21,7 @@ dedup_rule（去重规则），供第三方从 query-hits.json 独立复算 yiel
   用于指导多源异构语法映射——每个来源选择其支持的字段语法，不把同一字符串原样投到不同数据库。
 """
 import argparse, json, urllib.request, urllib.parse, re, time, sys, pathlib
+from collect_open_sources import load_search_authorization
 sys.stdout.reconfigure(encoding='utf-8')
 
 
@@ -124,6 +125,7 @@ def build_queries(keywords, pico=None):
 def main():
     p = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     p.add_argument('--library', required=True, help='题录 JSON（判断在库内）')
+    p.add_argument('--run-config', required=True, help='已确认的 run-config.json；必须授权 OpenAlex 检索')
     p.add_argument('--context', required=True, help='context.json（读 keywords/profile）')
     p.add_argument('--benchmark', help='A1 基准集 JSON；当 --dev-set 和 --gold 均未提供时复用为 dev_set')
     p.add_argument('--gold', help='A2 gold set JSON（若需要独立于 benchmark；v2 建议使用 --dev-set + --validation-set）')
@@ -135,6 +137,16 @@ def main():
     p.add_argument('--max-per-query', type=int, default=50,
                    help='每检索式最大命中数（仅首屏 top cited，非完整快照）')
     a = p.parse_args()
+    if a.max_per_query < 1 or a.max_per_query > 200:
+        p.error('--max-per-query must be between 1 and 200')
+    if a.min_cited < 0:
+        p.error('--min-cited must be non-negative')
+    try:
+        allowed_sources = load_search_authorization(a.run_config)
+    except (ValueError, PermissionError) as exc:
+        p.error(str(exc))
+    if allowed_sources is not None and "openalex" not in allowed_sources:
+        p.error("OpenAlex is not authorized by automation.allowed_sources")
 
     library = json.load(open(a.library, encoding='utf-8'))
     ctx = json.load(open(a.context, encoding='utf-8'))
@@ -165,6 +177,7 @@ def main():
             dev_source = "validation_set 复用（不推荐——将被 A2 标记为 estimated）"
 
     # Check dev/val overlap
+    dev_validation_overlap = set()
     if dev_set and validation_set:
         dev_dois = set()
         for e in dev_set:
@@ -174,9 +187,9 @@ def main():
         for e in validation_set:
             for did in ids_for_gold(e):
                 val_dois.add(did)
-        overlap = dev_dois & val_dois
-        if overlap:
-            print(f"WARNING: Dev/validation sets overlap on {len(overlap)} identifier(s). A2 independence is compromised.")
+        dev_validation_overlap = dev_dois & val_dois
+        if dev_validation_overlap:
+            print(f"WARNING: Dev/validation sets overlap on {len(dev_validation_overlap)} identifier(s). A2 independence is compromised.")
 
     # ── PICO decomposition ──
     pico = None
@@ -245,18 +258,16 @@ def main():
     # ── Compute dev_recall + validation_recall ──
     dev_recall, dev_total = compute_recall(dev_set, hit_ids_set) if dev_set else (None, 0)
     val_recall, val_total = compute_recall(validation_set, hit_ids_set) if validation_set else (None, 0)
+    val_matched = sum(bool(ids_for_gold(g) & hit_ids_set)
+                      for g in (validation_set or []) if isinstance(g, dict) and ids_for_gold(g))
 
     # ── A2: evaluate against gold/dev_set for backward compat ──
     gold = dev_set or []  # default gold = dev_set
-    gold_ids = set()
-    for g in gold:
-        gold_ids |= ids_for_gold(g)
-    id_matched = gold_ids & hit_ids_set
     gold_with_ids = [g for g in gold if isinstance(g, dict) and ids_for_gold(g)]
     a2_total_with_id = len(gold_with_ids)
-    a2_matched_id = len(id_matched)
+    a2_matched_items = sum(bool(ids_for_gold(g) & hit_ids_set) for g in gold_with_ids)
     a2_total_all = len(gold)
-    a2_recall_id = round(a2_matched_id / a2_total_with_id, 3) if a2_total_with_id else None
+    a2_recall_id = round(a2_matched_items / a2_total_with_id, 3) if a2_total_with_id else None
 
     # Title candidate matching for cross-system manual verification
     gold_titles = {norm(g.get('title')) for g in gold if g.get('title')}
@@ -307,21 +318,24 @@ def main():
     # ── Build search_meta.json with v2 fields ──
     a2_evidence = "measured"
     a2_note = 'A2 只有稳定 ID 匹配计入分子；分母=有稳定 ID 的 gold 条目（与 run_audit.a2 对齐）。'
-    if validation_set:
+    if validation_set and not dev_validation_overlap:
         a2_note += f' 独立验证集: {val_total} 篇（{val_source}），dev/val 独立。'
     else:
         a2_evidence = "estimated"
-        a2_note += f' 无独立验证集——A2 使用 {dev_source}，可能被高估（dev=val 复用）。建议补充独立验证集。'
+        if dev_validation_overlap:
+            a2_note += f' 开发集与验证集重叠 {len(dev_validation_overlap)} 个稳定标识符——独立性已受损。'
+        else:
+            a2_note += f' 无独立验证集——A2 使用 {dev_source}，可能被高估（dev=val 复用）。建议补充独立验证集。'
 
     json.dump({'queries': queries_record, 'search_rounds': search_rounds,
                'planned_pathways': ['openalex-first-round'],
                'source_marginal_yields': marginal,
-               'a2': {'id_matched': a2_matched_id,
+               'a2': {'matched_items': a2_matched_items,
                       'title_candidates': a2_title_candidates,
                       'total_with_id': a2_total_with_id,
                       'total_all': a2_total_all,
                       'recall_by_id': a2_recall_id,
-                      'id_matched_per_id_total': f'{a2_matched_id}/{a2_total_with_id}',
+                      'matched_items_per_total': f'{a2_matched_items}/{a2_total_with_id}',
                       'missing_titles': a2_missing_titles[:15],
                       'note': a2_note},
                # v2 fields
@@ -330,6 +344,7 @@ def main():
                'dev_source': dev_source,
                'validation_recall': val_recall,
                'validation_recall_total': val_total,
+               'validation_recall_matched': val_matched,
                'validation_source': val_source or '无独立验证集',
                'a2_evidence_status': a2_evidence,
                'potential_additions_titles': [x['title'] for x in potential_add[:20]],
@@ -337,7 +352,7 @@ def main():
                'first_round_discovery_ggr': discovery_ggr,
                'note': 'B 饱和度处于候选发现阶段——included_high=0 直至筛选确认。GGR 分子需人工完成纳入后方可填入。'},
               open(out / 'search_meta.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
-    print(f'\n检索命中去重: {len(all_hits)} | A2 稳定ID: {a2_matched_id}/{a2_total_with_id}={a2_recall_id} | A2 标题候选: {a2_title_candidates}')
+    print(f'\n检索命中去重: {len(all_hits)} | A2 条目级稳定 ID: {a2_matched_items}/{a2_total_with_id}={a2_recall_id} | A2 标题候选: {a2_title_candidates}')
     if validation_set:
         print(f'Dev recall: {dev_recall} ({dev_total} 篇) | Validation recall: {val_recall} ({val_total} 篇) — {val_source}')
     else:

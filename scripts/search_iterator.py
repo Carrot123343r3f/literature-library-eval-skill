@@ -120,12 +120,21 @@ def validate(data, strict=False):
         last_two = [it.get("results", {}).get("validation_recall") for it in iterations[-2:]]
         has_val = all(v is not None for v in last_two)
         if has_val:
-            a2_stopped = all(last_two[i] - last_two[i-1] < A2_STOP_DELTA
-                             for i in range(1, len(last_two)))
+            if not all(isinstance(v, (int, float)) and 0 <= v <= 1 for v in last_two):
+                errors.append("Last two validation_recall values must be numbers in [0, 1]")
+                a2_stopped = False
+            else:
+                a2_stopped = all(last_two[i] - last_two[i-1] < A2_STOP_DELTA
+                                 for i in range(1, len(last_two)))
         else:
             a2_stopped = None
 
         decisions = [it.get("decision") for it in iterations]
+        if decisions[-1] == "a2_stop":
+            if a2_stopped is not True:
+                errors.append("Final decision a2_stop requires two valid validation recalls with improvement < 0.03")
+        elif a2_stopped is True and decisions[-1] == "continue":
+            warnings.append("Validation recall has plateaued for two rounds; record an explicit a2_stop or rationale to continue")
         if decisions[-1] == "continue" and len(iterations) >= MAX_ITERATIONS:
             warnings.append(f"Reached {MAX_ITERATIONS} iterations without stop decision — "
                            "review whether search can be further improved")

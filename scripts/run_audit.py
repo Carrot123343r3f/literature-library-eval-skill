@@ -96,11 +96,15 @@ def load_snapshot(path):
     sources = {}
     for query in data.get("queries", []):
         for name, result in query.get("sources", {}).items():
-            bucket = sources.setdefault(name, {"items": [], "statuses": []})
+            bucket = sources.setdefault(name, {"items": [], "statuses": [], "completion_flags": [],
+                                               "scope_filters": data.get("scope_filters"), "dedup_rule": data.get("dedup_rule")})
             bucket["items"].extend(result.get("items", []))
             bucket["statuses"].append(result.get("status", "unknown"))
+            bucket["completion_flags"].append(result.get("complete") is True)
     if not sources and isinstance(data.get("sources"), dict):
-        sources = {name: {"items": value.get("items", []), "statuses": [value.get("status", "unknown")]}
+        sources = {name: {"items": value.get("items", []), "statuses": [value.get("status", "unknown")],
+                          "completion_flags": [value.get("complete") is True],
+                          "scope_filters": data.get("scope_filters"), "dedup_rule": data.get("dedup_rule")}
                    for name, value in data["sources"].items()}
     return sources
 
@@ -141,19 +145,27 @@ def a3(sources):
     if not sources or len(sources) < 2:
         return {"status": "not_assessable", "note": "Supply deduplicable snapshots from at least two sources."}
     incomplete = sorted(name for name, meta in sources.items()
-                        if any(status != "complete" for status in meta.get("statuses", [])))
+                        if any(status != "complete" for status in meta.get("statuses", []))
+                        or not all(meta.get("completion_flags", [])))
+    filters = {json.dumps(meta.get("scope_filters"), ensure_ascii=False, sort_keys=True)
+               for meta in sources.values()}
+    dedup_rules = {str(meta.get("dedup_rule") or "") for meta in sources.values()}
+    boundaries_valid = len(filters) == 1 and next(iter(filters), "null") not in ("null", "{}")
+    dedup_valid = len(dedup_rules) == 1 and bool(next(iter(dedup_rules), ""))
     source_ids = {name: set().union(*(ids(x) for x in meta.get("items", []) if isinstance(x, dict)))
                   for name, meta in sources.items()}
     union = set().union(*source_ids.values())
     if not union: return {"status": "not_assessable", "note": "Candidate snapshots contain no stable identifiers."}
     overlaps = {"|".join(pair): len(source_ids[pair[0]] & source_ids[pair[1]])
                 for pair in __import__('itertools').combinations(sorted(source_ids), 2)}
-    result = {"status": "estimated_lower_bound" if not incomplete else "partial_snapshot",
+    result = {"status": "estimated_lower_bound" if not incomplete and boundaries_valid and dedup_valid else "partial_snapshot",
               "deduplicated_candidate_lower_bound": len(union),
               "source_unique_identifier_counts": {k: len(v) for k, v in source_ids.items()},
               "pairwise_overlaps": overlaps, "incomplete_sources": incomplete,
+              "boundaries_valid": boundaries_valid, "dedup_rule_valid": dedup_valid,
               "note": "Multi-source deduplicated lower bound; not Recall or capture-recapture."}
-    if incomplete: result["note"] = "Source snapshots incomplete; provisional count must not support A3 conclusions."
+    if incomplete or not boundaries_valid or not dedup_valid:
+        result["note"] = "Source snapshots are incomplete or lack consistent scope filters/dedup rule; provisional count must not support A3 conclusions."
     return result
 
 def health(library, standards=None, dedup_log_provided=False, dedup_log_depth="missing", decision_log_provided=False, taxonomy=None):
@@ -213,11 +225,14 @@ def health(library, standards=None, dedup_log_provided=False, dedup_log_depth="m
             "f5_note": f5_note,
             "note": "F3=v 附件或开放链接任一可用的记录比例；两率分列展示以避免重复计数。版本族等价性、访问权限和更正状态需专项来源核验。F5 需 decision-log 以追溯纳入/排除理由。"}
 
+PATHWAY_MINIMUMS = {"快速综述": 2, "叙事综述": 3, "范围综述": 3, "系统综述": 4, "伞式综述": 5}
+PATHWAY_TYPES = {"db_boolean", "backward_citation", "forward_citation", "related_articles", "standards_guidelines"}
+
+
 def stability(context):
     rounds = context.get("search_rounds", [])
-    # Only rounds with screened_complete or explicit screening bypass count for convergence.
-    # discovery_only rounds are excluded from GGR/DRR verdicts — candidates != inclusions.
-    screened_rounds = [x for x in rounds if x.get("screening_status") != "discovery_only"]
+    # Only explicit, fully screened rounds may contribute to a saturation claim.
+    screened_rounds = [x for x in rounds if x.get("screening_status") == "screened_complete"]
     any_discovery_only = any(x.get("screening_status") == "discovery_only" for x in rounds)
     rates = [round(x["included_high"] / x["core_before"], 4) for x in screened_rounds
              if isinstance(x.get("core_before"), (int, float)) and x["core_before"] > 0
@@ -228,28 +243,52 @@ def stability(context):
     done = {x.get("pathway") for x in rounds if x.get("completed")}
     complete = round(len(paths & done) / len(paths), 3) if paths else None
     standards = context.get("standards", {})
-    threshold = float(standards.get("b_ggr_threshold", 0.02))
-    yield_threshold = float(standards.get("b_drr_threshold", 0.05))
-    # Only count yields from non-discovery_only pathways
-    yields = [x.get("yield") for x in context.get("source_marginal_yields", [])
-              if isinstance(x.get("yield"), (int, float))
-              and x.get("screening_status") != "discovery_only"]
+    try:
+        threshold = float(standards.get("b_ggr_threshold", 0.02))
+        yield_threshold = float(standards.get("b_drr_threshold", 0.05))
+    except (TypeError, ValueError) as exc:
+        return {"status": "not_assessable", "checks": {"B1_ggr": "not_assessable",
+                "B2_drr": "not_assessable", "B3_pathway_completion": "not_assessable",
+                "B3_independent_validation": "not_assessable", "F1_query_traceability": "not_assessable"},
+                "verdict": "不可证明", "note": f"B 阈值必须是数值：{exc}"}
+    if threshold < 0 or yield_threshold < 0:
+        return {"status": "not_assessable", "checks": {"B1_ggr": "not_assessable",
+                "B2_drr": "not_assessable", "B3_pathway_completion": "not_assessable",
+                "B3_independent_validation": "not_assessable", "F1_query_traceability": "not_assessable"},
+                "verdict": "不可证明", "note": "B 阈值不能为负数。"}
+    independent_pathways = context.get("independent_pathways", [])
+    valid_pathways = [x for x in independent_pathways if isinstance(x, dict)
+                      and isinstance(x.get("pathway_id"), str) and x["pathway_id"].strip()
+                      and x.get("type") in PATHWAY_TYPES
+                      and x.get("completed") is True
+                      and x.get("screening_status") == "screened_complete"
+                      and isinstance(x.get("yield"), (int, float))]
+    review_type = normalize_review_type(context.get("review_type", ""))
+    required_pathways = PATHWAY_MINIMUMS.get(review_type, 3)
+    pathway_types = {x.get("type") for x in valid_pathways}
+    pathway_ids = {x["pathway_id"] for x in valid_pathways}
+    citation_pathways = sum(x.get("type") in {"backward_citation", "forward_citation"} for x in valid_pathways)
+    independence_complete = (len(valid_pathways) >= required_pathways
+                             and len(pathway_types) >= required_pathways
+                             and bool(paths) and paths <= pathway_ids
+                             and (review_type != "伞式综述" or citation_pathways >= 2))
+    yields = [x["yield"] for x in valid_pathways]
     iv_passed = context.get("independent_validation_passed")
     run_log = context.get("run_log_complete")
     run_log_depth = context.get("run_log_depth", "missing")
     has_enough_screened = len(screened_rounds) >= 2
-    converged = (has_enough_screened and all(x < threshold for x in rates[-2:]) and complete == 1.0
+    converged = (has_enough_screened and independence_complete and all(x <= threshold for x in rates[-2:]) and complete == 1.0
                  and iv_passed is True
-                 and bool(yields) and all(x < yield_threshold for x in yields))
+                 and bool(yields) and all(x <= yield_threshold for x in yields))
     # B1 / B2: require screened rounds — discovery_only → not_assessable
     if any_discovery_only and not has_enough_screened:
         b1_verdict = "not_assessable"
         b2_verdict = "not_assessable"
     else:
-        b1_verdict = "pass" if len(rates) >= 2 and all(x < threshold for x in rates[-2:]) else ("not_assessable" if len(rates) < 2 else "fail")
-        b2_verdict = "pass" if yields and all(x < yield_threshold for x in yields) else ("not_assessable" if not yields else "fail")
+        b1_verdict = "pass" if len(rates) >= 2 and all(x <= threshold for x in rates[-2:]) else ("not_assessable" if len(rates) < 2 else "fail")
+        b2_verdict = "pass" if yields and all(x <= yield_threshold for x in yields) else ("not_assessable" if not yields else "fail")
     checks = {"B1_ggr": b1_verdict,
-              "B3_pathway_completion": "pass" if complete == 1.0 else "not_assessable" if complete is None else "fail",
+              "B3_pathway_completion": "pass" if complete == 1.0 and independence_complete else "not_assessable" if complete is None else "fail",
               "B2_drr": b2_verdict,
               "F1_query_traceability": "pass" if run_log is True
               else "fail" if run_log is False else "not_assessable",
@@ -258,6 +297,8 @@ def stability(context):
     result = {"status": "discovery_only" if any_discovery_only and not has_enough_screened else ("measured" if rounds else "not_assessable"),
               "high_confidence_new_rates": rates, "discovery_candidates_total": discovery_candidates_count,
               "pathway_completion": complete, "source_marginal_yields": yields,
+              "required_independent_pathways": required_pathways,
+              "valid_independent_pathways": len(valid_pathways),
               "thresholds": {"new_rate": threshold, "marginal_yield": yield_threshold}, "checks": checks,
               "independent_validation_passed": iv_passed,
               "verdict": "趋稳" if converged and all(x == "pass" for x in checks.values())
@@ -287,8 +328,11 @@ def currency(context):
             "note": "Report every successful source date."}
 
 def artifacts(paths):
-    result = {name: {"provided": bool(value), "path": value} for name, value in paths.items()}
-    result["provided_with_paths"] = {k: v["path"] for k, v in result.items() if v["provided"]}
+    # Artifact metadata is rendered into public reports.  Never retain a source
+    # path here: a path can expose usernames, workspace layout, or mounted volumes.
+    result = {name: {"provided": bool(value),
+                     "source_filename": pathlib.Path(value).name if value else None}
+              for name, value in paths.items()}
     return result
 
 def balance(library, standards=None):
@@ -652,6 +696,30 @@ def compact(value):
     if isinstance(value, (list, dict)): return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
     return str(value).replace("|", "／").replace("\n", " ")
 
+
+SENSITIVE_KEY_PARTS = ("token", "secret", "password", "api_key", "apikey", "authorization", "credential")
+
+
+def _is_absolute_local_path(value):
+    """Recognise Windows and POSIX absolute paths without resolving them."""
+    if not isinstance(value, str):
+        return False
+    return bool(re.match(r"^(?:[A-Za-z]:[\\/]|/|\\\\)", value.strip()))
+
+
+def _public_value(value, key=""):
+    """Recursively redact secrets and absolute local paths before report rendering."""
+    key_lower = str(key).casefold()
+    if any(part in key_lower for part in SENSITIVE_KEY_PARTS):
+        return "[REDACTED]"
+    if isinstance(value, dict):
+        return {str(k): _public_value(v, str(k)) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_public_value(v, key) for v in value]
+    if _is_absolute_local_path(value):
+        return pathlib.PurePath(value).name or "[LOCAL_PATH]"
+    return value
+
 def _input_evidence_table(report):
     """Generate the input evidence status table placed at the top of the report."""
     ctx = report.get("context", {})
@@ -676,9 +744,9 @@ def _input_evidence_table(report):
     snap_provided = bool(artifacts.get("candidate-snapshots", {}).get("provided") or artifacts.get("source-snapshot", {}).get("provided"))
 
     # A2 independence check
-    a1_path = artifacts.get("benchmark", {}).get("path", "")
-    a2_path = artifacts.get("gold", {}).get("path", "")
-    gold_independence = "独立于 A1" if (a2_path and a2_path != a1_path) else ("与 A1 复用" if gold_provided else "—")
+    # File names are intentionally non-authoritative: two independent files may
+    # share a name, and report output must never disclose their absolute paths.
+    gold_independence = "已单独提供（独立性需由 metadata 核验）" if gold_provided else "—"
 
     lines = ["## 本次评估输入与证据状态\n"]
     lines.append("| 输入工件 | 是否提供 | 是否有效 | 支撑的指标 | 缺失影响 |")
@@ -1340,13 +1408,26 @@ def copy_inputs_and_manifest(report, artifact_paths, out):
     for label, src in sorted(artifact_paths.items()):
         entry = {"provided": bool(src)}
         if src and pathlib.Path(src).is_file():
-            h = hash_file(src) or "unreadable"
-            entry["sha256"] = h
             src_path = pathlib.Path(src)
+            # Context often carries Agent session metadata. Archive a redacted
+            # JSON representation instead of copying its raw source verbatim.
+            if label == "context":
+                try:
+                    raw_context = json.loads(src_path.read_text(encoding="utf-8"))
+                    payload = json.dumps(_public_value(raw_context), ensure_ascii=False, indent=2).encode("utf-8")
+                except (OSError, json.JSONDecodeError):
+                    payload = None
+            else:
+                payload = None
+            h = hashlib.sha256(payload).hexdigest() if payload is not None else (hash_file(src) or "unreadable")
+            entry["sha256"] = h
             safe_prefix = f"{label}__{h[:12]}" if h != "unreadable" else label
             dst = inputs_dir / f"{safe_prefix}{src_path.suffix}"
             if not dst.exists() or hash_file(dst) != h:
-                shutil.copy2(src, dst)
+                if payload is not None:
+                    dst.write_bytes(payload)
+                else:
+                    shutil.copy2(src, dst)
             entry["copied_to"] = str(dst.relative_to(out))
             entry["source_filename"] = src_path.name
         manifest["input_files"][label] = entry
@@ -1378,6 +1459,12 @@ def write(report, out, artifact_paths=None):
     if artifact_paths:
         copy_inputs_and_manifest(report, artifact_paths, out)
         report["manifest"] = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+
+    # Keep computation inputs private.  All rendered and persisted report views
+    # must comply with the Skill rule that secrets and absolute local paths never
+    # leave the execution boundary.
+    report["context"] = _public_value(report.get("context", {}))
+    report["artifacts"] = _public_value(report.get("artifacts", {}))
 
     (out / "audit.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -1449,11 +1536,15 @@ def _validate_run_config(rc):
         rt = proj.get("review_type")
         VALID_RT = {"narrative", "systematic", "scoping", "rapid", "umbrella",
                     "叙事综述", "系统综述", "范围综述", "快速综述", "伞式综述"}
-        if rt and rt not in VALID_RT:
+        if not isinstance(rt, str) or not rt:
+            errors.append("project.review_type is required (non-empty string)")
+        elif rt not in VALID_RT:
             errors.append(f"project.review_type: must be one of {VALID_RT}, got {rt!r}")
         ss = proj.get("scope_status")
         VALID_SS = {"in_scope", "cross_domain", "out_of_scope", "scope_uncertain"}
-        if ss and ss not in VALID_SS:
+        if not isinstance(ss, str) or not ss:
+            errors.append("project.scope_status is required (non-empty string)")
+        elif ss not in VALID_SS:
             errors.append(f"project.scope_status: must be one of {VALID_SS}, got {ss!r}")
         al = proj.get("allowed_assessment_level")
         VALID_AL = {"full", "limited_metadata_only", "stop"}
@@ -1462,6 +1553,8 @@ def _validate_run_config(rc):
     # library
     lib = rc.get("library", {})
     if isinstance(lib, dict):
+        if not isinstance(lib.get("provided"), bool):
+            errors.append("library.provided is required and must be boolean")
         if lib.get("provided") and not lib.get("path"):
             errors.append("library.path is required when library.provided is true")
         fmt = lib.get("format")
@@ -1475,6 +1568,10 @@ def _validate_run_config(rc):
     if isinstance(auto, dict):
         if "allow_search" not in auto:
             errors.append("automation.allow_search is required")
+        elif not isinstance(auto["allow_search"], bool):
+            errors.append("automation.allow_search must be boolean")
+        if "allowed_sources" in auto and not isinstance(auto["allowed_sources"], list):
+            errors.append("automation.allowed_sources must be an array")
     else:
         errors.append("automation is required and must be an object")
     # standards
@@ -1483,6 +1580,10 @@ def _validate_run_config(rc):
         ov = stds.get("user_overrides")
         if ov is not None and not isinstance(ov, dict):
             errors.append("standards.user_overrides must be an object")
+        elif isinstance(ov, dict):
+            for key in ("b_ggr_threshold", "b_drr_threshold"):
+                if key in ov and (not isinstance(ov[key], (int, float)) or isinstance(ov[key], bool) or ov[key] < 0):
+                    errors.append(f"standards.user_overrides.{key} must be a non-negative number")
     # output
     out_cfg = rc.get("output", {})
     if not isinstance(out_cfg, dict):
@@ -1542,7 +1643,7 @@ def main():
             pth = pathlib.Path(path_str)
             if pth.is_absolute(): return str(pth)
             resolved = (rc_base / pth).resolve()
-            return str(resolved) if resolved.is_file() else str(pathlib.Path(path_str).resolve())
+            return str(resolved)
 
         lib_info = rc.get("library", {})
         if lib_info.get("provided") and lib_info.get("path") and not a.library:
@@ -1607,6 +1708,10 @@ def main():
     if search_meta_path:
         try:
             sm = json.loads(pathlib.Path(search_meta_path).read_bytes())
+            ctx["_search_meta_query_failed"] = any(
+                isinstance(q, dict) and q.get("status") == "failed"
+                for q in sm.get("queries", [])
+            )
             # Merge search_rounds only if not already provided via context
             if "search_rounds" not in ctx or not ctx["search_rounds"]:
                 ctx["search_rounds"] = sm.get("search_rounds", ctx.get("search_rounds", []))
@@ -1622,18 +1727,21 @@ def main():
             ctx["_search_meta_dev_recall"] = dev_recall
             ctx["_search_meta_val_recall"] = val_recall
             ctx["_search_meta_val_total"] = sm.get("validation_recall_total", 0)
+            ctx["_search_meta_val_matched"] = sm.get("validation_recall_matched", 0)
             ctx["_search_meta_dev_total"] = sm.get("dev_recall_total", 0)
         except (json.JSONDecodeError, OSError):
             pass
     # Check query_hits for failed sources — downgrade A2 status if any query failed
     a2_query_failed = False
+    a2_query_failed = bool(ctx.get("_search_meta_query_failed"))
     if a.query_hits:
         qh_path = pathlib.Path(a.query_hits)
         if qh_path.is_file():
             try:
                 qh_data = json.loads(qh_path.read_text(encoding="utf-8"))
                 if isinstance(qh_data, list):
-                    # query-hits.json is a flat list of hit records
+                    # Flat hit lists cannot represent failures.  The paired
+                    # search_meta.json above is the authoritative execution log.
                     pass
                 elif isinstance(qh_data, dict):
                     queries_info = qh_data.get("queries", qh_data.get("query_log", []))
@@ -1651,10 +1759,18 @@ def main():
     if a2_query_failed and cov["a2"].get("status") == "measured":
         cov["a2"]["status"] = "partial_snapshot"
         cov["a2"]["note"] = (cov["a2"].get("note", "") + " At least one source query failed — A2 recall may underestimate true sensitivity.").strip()
-    # Downgrade A2 to estimated when no independent validation set
+    # An independent validation set is the A2 primary value.  Development-set
+    # recall remains diagnostic only and is never substituted silently.
     search_meta_a2_ev = ctx.get("_search_meta_a2_evidence", "")
     has_val_set = ctx.get("_search_meta_val_total", 0) > 0
-    if search_meta_a2_ev == "estimated" and cov["a2"].get("status") == "measured":
+    val_recall = ctx.get("_search_meta_val_recall")
+    val_total = ctx.get("_search_meta_val_total", 0)
+    val_matched = ctx.get("_search_meta_val_matched", 0)
+    if (search_meta_a2_ev == "measured" and isinstance(val_recall, (int, float))
+            and isinstance(val_total, int) and val_total > 0 and not a2_query_failed):
+        cov["a2"] = {"status": "measured", "total": val_total, "matched": val_matched,
+                     "recall": val_recall, "note": "Independent validation-set recall; this is the A2 primary value."}
+    elif search_meta_a2_ev == "estimated" and cov["a2"].get("status") == "measured":
         cov["a2"]["status"] = "estimated"
         cov["a2"]["note"] = (cov["a2"].get("note", "") + " No independent validation set — A2 may be overestimated (dev=val reuse).").strip()
     # F1: parse run-log BEFORE stability() so F1_query_traceability can use the result
