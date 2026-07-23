@@ -1009,14 +1009,135 @@ def _search_iteration_section(report):
 
     return "\n".join(lines)
 
+
+def _short_report_note(value, limit=150):
+    """Keep the main report readable; the complete rationale remains in the register JSON."""
+    text = " ".join(str(value or "").split())
+    if len(text) <= limit:
+        return text
+    for delimiter in ("。", ";", "；", "."):
+        index = text.find(delimiter)
+        if 20 <= index < limit:
+            return text[:index + 1]
+    return text[:limit - 1].rstrip() + "…"
+
+
+def _result_overview(report):
+    """Decision-first overview shown before the full 21-indicator register."""
+    rows = report.get("indicator_register", [])
+    failed = [row for row in rows if row.get("meets_standard") == "fail"]
+    warnings = [row for row in rows if row.get("meets_standard") == "warning"]
+    gaps = [row for row in rows if row.get("meets_standard") == "not_assessable"]
+    candidate = [row for row in rows if row.get("evidence_status") == "candidate_discovery"]
+    if failed:
+        readiness = "暂不建议据此声明文献库已准备完毕"
+    elif gaps:
+        readiness = "有条件可用：关键证据仍需补齐"
+    else:
+        readiness = "可进入下一阶段，但应持续监测警示项"
+
+    lines = ["## 评估结论\n", f"**文献库准备度：{readiness}。**"]
+    lines.append(
+        f"本次共 {len(rows)} 项指标：阻断 {len(failed)} 项、需关注 {len(warnings)} 项、"
+        f"待补证据 {len(gaps)} 项、AI 候选层 {len(candidate)} 项。"
+    )
+    priorities = failed + gaps + warnings
+    if priorities:
+        lines.append("\n**优先处理：**")
+        for row in priorities[:3]:
+            lines.append(f"- **{row['subproject']} {row['project_name']}**：{_short_report_note(row.get('description_and_action'))}")
+    lines.append("\n> `pass`/`warning`/`fail` 是诊断信号；AI 候选层只用于补充检索和排序，不能替代正式筛选结论。")
+    return "\n".join(lines)
+
+
+def _focused_findings(report):
+    """Avoid repeating every dimension after the full register; expand only material risks."""
+    rows = report.get("indicator_register", [])
+    focus = [row for row in rows if row.get("meets_standard") in {"fail", "warning", "not_assessable"}
+             or row.get("evidence_status") == "candidate_discovery"]
+    if not focus:
+        return "所有指标均无阻断、警示或待补证据项。"
+    lines = []
+    for row in focus[:8]:
+        label = f"{row['subproject']} {row['project_name']}"
+        lines.append(f"- **{label}**（{row.get('meets_standard')} / {row.get('evidence_status')}）："
+                     f"{_short_report_note(row.get('description_and_action'))}")
+    if len(focus) > 8:
+        lines.append(f"- 另有 {len(focus) - 8} 项需关注或待补证据项，详见上方完整评价总表。")
+    return "\n".join(lines)
+
+
+def _report_html(markdown_text):
+    """Render the generated Markdown subset as a readable standalone HTML report."""
+    def inline(value):
+        escaped = html.escape(value)
+        escaped = re.sub(r"`([^`]+)`", r"<code>\1</code>", escaped)
+        return re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", escaped)
+
+    lines = markdown_text.splitlines()
+    parts = ["""<!doctype html><html lang='zh-CN'><meta charset='utf-8'>
+<title>文献库评估报告</title><style>
+body{margin:0;background:#f6f8fb;color:#172033;font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}
+main{max-width:1440px;margin:32px auto;padding:32px;background:#fff;border-radius:14px;box-shadow:0 8px 28px #1f355018}
+h1{font-size:30px;margin:0 0 24px;color:#112a46}h2{margin-top:36px;padding-bottom:8px;border-bottom:2px solid #dce7f3;color:#133b63}h3{margin-top:28px;color:#24567f}h4{margin-top:22px}
+p{margin:10px 0}blockquote{margin:16px 0;padding:12px 16px;background:#eef6ff;border-left:4px solid #3b82c4;border-radius:4px}
+ul{margin:8px 0 16px;padding-left:24px}.table-wrap{overflow-x:auto;margin:14px 0 24px}table{width:100%;border-collapse:collapse;font-size:13px}th{background:#173f68;color:#fff;text-align:left}th,td{padding:9px 10px;vertical-align:top;border:1px solid #d9e2ec}tr:nth-child(even){background:#f8fbfe}code{padding:1px 4px;background:#eef2f6;border-radius:3px;font-family:ui-monospace,Consolas,monospace}strong{color:#9b2c2c}
+@media(max-width:760px){main{margin:0;padding:18px;border-radius:0}h1{font-size:24px}table{font-size:12px}}
+</style><main>"""]
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        if line.startswith("|") and index + 1 < len(lines) and re.match(r"^\|[ -:|]+\|$", lines[index + 1]):
+            headers = [cell.strip() for cell in line.strip("|").split("|")]
+            index += 2
+            body = []
+            while index < len(lines) and lines[index].startswith("|"):
+                body.append([cell.strip() for cell in lines[index].strip("|").split("|")])
+                index += 1
+            parts.append("<div class='table-wrap'><table><thead><tr>" + "".join(f"<th>{inline(cell)}</th>" for cell in headers) + "</tr></thead><tbody>")
+            for row in body:
+                parts.append("<tr>" + "".join(f"<td>{inline(cell)}</td>" for cell in row) + "</tr>")
+            parts.append("</tbody></table></div>")
+            continue
+        if line.startswith("#### "):
+            parts.append(f"<h4>{inline(line[5:])}</h4>")
+        elif line.startswith("### "):
+            parts.append(f"<h3>{inline(line[4:])}</h3>")
+        elif line.startswith("## "):
+            parts.append(f"<h2>{inline(line[3:])}</h2>")
+        elif line.startswith("# "):
+            parts.append(f"<h1>{inline(line[2:])}</h1>")
+        elif line.startswith("> "):
+            parts.append(f"<blockquote>{inline(line[2:])}</blockquote>")
+        elif line.startswith("- "):
+            items = []
+            while index < len(lines) and lines[index].startswith("- "):
+                items.append(f"<li>{inline(lines[index][2:])}</li>")
+                index += 1
+            parts.append("<ul>" + "".join(items) + "</ul>")
+            continue
+        elif line.strip():
+            parts.append(f"<p>{inline(line)}</p>")
+        index += 1
+    parts.append("</main></html>")
+    return "\n".join(parts)
+
+
 def _priority_actions(report):
-    blocking, rec = [], []
+    blocking, evidence_gaps, rec = [], [], []
     for row in report.get("indicator_register", []):
         v = row.get("meets_standard", "")
-        if v == "fail": blocking.append(f"- **{row['subproject']} {row['project_name']}**：{row.get('description_and_action','')}")
-        elif v == "warning": rec.append(f"- {row['subproject']} {row['project_name']}：{row.get('description_and_action','')}")
+        action = _short_report_note(row.get('description_and_action'))
+        item = f"- **{row['subproject']} {row['project_name']}**：{action}"
+        if v == "fail": blocking.append(item)
+        elif v == "not_assessable": evidence_gaps.append(item)
+        elif v == "warning": rec.append(item)
     parts = []
     if blocking: parts.append("### 阻断项\n\n" + "\n".join(blocking))
+    if evidence_gaps:
+        shown = evidence_gaps[:5]
+        suffix = f"\n- 另有 {len(evidence_gaps) - 5} 项待补证据，详见完整评价总表。" if len(evidence_gaps) > 5 else ""
+        parts.append("### 待补证据\n\n" + "\n".join(shown) + suffix)
     if rec: parts.append("### 建议改进\n\n" + "\n".join(rec))
     ctx = report.get("context", {})
     pa = ctx.get("potential_additions", [])
@@ -1537,6 +1658,9 @@ def write(report, out, artifact_paths=None):
     evidence_table = _input_evidence_table(report)
     method_narrative = _method_narrative(report)
     search_iteration_section = _search_iteration_section(report)
+    result_overview = _result_overview(report)
+    focused_findings = _focused_findings(report)
+    table_rows = [row[:-1] + (_short_report_note(row[-1]),) for row in rows]
 
     md = ["# 文献库评估报告\n"]
     # 1. 基本信息
@@ -1546,30 +1670,31 @@ def write(report, out, artifact_paths=None):
     md.append(f"| 工程领域 | {pr} |"); md.append(f"| 研究范围 | {sc} |")
     if a3l: md.append(f"| 全域参考 | OpenAlex 候选下界 {a3l} 篇 |")
     md.append("")
-    # 2. 本次评估输入与证据状态
-    if evidence_table:
-        md.append(evidence_table)
-        md.append("")
-    # 3. 评估方法与过程
-    md.append("## 评估方法与过程\n"); md.append(method_narrative); md.append("")
-    # 3b. 检索迭代过程（有 search_iterations 时渲染）
-    if search_iteration_section:
-        md.append(search_iteration_section)
-        md.append("")
-    # 4. A–F 六维评估总表
+    # 2. Decision-first conclusion.  The complete register remains in the body.
+    md.append(result_overview); md.append("")
+    # 3. A–F 六维评估总表
     md.append("## A–F 六维评估总表\n")
     md.append("| 维度 | 编号 | 评估项 | 标准 | 判定 | 当前值 | 证据状态 | 说明与行动 |")
     md.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
-    md.append("\n".join("| " + " | ".join(compact(cell) for cell in row) + " |" for row in rows))
+    md.append("\n".join("| " + " | ".join(compact(cell) for cell in row) + " |" for row in table_rows))
     md.append("")
-    # 5. 各维度分析
-    md.append("## 各维度分析\n"); md.append(_dimension_narrative(report)); md.append("")
-    # 6. 改进建议
-    md.append("## 改进建议\n"); md.append(_priority_actions(report)); md.append("")
-    # 7. 局限与声明
-    md.append("## 局限与声明\n"); md.append("\n".join("- " + x for x in report["limitations"])); md.append("")
-    (out / "audit.md").write_text("\n".join(md) + "\n", encoding="utf-8")
-    (out / "audit.html").write_text("<html><meta charset='utf-8'><body><pre>" + html.escape("\n".join(md)) + "</pre></body></html>", encoding="utf-8")
+    # 4. Expand only material issues; the full detail is already in the register.
+    md.append("## 重点发现与解释\n"); md.append(focused_findings); md.append("")
+    # 5. Actionable results, including important evidence gaps.
+    md.append("## 优先行动清单\n"); md.append(_priority_actions(report)); md.append("")
+    # 6. Audit material is intentionally after the decision content.
+    md.append("## 附录 B：证据与方法记录\n")
+    if evidence_table:
+        md.append(evidence_table.replace("## 本次评估输入与证据状态", "### 输入证据状态"))
+        md.append("")
+    md.append("### 评估方法与口径\n"); md.append(method_narrative); md.append("")
+    if search_iteration_section:
+        md.append(search_iteration_section.replace("## 检索迭代过程", "### 检索迭代过程"))
+        md.append("")
+    md.append("### 局限与声明\n"); md.append("\n".join("- " + x for x in report["limitations"])); md.append("")
+    markdown = "\n".join(md) + "\n"
+    (out / "audit.md").write_text(markdown, encoding="utf-8")
+    (out / "audit.html").write_text(_report_html(markdown), encoding="utf-8")
 
 def _validate_run_config(rc):
     """Lightweight schema validation without jsonschema dependency. Returns list of error strings."""

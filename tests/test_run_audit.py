@@ -37,6 +37,17 @@ with tempfile.TemporaryDirectory() as temp:
     assert (out / "audit.md").exists() and (out / "audit.html").exists()
     markdown = (out / "audit.md").read_text(encoding="utf-8")
     assert "| 维度 | 编号 | 评估项 | 标准 | 判定 | 当前值 | 证据状态 | 说明与行动 |" in markdown
+    assert "## 评估结论" in markdown
+    assert "## 重点发现与解释" in markdown
+    assert "## 优先行动清单" in markdown
+    assert "## 附录 B：证据与方法记录" in markdown
+    assert "## 各维度分析" not in markdown
+    assert markdown.index("## 评估结论") < markdown.index("## A–F 六维评估总表")
+    assert markdown.index("## A–F 六维评估总表") < markdown.index("## 附录 B：证据与方法记录")
+    assert "### 待补证据" in markdown
+    rendered_html = (out / "audit.html").read_text(encoding="utf-8")
+    assert "<table>" in rendered_html
+    assert "<pre>" not in rendered_html
     register = audit["indicator_register"]
     assert len(register) == 21
     assert {row["subproject"] for row in register} >= {"A1", "B1", "C1", "D1", "E1", "F6"}
