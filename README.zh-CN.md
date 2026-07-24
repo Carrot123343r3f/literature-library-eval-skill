@@ -169,6 +169,16 @@ git clone https://github.com/Carrot123343r3f/literature-library-eval-skill.git \
 | **AI Agent** | [SKILL.md](SKILL.md) · [输入协议](references/intake-protocol.md) · [检索协议](references/search-strategy-protocol.md) |
 | **开发者** | [run-config-schema.json](schemas/run-config-schema.json) · [架构](docs/architecture.md) · [tests/](tests/) |
 
+### 可选模块：单篇文献价值与补库建议
+
+`scripts/rank_papers.py` 独立于 A–F 文献库准备度审计，输出库内单篇质量、库内核心支撑和外部补库候选三类可解释排名。它不会把引用量或期刊/会议名称当成研究质量裁决。
+
+```bash
+python scripts/rank_papers.py --library library.json --context context.json --run-config run-config.json --out paper-ranking
+```
+
+外部候选默认使用 OpenAlex 自动检索，要求 `automation.allow_search=true` 且 `automation.allowed_sources` 包含 `openalex`。检索失败会退出并生成 `paper-ranking-error.json`，不会虚构“全网 Top 20”。使用 `--external-candidates` 可基于已保存的候选快照离线复跑。
+
 ## 路线图
 
 | 阶段 | 内容 | 状态 |

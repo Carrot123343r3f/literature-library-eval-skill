@@ -165,6 +165,16 @@ git clone https://github.com/Carrot123343r3f/literature-library-eval-skill.git \
 | **AI Agents** | [SKILL.md](SKILL.md) · [Intake protocol](references/intake-protocol.md) · [Search protocol](references/search-strategy-protocol.md) |
 | **Developers** | [run-config-schema.json](schemas/run-config-schema.json) · [Architecture](docs/architecture.md) · [tests/](tests/) |
 
+### Optional paper-value-ranking module
+
+`scripts/rank_papers.py` is independent from the A–F readiness audit. It produces three transparent rankings: library papers by individual value, library papers by their marginal support for the current review, and externally discovered candidates by inclusion priority. It never treats citation count or venue as a research-quality verdict.
+
+```bash
+python scripts/rank_papers.py --library library.json --context context.json --run-config run-config.json --out paper-ranking
+```
+
+External discovery uses OpenAlex only when `automation.allow_search=true` and `openalex` is permitted by `automation.allowed_sources`. If the query cannot run, the command exits with an error and writes `paper-ranking-error.json`; it does not emit a fabricated external Top 20. A saved candidate snapshot can be supplied with `--external-candidates` for reproducible/offline reruns.
+
 ## Roadmap
 
 | Phase | What | Status |
