@@ -9,6 +9,38 @@ import urllib.request
 import xml.etree.ElementTree as ET
 
 
+MAX_RECORDS_PER_SOURCE_QUERY = 10_000
+
+
+def load_search_authorization(run_config_path):
+    """Return the persisted source allowlist after enforcing search consent."""
+    try:
+        with open(run_config_path, encoding="utf-8") as fh:
+            config = json.load(fh)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"invalid run-config: {exc}") from exc
+    automation = config.get("automation")
+    if not isinstance(automation, dict) or automation.get("allow_search") is not True:
+        raise PermissionError("automation.allow_search must be true before online collection")
+    allowed = automation.get("allowed_sources")
+    if allowed is not None and (not isinstance(allowed, list) or not all(isinstance(x, str) for x in allowed)):
+        raise ValueError("automation.allowed_sources must be an array of source names")
+    return None if allowed is None else {x.casefold() for x in allowed}
+
+
+def load_authorized_plan(run_config_path, plan_path):
+    """Load a plan only after enforcing the user's persisted search consent."""
+    allowed_sources = load_search_authorization(run_config_path)
+    try:
+        with open(plan_path, encoding="utf-8") as fh:
+            plan = json.load(fh)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"invalid query plan: {exc}") from exc
+    if not isinstance(plan, dict) or not isinstance(plan.get("queries"), list) or not plan["queries"]:
+        raise ValueError("query plan must be an object with a non-empty queries array")
+    return plan, allowed_sources
+
+
 def get_json(url):
     request = urllib.request.Request(url, headers={"User-Agent": "literature-library-eval/3.0"})
     with urllib.request.urlopen(request, timeout=45) as response:
@@ -76,17 +108,39 @@ COLLECTORS = {"openalex": openalex, "crossref": crossref, "europepmc": europepmc
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--run-config", required=True,
+                        help="confirmed run-config.json; allow_search=true is required")
     parser.add_argument("--plan", required=True, help="query-plan JSON with queries[{id,query,sources}]")
     parser.add_argument("--out", required=True, help="source snapshot JSON")
     parser.add_argument("--max-records", type=int, default=1000, help="maximum records per source/query; a limit means an incomplete snapshot")
     args = parser.parse_args()
-    if args.max_records < 1: parser.error("--max-records must be positive")
-    with open(args.plan, encoding="utf-8") as fh: plan = json.load(fh)
-    result = {"schema_version": "1.0", "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(), "max_records_per_source_query": args.max_records, "queries": []}
+    if not 1 <= args.max_records <= MAX_RECORDS_PER_SOURCE_QUERY:
+        parser.error(f"--max-records must be between 1 and {MAX_RECORDS_PER_SOURCE_QUERY}")
+    try:
+        plan, allowed_sources = load_authorized_plan(args.run_config, args.plan)
+    except (ValueError, PermissionError) as exc:
+        parser.error(str(exc))
+    result = {"schema_version": "1.1", "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+              "max_records_per_source_query": args.max_records,
+              "scope_filters": plan.get("scope_filters"), "dedup_rule": plan.get("dedup_rule"), "queries": []}
     for row in plan.get("queries", []):
+        if not isinstance(row, dict) or not isinstance(row.get("query"), str) or not row["query"].strip():
+            result["queries"].append({"id": row.get("id") if isinstance(row, dict) else None,
+                                      "sources": {}, "status": "failed",
+                                      "error": "each query requires a non-empty string query"})
+            continue
+        sources = row.get("sources", ["openalex"])
+        if not isinstance(sources, list) or not all(isinstance(source, str) for source in sources):
+            result["queries"].append({"id": row.get("id"), "query": row["query"], "sources": {},
+                                      "status": "failed", "error": "sources must be an array of strings"})
+            continue
         entry = {"id": row.get("id"), "query": row["query"], "sources": {}}
-        for source in row.get("sources", ["openalex"]):
-            collector = COLLECTORS.get(source)
+        for source in sources:
+            source_key = source.casefold()
+            if allowed_sources is not None and source_key not in allowed_sources:
+                entry["sources"][source] = {"status": "failed", "error": "source is not authorized by run-config"}
+                continue
+            collector = COLLECTORS.get(source_key)
             if not collector: entry["sources"][source] = {"status": "failed", "error": "unsupported open-source collector"}; continue
             try:
                 collected = collector(row["query"], args.max_records); collected["status"] = "complete" if collected["complete"] else "partial"

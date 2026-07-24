@@ -96,11 +96,15 @@ def load_snapshot(path):
     sources = {}
     for query in data.get("queries", []):
         for name, result in query.get("sources", {}).items():
-            bucket = sources.setdefault(name, {"items": [], "statuses": []})
+            bucket = sources.setdefault(name, {"items": [], "statuses": [], "completion_flags": [],
+                                               "scope_filters": data.get("scope_filters"), "dedup_rule": data.get("dedup_rule")})
             bucket["items"].extend(result.get("items", []))
             bucket["statuses"].append(result.get("status", "unknown"))
+            bucket["completion_flags"].append(result.get("complete") is True)
     if not sources and isinstance(data.get("sources"), dict):
-        sources = {name: {"items": value.get("items", []), "statuses": [value.get("status", "unknown")]}
+        sources = {name: {"items": value.get("items", []), "statuses": [value.get("status", "unknown")],
+                          "completion_flags": [value.get("complete") is True],
+                          "scope_filters": data.get("scope_filters"), "dedup_rule": data.get("dedup_rule")}
                    for name, value in data["sources"].items()}
     return sources
 
@@ -141,19 +145,27 @@ def a3(sources):
     if not sources or len(sources) < 2:
         return {"status": "not_assessable", "note": "Supply deduplicable snapshots from at least two sources."}
     incomplete = sorted(name for name, meta in sources.items()
-                        if any(status != "complete" for status in meta.get("statuses", [])))
+                        if any(status != "complete" for status in meta.get("statuses", []))
+                        or not all(meta.get("completion_flags", [])))
+    filters = {json.dumps(meta.get("scope_filters"), ensure_ascii=False, sort_keys=True)
+               for meta in sources.values()}
+    dedup_rules = {str(meta.get("dedup_rule") or "") for meta in sources.values()}
+    boundaries_valid = len(filters) == 1 and next(iter(filters), "null") not in ("null", "{}")
+    dedup_valid = len(dedup_rules) == 1 and bool(next(iter(dedup_rules), ""))
     source_ids = {name: set().union(*(ids(x) for x in meta.get("items", []) if isinstance(x, dict)))
                   for name, meta in sources.items()}
     union = set().union(*source_ids.values())
     if not union: return {"status": "not_assessable", "note": "Candidate snapshots contain no stable identifiers."}
     overlaps = {"|".join(pair): len(source_ids[pair[0]] & source_ids[pair[1]])
                 for pair in __import__('itertools').combinations(sorted(source_ids), 2)}
-    result = {"status": "estimated_lower_bound" if not incomplete else "partial_snapshot",
+    result = {"status": "estimated_lower_bound" if not incomplete and boundaries_valid and dedup_valid else "partial_snapshot",
               "deduplicated_candidate_lower_bound": len(union),
               "source_unique_identifier_counts": {k: len(v) for k, v in source_ids.items()},
               "pairwise_overlaps": overlaps, "incomplete_sources": incomplete,
+              "boundaries_valid": boundaries_valid, "dedup_rule_valid": dedup_valid,
               "note": "Multi-source deduplicated lower bound; not Recall or capture-recapture."}
-    if incomplete: result["note"] = "Source snapshots incomplete; provisional count must not support A3 conclusions."
+    if incomplete or not boundaries_valid or not dedup_valid:
+        result["note"] = "Source snapshots are incomplete or lack consistent scope filters/dedup rule; provisional count must not support A3 conclusions."
     return result
 
 def health(library, standards=None, dedup_log_provided=False, dedup_log_depth="missing", decision_log_provided=False, taxonomy=None):
@@ -213,43 +225,82 @@ def health(library, standards=None, dedup_log_provided=False, dedup_log_depth="m
             "f5_note": f5_note,
             "note": "F3=v 附件或开放链接任一可用的记录比例；两率分列展示以避免重复计数。版本族等价性、访问权限和更正状态需专项来源核验。F5 需 decision-log 以追溯纳入/排除理由。"}
 
+PATHWAY_MINIMUMS = {"快速综述": 2, "叙事综述": 3, "范围综述": 3, "系统综述": 4, "伞式综述": 5}
+PATHWAY_TYPES = {"db_boolean", "backward_citation", "forward_citation", "related_articles", "standards_guidelines"}
+
+
 def stability(context):
     rounds = context.get("search_rounds", [])
-    # Only rounds with screened_complete or explicit screening bypass count for convergence.
-    # discovery_only rounds are excluded from GGR/DRR verdicts — candidates != inclusions.
-    screened_rounds = [x for x in rounds if x.get("screening_status") != "discovery_only"]
-    any_discovery_only = any(x.get("screening_status") == "discovery_only" for x in rounds)
+    # Only explicit, fully screened rounds may contribute to a saturation claim.
+    screened_rounds = [x for x in rounds if x.get("screening_status") == "screened_complete"]
+    discovery_rounds = [x for x in rounds if x.get("screening_status") == "discovery_only"]
+    any_discovery_only = bool(discovery_rounds)
     rates = [round(x["included_high"] / x["core_before"], 4) for x in screened_rounds
              if isinstance(x.get("core_before"), (int, float)) and x["core_before"] > 0
              and isinstance(x.get("included_high"), (int, float))]
     discovery_candidates_count = sum(x.get("discovery_candidates", 0) for x in rounds
                                      if x.get("screening_status") == "discovery_only")
+    candidate_ggr_rates = [round(x["discovery_candidates"] / x["core_before"], 4)
+                           for x in discovery_rounds
+                           if isinstance(x.get("core_before"), (int, float)) and x["core_before"] > 0
+                           and isinstance(x.get("discovery_candidates"), (int, float))]
+    candidate_yields = [x for x in context.get("source_marginal_yields", [])
+                        if isinstance(x, dict) and x.get("screening_status") == "discovery_only"
+                        and isinstance(x.get("yield"), (int, float))]
     paths = set(context.get("planned_pathways", []))
     done = {x.get("pathway") for x in rounds if x.get("completed")}
     complete = round(len(paths & done) / len(paths), 3) if paths else None
+    discovery_done = {x.get("pathway") for x in discovery_rounds if x.get("completed")}
+    discovery_planned = paths & {x.get("pathway") for x in discovery_rounds}
+    candidate_completion = (round(len(discovery_done & discovery_planned) / len(discovery_planned), 3)
+                            if discovery_planned else None)
     standards = context.get("standards", {})
-    threshold = float(standards.get("b_ggr_threshold", 0.02))
-    yield_threshold = float(standards.get("b_drr_threshold", 0.05))
-    # Only count yields from non-discovery_only pathways
-    yields = [x.get("yield") for x in context.get("source_marginal_yields", [])
-              if isinstance(x.get("yield"), (int, float))
-              and x.get("screening_status") != "discovery_only"]
+    try:
+        threshold = float(standards.get("b_ggr_threshold", 0.02))
+        yield_threshold = float(standards.get("b_drr_threshold", 0.05))
+    except (TypeError, ValueError) as exc:
+        return {"status": "not_assessable", "checks": {"B1_ggr": "not_assessable",
+                "B2_drr": "not_assessable", "B3_pathway_completion": "not_assessable",
+                "B3_independent_validation": "not_assessable", "F1_query_traceability": "not_assessable"},
+                "verdict": "不可证明", "note": f"B 阈值必须是数值：{exc}"}
+    if threshold < 0 or yield_threshold < 0:
+        return {"status": "not_assessable", "checks": {"B1_ggr": "not_assessable",
+                "B2_drr": "not_assessable", "B3_pathway_completion": "not_assessable",
+                "B3_independent_validation": "not_assessable", "F1_query_traceability": "not_assessable"},
+                "verdict": "不可证明", "note": "B 阈值不能为负数。"}
+    independent_pathways = context.get("independent_pathways", [])
+    valid_pathways = [x for x in independent_pathways if isinstance(x, dict)
+                      and isinstance(x.get("pathway_id"), str) and x["pathway_id"].strip()
+                      and x.get("type") in PATHWAY_TYPES
+                      and x.get("completed") is True
+                      and x.get("screening_status") == "screened_complete"
+                      and isinstance(x.get("yield"), (int, float))]
+    review_type = normalize_review_type(context.get("review_type", ""))
+    required_pathways = PATHWAY_MINIMUMS.get(review_type, 3)
+    pathway_types = {x.get("type") for x in valid_pathways}
+    pathway_ids = {x["pathway_id"] for x in valid_pathways}
+    citation_pathways = sum(x.get("type") in {"backward_citation", "forward_citation"} for x in valid_pathways)
+    independence_complete = (len(valid_pathways) >= required_pathways
+                             and len(pathway_types) >= required_pathways
+                             and bool(paths) and paths <= pathway_ids
+                             and (review_type != "伞式综述" or citation_pathways >= 2))
+    yields = [x["yield"] for x in valid_pathways]
     iv_passed = context.get("independent_validation_passed")
     run_log = context.get("run_log_complete")
     run_log_depth = context.get("run_log_depth", "missing")
     has_enough_screened = len(screened_rounds) >= 2
-    converged = (has_enough_screened and all(x < threshold for x in rates[-2:]) and complete == 1.0
+    converged = (has_enough_screened and independence_complete and all(x <= threshold for x in rates[-2:]) and complete == 1.0
                  and iv_passed is True
-                 and bool(yields) and all(x < yield_threshold for x in yields))
+                 and bool(yields) and all(x <= yield_threshold for x in yields))
     # B1 / B2: require screened rounds — discovery_only → not_assessable
     if any_discovery_only and not has_enough_screened:
         b1_verdict = "not_assessable"
         b2_verdict = "not_assessable"
     else:
-        b1_verdict = "pass" if len(rates) >= 2 and all(x < threshold for x in rates[-2:]) else ("not_assessable" if len(rates) < 2 else "fail")
-        b2_verdict = "pass" if yields and all(x < yield_threshold for x in yields) else ("not_assessable" if not yields else "fail")
+        b1_verdict = "pass" if len(rates) >= 2 and all(x <= threshold for x in rates[-2:]) else ("not_assessable" if len(rates) < 2 else "fail")
+        b2_verdict = "pass" if yields and all(x <= yield_threshold for x in yields) else ("not_assessable" if not yields else "fail")
     checks = {"B1_ggr": b1_verdict,
-              "B3_pathway_completion": "pass" if complete == 1.0 else "not_assessable" if complete is None else "fail",
+              "B3_pathway_completion": "pass" if complete == 1.0 and independence_complete else "not_assessable" if complete is None else "fail",
               "B2_drr": b2_verdict,
               "F1_query_traceability": "pass" if run_log is True
               else "fail" if run_log is False else "not_assessable",
@@ -257,7 +308,18 @@ def stability(context):
               else "fail" if iv_passed is False else "not_assessable"}
     result = {"status": "discovery_only" if any_discovery_only and not has_enough_screened else ("measured" if rounds else "not_assessable"),
               "high_confidence_new_rates": rates, "discovery_candidates_total": discovery_candidates_count,
+              "candidate_discovery": {
+                  "status": "candidate_discovery" if any_discovery_only else "not_assessable",
+                  "ggr_rates": candidate_ggr_rates,
+                  "pathway_yields": candidate_yields,
+                  "completed_pathways": len(discovery_done & discovery_planned),
+                  "planned_pathways": len(discovery_planned),
+                  "pathway_completion": candidate_completion,
+                  "candidates_total": discovery_candidates_count,
+              },
               "pathway_completion": complete, "source_marginal_yields": yields,
+              "required_independent_pathways": required_pathways,
+              "valid_independent_pathways": len(valid_pathways),
               "thresholds": {"new_rate": threshold, "marginal_yield": yield_threshold}, "checks": checks,
               "independent_validation_passed": iv_passed,
               "verdict": "趋稳" if converged and all(x == "pass" for x in checks.values())
@@ -287,8 +349,11 @@ def currency(context):
             "note": "Report every successful source date."}
 
 def artifacts(paths):
-    result = {name: {"provided": bool(value), "path": value} for name, value in paths.items()}
-    result["provided_with_paths"] = {k: v["path"] for k, v in result.items() if v["provided"]}
+    # Artifact metadata is rendered into public reports.  Never retain a source
+    # path here: a path can expose usernames, workspace layout, or mounted volumes.
+    result = {name: {"provided": bool(value),
+                     "source_filename": pathlib.Path(value).name if value else None}
+              for name, value in paths.items()}
     return result
 
 def balance(library, standards=None):
@@ -652,6 +717,30 @@ def compact(value):
     if isinstance(value, (list, dict)): return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
     return str(value).replace("|", "／").replace("\n", " ")
 
+
+SENSITIVE_KEY_PARTS = ("token", "secret", "password", "api_key", "apikey", "authorization", "credential")
+
+
+def _is_absolute_local_path(value):
+    """Recognise Windows and POSIX absolute paths without resolving them."""
+    if not isinstance(value, str):
+        return False
+    return bool(re.match(r"^(?:[A-Za-z]:[\\/]|/|\\\\)", value.strip()))
+
+
+def _public_value(value, key=""):
+    """Recursively redact secrets and absolute local paths before report rendering."""
+    key_lower = str(key).casefold()
+    if any(part in key_lower for part in SENSITIVE_KEY_PARTS):
+        return "[REDACTED]"
+    if isinstance(value, dict):
+        return {str(k): _public_value(v, str(k)) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_public_value(v, key) for v in value]
+    if _is_absolute_local_path(value):
+        return pathlib.PurePath(value).name or "[LOCAL_PATH]"
+    return value
+
 def _input_evidence_table(report):
     """Generate the input evidence status table placed at the top of the report."""
     ctx = report.get("context", {})
@@ -676,9 +765,9 @@ def _input_evidence_table(report):
     snap_provided = bool(artifacts.get("candidate-snapshots", {}).get("provided") or artifacts.get("source-snapshot", {}).get("provided"))
 
     # A2 independence check
-    a1_path = artifacts.get("benchmark", {}).get("path", "")
-    a2_path = artifacts.get("gold", {}).get("path", "")
-    gold_independence = "独立于 A1" if (a2_path and a2_path != a1_path) else ("与 A1 复用" if gold_provided else "—")
+    # File names are intentionally non-authoritative: two independent files may
+    # share a name, and report output must never disclose their absolute paths.
+    gold_independence = "已单独提供（独立性需由 metadata 核验）" if gold_provided else "—"
 
     lines = ["## 本次评估输入与证据状态\n"]
     lines.append("| 输入工件 | 是否提供 | 是否有效 | 支撑的指标 | 缺失影响 |")
@@ -920,14 +1009,135 @@ def _search_iteration_section(report):
 
     return "\n".join(lines)
 
+
+def _short_report_note(value, limit=150):
+    """Keep the main report readable; the complete rationale remains in the register JSON."""
+    text = " ".join(str(value or "").split())
+    if len(text) <= limit:
+        return text
+    for delimiter in ("。", ";", "；", "."):
+        index = text.find(delimiter)
+        if 20 <= index < limit:
+            return text[:index + 1]
+    return text[:limit - 1].rstrip() + "…"
+
+
+def _result_overview(report):
+    """Decision-first overview shown before the full 21-indicator register."""
+    rows = report.get("indicator_register", [])
+    failed = [row for row in rows if row.get("meets_standard") == "fail"]
+    warnings = [row for row in rows if row.get("meets_standard") == "warning"]
+    gaps = [row for row in rows if row.get("meets_standard") == "not_assessable"]
+    candidate = [row for row in rows if row.get("evidence_status") == "candidate_discovery"]
+    if failed:
+        readiness = "暂不建议据此声明文献库已准备完毕"
+    elif gaps:
+        readiness = "有条件可用：关键证据仍需补齐"
+    else:
+        readiness = "可进入下一阶段，但应持续监测警示项"
+
+    lines = ["## 评估结论\n", f"**文献库准备度：{readiness}。**"]
+    lines.append(
+        f"本次共 {len(rows)} 项指标：阻断 {len(failed)} 项、需关注 {len(warnings)} 项、"
+        f"待补证据 {len(gaps)} 项、AI 候选层 {len(candidate)} 项。"
+    )
+    priorities = failed + gaps + warnings
+    if priorities:
+        lines.append("\n**优先处理：**")
+        for row in priorities[:3]:
+            lines.append(f"- **{row['subproject']} {row['project_name']}**：{_short_report_note(row.get('description_and_action'))}")
+    lines.append("\n> `pass`/`warning`/`fail` 是诊断信号；AI 候选层只用于补充检索和排序，不能替代正式筛选结论。")
+    return "\n".join(lines)
+
+
+def _focused_findings(report):
+    """Avoid repeating every dimension after the full register; expand only material risks."""
+    rows = report.get("indicator_register", [])
+    focus = [row for row in rows if row.get("meets_standard") in {"fail", "warning", "not_assessable"}
+             or row.get("evidence_status") == "candidate_discovery"]
+    if not focus:
+        return "所有指标均无阻断、警示或待补证据项。"
+    lines = []
+    for row in focus[:8]:
+        label = f"{row['subproject']} {row['project_name']}"
+        lines.append(f"- **{label}**（{row.get('meets_standard')} / {row.get('evidence_status')}）："
+                     f"{_short_report_note(row.get('description_and_action'))}")
+    if len(focus) > 8:
+        lines.append(f"- 另有 {len(focus) - 8} 项需关注或待补证据项，详见上方完整评价总表。")
+    return "\n".join(lines)
+
+
+def _report_html(markdown_text):
+    """Render the generated Markdown subset as a readable standalone HTML report."""
+    def inline(value):
+        escaped = html.escape(value)
+        escaped = re.sub(r"`([^`]+)`", r"<code>\1</code>", escaped)
+        return re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", escaped)
+
+    lines = markdown_text.splitlines()
+    parts = ["""<!doctype html><html lang='zh-CN'><meta charset='utf-8'>
+<title>文献库评估报告</title><style>
+body{margin:0;background:#f6f8fb;color:#172033;font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}
+main{max-width:1440px;margin:32px auto;padding:32px;background:#fff;border-radius:14px;box-shadow:0 8px 28px #1f355018}
+h1{font-size:30px;margin:0 0 24px;color:#112a46}h2{margin-top:36px;padding-bottom:8px;border-bottom:2px solid #dce7f3;color:#133b63}h3{margin-top:28px;color:#24567f}h4{margin-top:22px}
+p{margin:10px 0}blockquote{margin:16px 0;padding:12px 16px;background:#eef6ff;border-left:4px solid #3b82c4;border-radius:4px}
+ul{margin:8px 0 16px;padding-left:24px}.table-wrap{overflow-x:auto;margin:14px 0 24px}table{width:100%;border-collapse:collapse;font-size:13px}th{background:#173f68;color:#fff;text-align:left}th,td{padding:9px 10px;vertical-align:top;border:1px solid #d9e2ec}tr:nth-child(even){background:#f8fbfe}code{padding:1px 4px;background:#eef2f6;border-radius:3px;font-family:ui-monospace,Consolas,monospace}strong{color:#9b2c2c}
+@media(max-width:760px){main{margin:0;padding:18px;border-radius:0}h1{font-size:24px}table{font-size:12px}}
+</style><main>"""]
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        if line.startswith("|") and index + 1 < len(lines) and re.match(r"^\|[ -:|]+\|$", lines[index + 1]):
+            headers = [cell.strip() for cell in line.strip("|").split("|")]
+            index += 2
+            body = []
+            while index < len(lines) and lines[index].startswith("|"):
+                body.append([cell.strip() for cell in lines[index].strip("|").split("|")])
+                index += 1
+            parts.append("<div class='table-wrap'><table><thead><tr>" + "".join(f"<th>{inline(cell)}</th>" for cell in headers) + "</tr></thead><tbody>")
+            for row in body:
+                parts.append("<tr>" + "".join(f"<td>{inline(cell)}</td>" for cell in row) + "</tr>")
+            parts.append("</tbody></table></div>")
+            continue
+        if line.startswith("#### "):
+            parts.append(f"<h4>{inline(line[5:])}</h4>")
+        elif line.startswith("### "):
+            parts.append(f"<h3>{inline(line[4:])}</h3>")
+        elif line.startswith("## "):
+            parts.append(f"<h2>{inline(line[3:])}</h2>")
+        elif line.startswith("# "):
+            parts.append(f"<h1>{inline(line[2:])}</h1>")
+        elif line.startswith("> "):
+            parts.append(f"<blockquote>{inline(line[2:])}</blockquote>")
+        elif line.startswith("- "):
+            items = []
+            while index < len(lines) and lines[index].startswith("- "):
+                items.append(f"<li>{inline(lines[index][2:])}</li>")
+                index += 1
+            parts.append("<ul>" + "".join(items) + "</ul>")
+            continue
+        elif line.strip():
+            parts.append(f"<p>{inline(line)}</p>")
+        index += 1
+    parts.append("</main></html>")
+    return "\n".join(parts)
+
+
 def _priority_actions(report):
-    blocking, rec = [], []
+    blocking, evidence_gaps, rec = [], [], []
     for row in report.get("indicator_register", []):
         v = row.get("meets_standard", "")
-        if v == "fail": blocking.append(f"- **{row['subproject']} {row['project_name']}**：{row.get('description_and_action','')}")
-        elif v == "warning": rec.append(f"- {row['subproject']} {row['project_name']}：{row.get('description_and_action','')}")
+        action = _short_report_note(row.get('description_and_action'))
+        item = f"- **{row['subproject']} {row['project_name']}**：{action}"
+        if v == "fail": blocking.append(item)
+        elif v == "not_assessable": evidence_gaps.append(item)
+        elif v == "warning": rec.append(item)
     parts = []
     if blocking: parts.append("### 阻断项\n\n" + "\n".join(blocking))
+    if evidence_gaps:
+        shown = evidence_gaps[:5]
+        suffix = f"\n- 另有 {len(evidence_gaps) - 5} 项待补证据，详见完整评价总表。" if len(evidence_gaps) > 5 else ""
+        parts.append("### 待补证据\n\n" + "\n".join(shown) + suffix)
     if rec: parts.append("### 建议改进\n\n" + "\n".join(rec))
     ctx = report.get("context", {})
     pa = ctx.get("potential_additions", [])
@@ -978,6 +1188,7 @@ def indicator_rows(report):
     s = report.get("standards", {}); ctx = report.get("context", {})
     artifacts = report.get("artifacts", {})
     chk = lambda g, k: g.get("checks", {}).get(k, "not_assessable")
+    recency_checks = report["recency"]
     user_confirmed = s.get("confirmed_by_user", True)
     is_umbrella = ctx.get("review_type") == "伞式综述"
 
@@ -993,9 +1204,11 @@ def indicator_rows(report):
         "a1m": s.get("a1_min_recall"), "a2m": s.get("a2_min_recall"),
         "br": p.get("high_confidence_new_rates", []),
         "bv": p.get("verdict", "—"),
+        "b_candidate": p.get("candidate_discovery", {}),
         "tc": t.get("topic_counts", {}), "tf": t.get("flags", []),
         "bs": b.get("top_source_share"), "bcv": b.get("cv"), "bg": b.get("gini"), "bsh": b.get("normalized_shannon"),
         "ds": d.get("recent_share"), "dy": d.get("window_years"),
+        "d_min": d.get("minimum_share"),
         "d_status": d.get("status"), "d_rec": d.get("recent_records"),
         "d_dated": d.get("dated_records"), "d_comp": d.get("year_completeness"),
         "d_pre": d.get("preprint_records"),
@@ -1043,18 +1256,32 @@ def indicator_rows(report):
 
     def _b1(d):
         br = d["br"]
-        cur = (', '.join(f'{r:.4f}' for r in br[-2:]) if len(br) >= 2
-               else (f'首轮 {br[-1]:.4f}（需第2轮确认趋稳）' if len(br) == 1 else '—'))
+        formal = (', '.join(f'{r:.4f}' for r in br[-2:]) if len(br) >= 2
+                  else (f'首轮 {br[-1]:.4f}（需第2轮确认趋稳）' if len(br) == 1
+                        else '已完成筛选轮次 0/2（尚无正式 GGR）'))
+        candidate_rates = d["b_candidate"].get("ggr_rates", [])
+        candidate = (', '.join(f'{rate:.4f}' for rate in candidate_rates)
+                     if candidate_rates else '未执行 AI 候选检索')
+        cur = f"正式 GGR：{formal}；AI 候选 GGR：{candidate}"
         return (chk(p, "B1_ggr"), cur, p.get("status"),
+                f"AI 候选 GGR=发现候选/轮次开始前核心库，只用于首轮补充和后续筛选排序，不能替代正式 GGR。"
                 f"B 趋稳仅在筛选决策真实、路径独立且多轮完成时才成立。"
                 f"GGR={', '.join(f'{r:.4f}' for r in br[-2:]) if len(br)>=2 else ('首轮 '+f'{br[-1]:.4f}'+'，需第2轮确认' if len(br)==1 else '需要至少两轮 search round')}。"
                 f"高置信新增/核心库。")
 
     def _b2(d):
         my = p.get('source_marginal_yields', [])
+        valid = p.get('valid_independent_pathways', 0)
+        required = p.get('required_independent_pathways', '—')
+        candidate_yields = d["b_candidate"].get("pathway_yields", [])
+        candidate = (', '.join(f"{x.get('pathway', '未命名')}={_fmt_pct(x.get('yield'))}"
+                               for x in candidate_yields)
+                     if candidate_yields else '未执行 AI 候选路径')
         return (chk(p, "B2_drr"),
-                f"{_fmt_num(len(my))} 条路径", p.get("status"),
-                f"DRR 只有在筛选确认后才有意义——发现候选不等于纳入项。边际收益：{my}。"
+                f"正式：已验证独立路径 {_fmt_num(valid)}/{_fmt_num(required)}；AI 候选路径发现率：{candidate}",
+                p.get("status"),
+                f"AI 候选路径发现率=该路径新候选/该路径候选，只用于首轮补充；正式 DRR 必须以筛选确认的纳入项复算。"
+                f"正式边际收益：{my}。"
                 f"新路径高置信文献/候选量。")
 
     def _b3(d):
@@ -1063,11 +1290,21 @@ def indicator_rows(report):
                    else "fail" if chk(p, "B3_pathway_completion") == "fail" or chk(p, "B3_independent_validation") == "fail"
                    else "not_assessable")
         iv_label = ('通过' if p.get('independent_validation_passed') is True
-                    else ('未通过' if p.get('independent_validation_passed') is False else '—'))
+                    else ('未通过' if p.get('independent_validation_passed') is False else '未提供'))
+        complete = p.get('pathway_completion')
+        pathway_label = (_fmt_pct(complete) if complete is not None
+                         else f"0/{_fmt_num(p.get('required_independent_pathways', '—'))}（未提供完成路径）")
+        candidate_b3 = d["b_candidate"]
+        candidate_planned = candidate_b3.get("planned_pathways", 0)
+        candidate_label = (f"{_fmt_num(candidate_b3.get('completed_pathways', 0))}/"
+                           f"{_fmt_num(candidate_planned)}"
+                           f"（候选 {_fmt_num(candidate_b3.get('candidates_total', 0))} 条）"
+                           if candidate_planned else "未执行 AI 候选检索")
         return (verdict,
-                f"路径 {_fmt_pct(p.get('pathway_completion'))} | 独立验证 {iv_label}",
+                f"正式路径 {pathway_label} | 独立验证 {iv_label}；AI 候选执行 {candidate_label}",
                 p.get("status"),
-                f"结论：**{bv}**。仅低 GGR/DRR 不够——需路径完成+独立验证+筛选真实同时成立。")
+                f"AI 候选执行率仅说明自动补充检索是否完成，不是独立验证。结论：**{bv}**。"
+                f"仅低 GGR/DRR 不够——需路径完成+独立验证+筛选真实同时成立。")
 
     def _c1(d):
         tc = d["tc"]; tf = d["tf"]
@@ -1100,31 +1337,37 @@ def indicator_rows(report):
     def _d1(d):
         dsrc = d["dsrc"]
         fdays = report.get('currency', {}).get('freshness_threshold_days', '—')
-        return (chk(d, "D1_search_freshness"),
-                "; ".join(f"{k}:{v['days_since']}天" for k,v in dsrc.items()) if dsrc else "—",
+        verdict = chk(recency_checks, "D1_search_freshness")
+        return (verdict,
+                "; ".join(f"{k}:{v['days_since']}天" for k,v in dsrc.items()) if dsrc else "有日期来源 0（未记录检索日期）",
                 report.get("currency", {}).get("status", "not_assessable"),
                 f"{len(dsrc)} 个来源有日期。"
-                f"{'存在过期来源。' if chk(d,'D1_search_freshness')=='warning' else '来源在新鲜度窗口内。'}")
+                f"{'存在过期来源。' if verdict=='warning' else '来源在新鲜度窗口内。'}")
 
     def _d2(d):
-        return (chk(d, "D2_recent_share"),
+        verdict = chk(recency_checks, "D2_recent_share")
+        return (verdict,
                 f"{_fmt_pct(d['ds'])}（{_fmt_num(d.get('d_rec'))}/{_fmt_num(d.get('d_dated'))} 有日期）",
                 d["d_status"],
                 f"近 {d['dy']} 年占比 {_fmt_pct(d['ds'])}。阈值按 profile：AI/通信 3年40%、常规 5年35%、基础设施 7年30%。"
-                f"{'低于阈值。' if chk(d,'D2_recent_share')=='warning' else '达标。'}"
+                f"{'低于阈值。' if verdict=='warning' else '达标。'}"
                 f"年份字段完整率 {_fmt_pct(d.get('d_comp'))}；<50% 时 D2 自动降级为 warning。")
 
     def _d3(d):
-        return (chk(d, "D3_frontier"),
-                ctx.get("frontier_coverage_verdict", "—"), d["d_status"],
+        verdict = chk(recency_checks, "D3_frontier")
+        return (verdict,
+                (ctx.get("frontier_coverage_verdict")
+                 if "frontier_coverage_verdict" in ctx else "独立前沿检索证据 0 条（未提供）"),
+                "measured" if verdict != "not_assessable" else "not_assessable",
                 "前沿覆盖需 context.frontier_coverage_verdict。近期发表不等于前沿覆盖。")
 
     def _d4(d):
         pre = d.get('d_pre', '—')
-        return (chk(d, "D4_versions_preprints"),
-                f"预印本 {_fmt_num(pre)} 条", d["d_status"],
+        verdict = chk(recency_checks, "D4_versions_preprints")
+        return (verdict,
+                f"预印本 {_fmt_num(pre)} 条", "measured" if verdict != "not_assessable" else "not_assessable",
                 f"{_fmt_num(pre)} 条预印本。"
-                f"{'未核验版本关系。' if chk(d,'D4_versions_preprints')=='not_assessable' else ''}")
+                f"{'未核验版本关系。' if verdict=='not_assessable' else ''}")
 
     def _e1(d):
         qh = d["qh"]
@@ -1234,14 +1477,16 @@ def indicator_rows(report):
         "A1": lambda d: f"阈值 ≥ {d['a1m']}" if d['a1m'] else "需配置 a1_min_recall",
         "A2": lambda d: f"阈值 ≥ {d['a2m']}" if d['a2m'] else "需配置 a2_min_recall",
         "A3": "至少两完整来源去重后的不重复候选数；只报告下界",
-        "B1": lambda d: f"最后两轮均 < {p.get('thresholds',{}).get('new_rate','—')}" if len(d['br']) >= 2 else "/",
-        "B2": lambda d: f"各路径均 < {p.get('thresholds',{}).get('marginal_yield','—')}" if len(p.get('source_marginal_yields',[])) >= 2 else "/",
-        "B3": lambda d: "路径完成且独立验证通过" if p.get('independent_validation_passed') is not None else '/',
+        "B1": lambda d: (f"正式：最后两轮均 < {p.get('thresholds',{}).get('new_rate','—')}；"
+                           "AI 候选层仅展示，不作趋稳判定"),
+        "B2": lambda d: (f"正式：各独立路径均 < {p.get('thresholds',{}).get('marginal_yield','—')}；"
+                           "AI 候选层仅展示，不作趋稳判定"),
+        "B3": lambda d: "正式：路径完成且独立验证通过；AI 候选层仅展示执行进度",
         "C1": "无空主题；Top≤0.70；CV≤0.80；Gini≤0.50；Shannon≥0.55",
         "C2": "Top≤0.80；CV≤1.00；Gini≤0.60；Shannon≥0.45",
         "C3": "每主题 ≥2 来源；单一来源 ≤0.80",
         "D1": lambda d: f"各来源距检索 ≤ {report.get('currency',{}).get('freshness_threshold_days','—')} 天",
-        "D2": lambda d: f"近 {d['dy'] or '—'} 年占比 ≥ {d.get('minimum_share','—')}",
+        "D2": lambda d: f"近 {d['dy'] or '—'} 年占比 ≥ {_fmt_pct(d.get('d_min'))}",
         "D3": lambda d: "/" if not ctx.get("frontier_coverage_verdict") else "前沿窗口有独立检索/Gold set",
         "D4": lambda d: "/" if not ctx.get("version_currency_verdict") else "预印本-正式版关系已核验",
         "E1": "报告 h-index；仅背景信号",
@@ -1340,13 +1585,26 @@ def copy_inputs_and_manifest(report, artifact_paths, out):
     for label, src in sorted(artifact_paths.items()):
         entry = {"provided": bool(src)}
         if src and pathlib.Path(src).is_file():
-            h = hash_file(src) or "unreadable"
-            entry["sha256"] = h
             src_path = pathlib.Path(src)
+            # Context often carries Agent session metadata. Archive a redacted
+            # JSON representation instead of copying its raw source verbatim.
+            if label == "context":
+                try:
+                    raw_context = json.loads(src_path.read_text(encoding="utf-8"))
+                    payload = json.dumps(_public_value(raw_context), ensure_ascii=False, indent=2).encode("utf-8")
+                except (OSError, json.JSONDecodeError):
+                    payload = None
+            else:
+                payload = None
+            h = hashlib.sha256(payload).hexdigest() if payload is not None else (hash_file(src) or "unreadable")
+            entry["sha256"] = h
             safe_prefix = f"{label}__{h[:12]}" if h != "unreadable" else label
             dst = inputs_dir / f"{safe_prefix}{src_path.suffix}"
             if not dst.exists() or hash_file(dst) != h:
-                shutil.copy2(src, dst)
+                if payload is not None:
+                    dst.write_bytes(payload)
+                else:
+                    shutil.copy2(src, dst)
             entry["copied_to"] = str(dst.relative_to(out))
             entry["source_filename"] = src_path.name
         manifest["input_files"][label] = entry
@@ -1379,6 +1637,15 @@ def write(report, out, artifact_paths=None):
         copy_inputs_and_manifest(report, artifact_paths, out)
         report["manifest"] = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
 
+    # Keep computation inputs private.  All rendered and persisted report views
+    # must comply with the Skill rule that secrets and absolute local paths never
+    # leave the execution boundary.
+    report["context"] = _public_value(report.get("context", {}))
+    report["artifacts"] = _public_value(report.get("artifacts", {}))
+    # Rebind the rendering context after redaction.  Keeping the pre-redaction
+    # local reference here would leak absolute paths into audit.md/audit.html.
+    ctx = report["context"]
+
     (out / "audit.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
     gt = report.get("generated_at", "")[:19].replace("T", " ")
@@ -1391,6 +1658,9 @@ def write(report, out, artifact_paths=None):
     evidence_table = _input_evidence_table(report)
     method_narrative = _method_narrative(report)
     search_iteration_section = _search_iteration_section(report)
+    result_overview = _result_overview(report)
+    focused_findings = _focused_findings(report)
+    table_rows = [row[:-1] + (_short_report_note(row[-1]),) for row in rows]
 
     md = ["# 文献库评估报告\n"]
     # 1. 基本信息
@@ -1400,30 +1670,31 @@ def write(report, out, artifact_paths=None):
     md.append(f"| 工程领域 | {pr} |"); md.append(f"| 研究范围 | {sc} |")
     if a3l: md.append(f"| 全域参考 | OpenAlex 候选下界 {a3l} 篇 |")
     md.append("")
-    # 2. 本次评估输入与证据状态
-    if evidence_table:
-        md.append(evidence_table)
-        md.append("")
-    # 3. 评估方法与过程
-    md.append("## 评估方法与过程\n"); md.append(method_narrative); md.append("")
-    # 3b. 检索迭代过程（有 search_iterations 时渲染）
-    if search_iteration_section:
-        md.append(search_iteration_section)
-        md.append("")
-    # 4. A–F 六维评估总表
+    # 2. Decision-first conclusion.  The complete register remains in the body.
+    md.append(result_overview); md.append("")
+    # 3. A–F 六维评估总表
     md.append("## A–F 六维评估总表\n")
     md.append("| 维度 | 编号 | 评估项 | 标准 | 判定 | 当前值 | 证据状态 | 说明与行动 |")
     md.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
-    md.append("\n".join("| " + " | ".join(compact(cell) for cell in row) + " |" for row in rows))
+    md.append("\n".join("| " + " | ".join(compact(cell) for cell in row) + " |" for row in table_rows))
     md.append("")
-    # 5. 各维度分析
-    md.append("## 各维度分析\n"); md.append(_dimension_narrative(report)); md.append("")
-    # 6. 改进建议
-    md.append("## 改进建议\n"); md.append(_priority_actions(report)); md.append("")
-    # 7. 局限与声明
-    md.append("## 局限与声明\n"); md.append("\n".join("- " + x for x in report["limitations"])); md.append("")
-    (out / "audit.md").write_text("\n".join(md) + "\n", encoding="utf-8")
-    (out / "audit.html").write_text("<html><meta charset='utf-8'><body><pre>" + html.escape("\n".join(md)) + "</pre></body></html>", encoding="utf-8")
+    # 4. Expand only material issues; the full detail is already in the register.
+    md.append("## 重点发现与解释\n"); md.append(focused_findings); md.append("")
+    # 5. Actionable results, including important evidence gaps.
+    md.append("## 优先行动清单\n"); md.append(_priority_actions(report)); md.append("")
+    # 6. Audit material is intentionally after the decision content.
+    md.append("## 附录 B：证据与方法记录\n")
+    if evidence_table:
+        md.append(evidence_table.replace("## 本次评估输入与证据状态", "### 输入证据状态"))
+        md.append("")
+    md.append("### 评估方法与口径\n"); md.append(method_narrative); md.append("")
+    if search_iteration_section:
+        md.append(search_iteration_section.replace("## 检索迭代过程", "### 检索迭代过程"))
+        md.append("")
+    md.append("### 局限与声明\n"); md.append("\n".join("- " + x for x in report["limitations"])); md.append("")
+    markdown = "\n".join(md) + "\n"
+    (out / "audit.md").write_text(markdown, encoding="utf-8")
+    (out / "audit.html").write_text(_report_html(markdown), encoding="utf-8")
 
 def _validate_run_config(rc):
     """Lightweight schema validation without jsonschema dependency. Returns list of error strings."""
@@ -1449,11 +1720,15 @@ def _validate_run_config(rc):
         rt = proj.get("review_type")
         VALID_RT = {"narrative", "systematic", "scoping", "rapid", "umbrella",
                     "叙事综述", "系统综述", "范围综述", "快速综述", "伞式综述"}
-        if rt and rt not in VALID_RT:
+        if not isinstance(rt, str) or not rt:
+            errors.append("project.review_type is required (non-empty string)")
+        elif rt not in VALID_RT:
             errors.append(f"project.review_type: must be one of {VALID_RT}, got {rt!r}")
         ss = proj.get("scope_status")
         VALID_SS = {"in_scope", "cross_domain", "out_of_scope", "scope_uncertain"}
-        if ss and ss not in VALID_SS:
+        if not isinstance(ss, str) or not ss:
+            errors.append("project.scope_status is required (non-empty string)")
+        elif ss not in VALID_SS:
             errors.append(f"project.scope_status: must be one of {VALID_SS}, got {ss!r}")
         al = proj.get("allowed_assessment_level")
         VALID_AL = {"full", "limited_metadata_only", "stop"}
@@ -1462,6 +1737,8 @@ def _validate_run_config(rc):
     # library
     lib = rc.get("library", {})
     if isinstance(lib, dict):
+        if not isinstance(lib.get("provided"), bool):
+            errors.append("library.provided is required and must be boolean")
         if lib.get("provided") and not lib.get("path"):
             errors.append("library.path is required when library.provided is true")
         fmt = lib.get("format")
@@ -1475,6 +1752,10 @@ def _validate_run_config(rc):
     if isinstance(auto, dict):
         if "allow_search" not in auto:
             errors.append("automation.allow_search is required")
+        elif not isinstance(auto["allow_search"], bool):
+            errors.append("automation.allow_search must be boolean")
+        if "allowed_sources" in auto and not isinstance(auto["allowed_sources"], list):
+            errors.append("automation.allowed_sources must be an array")
     else:
         errors.append("automation is required and must be an object")
     # standards
@@ -1483,6 +1764,10 @@ def _validate_run_config(rc):
         ov = stds.get("user_overrides")
         if ov is not None and not isinstance(ov, dict):
             errors.append("standards.user_overrides must be an object")
+        elif isinstance(ov, dict):
+            for key in ("b_ggr_threshold", "b_drr_threshold"):
+                if key in ov and (not isinstance(ov[key], (int, float)) or isinstance(ov[key], bool) or ov[key] < 0):
+                    errors.append(f"standards.user_overrides.{key} must be a non-negative number")
     # output
     out_cfg = rc.get("output", {})
     if not isinstance(out_cfg, dict):
@@ -1542,7 +1827,7 @@ def main():
             pth = pathlib.Path(path_str)
             if pth.is_absolute(): return str(pth)
             resolved = (rc_base / pth).resolve()
-            return str(resolved) if resolved.is_file() else str(pathlib.Path(path_str).resolve())
+            return str(resolved)
 
         lib_info = rc.get("library", {})
         if lib_info.get("provided") and lib_info.get("path") and not a.library:
@@ -1607,6 +1892,10 @@ def main():
     if search_meta_path:
         try:
             sm = json.loads(pathlib.Path(search_meta_path).read_bytes())
+            ctx["_search_meta_query_failed"] = any(
+                isinstance(q, dict) and q.get("status") == "failed"
+                for q in sm.get("queries", [])
+            )
             # Merge search_rounds only if not already provided via context
             if "search_rounds" not in ctx or not ctx["search_rounds"]:
                 ctx["search_rounds"] = sm.get("search_rounds", ctx.get("search_rounds", []))
@@ -1622,18 +1911,21 @@ def main():
             ctx["_search_meta_dev_recall"] = dev_recall
             ctx["_search_meta_val_recall"] = val_recall
             ctx["_search_meta_val_total"] = sm.get("validation_recall_total", 0)
+            ctx["_search_meta_val_matched"] = sm.get("validation_recall_matched", 0)
             ctx["_search_meta_dev_total"] = sm.get("dev_recall_total", 0)
         except (json.JSONDecodeError, OSError):
             pass
     # Check query_hits for failed sources — downgrade A2 status if any query failed
     a2_query_failed = False
+    a2_query_failed = bool(ctx.get("_search_meta_query_failed"))
     if a.query_hits:
         qh_path = pathlib.Path(a.query_hits)
         if qh_path.is_file():
             try:
                 qh_data = json.loads(qh_path.read_text(encoding="utf-8"))
                 if isinstance(qh_data, list):
-                    # query-hits.json is a flat list of hit records
+                    # Flat hit lists cannot represent failures.  The paired
+                    # search_meta.json above is the authoritative execution log.
                     pass
                 elif isinstance(qh_data, dict):
                     queries_info = qh_data.get("queries", qh_data.get("query_log", []))
@@ -1651,10 +1943,18 @@ def main():
     if a2_query_failed and cov["a2"].get("status") == "measured":
         cov["a2"]["status"] = "partial_snapshot"
         cov["a2"]["note"] = (cov["a2"].get("note", "") + " At least one source query failed — A2 recall may underestimate true sensitivity.").strip()
-    # Downgrade A2 to estimated when no independent validation set
+    # An independent validation set is the A2 primary value.  Development-set
+    # recall remains diagnostic only and is never substituted silently.
     search_meta_a2_ev = ctx.get("_search_meta_a2_evidence", "")
     has_val_set = ctx.get("_search_meta_val_total", 0) > 0
-    if search_meta_a2_ev == "estimated" and cov["a2"].get("status") == "measured":
+    val_recall = ctx.get("_search_meta_val_recall")
+    val_total = ctx.get("_search_meta_val_total", 0)
+    val_matched = ctx.get("_search_meta_val_matched", 0)
+    if (search_meta_a2_ev == "measured" and isinstance(val_recall, (int, float))
+            and isinstance(val_total, int) and val_total > 0 and not a2_query_failed):
+        cov["a2"] = {"status": "measured", "total": val_total, "matched": val_matched,
+                     "recall": val_recall, "note": "Independent validation-set recall; this is the A2 primary value."}
+    elif search_meta_a2_ev == "estimated" and cov["a2"].get("status") == "measured":
         cov["a2"]["status"] = "estimated"
         cov["a2"]["note"] = (cov["a2"].get("note", "") + " No independent validation set — A2 may be overestimated (dev=val reuse).").strip()
     # F1: parse run-log BEFORE stability() so F1_query_traceability can use the result

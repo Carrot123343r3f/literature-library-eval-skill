@@ -40,7 +40,7 @@
     },
     "automation": {
       "type": "object",
-      "description": "v1.0: allow_search is informational only. allowed_sources/stop_conditions/allow_query_refinement are declared for forward compatibility but not yet enforced by scripts.",
+      "description": "allow_search is enforced by every bundled online collector. When allowed_sources is provided, it is an enforced allowlist; an empty list authorizes no online source.",
       "required": ["allow_search"],
       "properties": {
         "allow_search": {"type": "boolean"},

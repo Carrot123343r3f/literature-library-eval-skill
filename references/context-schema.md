@@ -72,7 +72,7 @@
 | `taxonomy[].target_share` | C1 TVD（可选） | 可选 |
 | `topic_source_counts` | C3 主题-来源交叉 | 可选，缺失则 C3 标 not_assessable |
 | `search_rounds`（≥2 轮，含 `core_before`/`included_high`） | B1 GGR | B 维必需 |
-| `planned_pathways` + rounds 的 `completed`/`pathway` | B3 路径完成 | B 维必需 |
+| `planned_pathways` + rounds 的 `completed`/`pathway` + `independent_pathways[].pathway_id` | B3 路径完成 | B 维必需；ID 必须一一对应 |
 | `source_marginal_yields[]`（含 `pathway`/`candidates`/`screened_high_confidence`/`new_high_confidence`/`dedup_rule`/`yield`） | B2 DRR | B 维必需；原始字段供第三方从 query-hits.json 复算 |
 | `independent_validation_passed` | B3 独立验证 | B 维必需 |
 | `last_successful_search` | D1 来源新鲜度 | D 维必需 |
@@ -90,6 +90,6 @@
 - `--library`（必需）：题录数组，每项含 `title`/`DOI`/`date`/`source`/`cited_by_count`/`publicationTitle` 等
 - `--benchmark`（A1）：基准集，每项含稳定标识符（DOI/arXiv ID）
 - `--gold` + `--query-hits`（A2）：Gold set 与已执行的检索命中快照
-- `--candidate-snapshots`（A3）：采集器输出的多源快照（`collect_open_sources.py` 生成）
+- `--candidate-snapshots`（A3）：采集器输出的多源快照（`collect_open_sources.py --run-config run-config.json ...` 生成）。采集器仅在 `automation.allow_search = true` 时联网，并按 `allowed_sources` 限制来源。
 
 未提供的输入 → 对应评估项标 `not_assessable`，报告如实说明缺失，不用替代数字伪装。

@@ -37,6 +37,17 @@ with tempfile.TemporaryDirectory() as temp:
     assert (out / "audit.md").exists() and (out / "audit.html").exists()
     markdown = (out / "audit.md").read_text(encoding="utf-8")
     assert "| 维度 | 编号 | 评估项 | 标准 | 判定 | 当前值 | 证据状态 | 说明与行动 |" in markdown
+    assert "## 评估结论" in markdown
+    assert "## 重点发现与解释" in markdown
+    assert "## 优先行动清单" in markdown
+    assert "## 附录 B：证据与方法记录" in markdown
+    assert "## 各维度分析" not in markdown
+    assert markdown.index("## 评估结论") < markdown.index("## A–F 六维评估总表")
+    assert markdown.index("## A–F 六维评估总表") < markdown.index("## 附录 B：证据与方法记录")
+    assert "### 待补证据" in markdown
+    rendered_html = (out / "audit.html").read_text(encoding="utf-8")
+    assert "<table>" in rendered_html
+    assert "<pre>" not in rendered_html
     register = audit["indicator_register"]
     assert len(register) == 21
     assert {row["subproject"] for row in register} >= {"A1", "B1", "C1", "D1", "E1", "F6"}
@@ -232,6 +243,13 @@ with tempfile.TemporaryDirectory() as temp:
     assert b1 == "not_assessable", f"B1 should be not_assessable for discovery_only, got {b1}"
     assert b2 == "not_assessable", f"B2 should be not_assessable for discovery_only, got {b2}"
     assert proc["verdict"] != "趋稳", f"Verdict should not be 趋稳 for discovery_only, got {proc['verdict']}"
+    candidate = proc["candidate_discovery"]
+    assert candidate["ggr_rates"] == [0.12]
+    assert candidate["pathway_yields"][0]["yield"] == 0.12
+    rows = {row["subproject"]: row for row in audit["indicator_register"]}
+    assert "AI 候选 GGR：0.1200" in rows["B1"]["current_status"]
+    assert "AI 候选路径发现率" in rows["B2"]["current_status"]
+    assert "AI 候选执行 1/1" in rows["B3"]["current_status"]
 
 print("B discovery_only guard: PASSED")
 
