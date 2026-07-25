@@ -167,13 +167,13 @@ git clone https://github.com/Carrot123343r3f/literature-library-eval-skill.git \
 
 ### Optional paper-value-ranking module
 
-`scripts/rank_papers.py` is independent from the A–F readiness audit. It produces three transparent rankings: library papers by individual value, library papers by their marginal support for the current review, and externally discovered candidates by inclusion priority. It never treats citation count or venue as a research-quality verdict.
+`scripts/run_paper_evaluation.py` (`rank_papers.py` remains a compatible entry point) is independent from the A–F readiness audit. It routes each paper by study design, separates eligibility, appraisal, reproducibility, integrity, bibliometric signals, and marginal review contribution, and then produces three transparent rankings. It never treats citation count or venue as a research-quality verdict or emits a cross-design universal quality score. See [the V2 evidence and contract note](references/paper-evaluation-v2.md).
 
 ```bash
-python scripts/rank_papers.py --library library.json --context context.json --run-config run-config.json --out paper-ranking
+python scripts/run_paper_evaluation.py --library library.json --context context.json --run-config run-config.json --out paper-evaluation
 ```
 
-External discovery uses OpenAlex only when `automation.allow_search=true` and `openalex` is permitted by `automation.allowed_sources`. If the query cannot run, the command exits with an error and writes `paper-ranking-error.json`; it does not emit a fabricated external Top 20. A saved candidate snapshot can be supplied with `--external-candidates` for reproducible/offline reruns.
+External discovery uses OpenAlex only when `automation.allow_search=true`, `openalex` is permitted by `automation.allowed_sources`, and an already configured `OPENALEX_API_KEY` is available. If the query cannot run, the command exits with an error and writes `paper-evaluation-error.json`; it does not emit a fabricated external Top 20. A saved candidate snapshot can be supplied with `--external-candidates` for reproducible/offline reruns.
 
 ## Roadmap
 

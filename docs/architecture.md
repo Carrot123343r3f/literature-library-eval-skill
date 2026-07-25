@@ -52,7 +52,7 @@ User Intake (run-config.json)
 | `search_iterator.py` | Multi-round iteration validator | ✅ |
 | `normalize_candidates.py` | Identifier dedup + version grouping | ✅ |
 | `run_audit.py` | A–F computation + report generation | ✅ |
-| `rank_papers.py` | Optional per-paper quality, core-support and external-candidate ranking | ✅ |
+| `run_paper_evaluation.py` | Optional design-aware per-paper evidence evaluation, core support and external candidates | ✅ |
 | `build_query_plan.py` | Cross-database query plan from PICO | 📋 |
 | `execute_search.py` | Multi-source search with pagination | 📋 |
 | `refine_queries.py` | Constrained atomic query modification | 📋 |

@@ -69,17 +69,18 @@ S3 确认完成 → SRCH-1 工程 PICO 分解 → SRCH-2 构建开发集+验证�
 
 ## 可选模块：单篇文献价值与补库建议
 
-当用户进一步询问“哪些文章更好”“哪些文章支撑当前文献库”“还应补哪些文章”时，运行独立的 `scripts/rank_papers.py`。它不改写 A–F 指标，也不输出混淆性的统一总分：
+当用户进一步询问“哪些文章更好”“哪些文章支撑当前文献库”“还应补哪些文章”时，运行 `scripts/run_paper_evaluation.py`（`rank_papers.py` 为兼容入口）。它不改写 A–F 指标，也不把异质研究压缩为单一质量分：
 
-1. **库内单篇质量 Top 20**：研究问题匹配度 30%、方法与证据 25%、可信度 15%、年龄归一化影响力 10%、时效 10%、可用性 10%。缺失维度不按零处理，按可用证据重归一化，并标明 `metadata_only` 或 `fulltext_assessed`。
-2. **库内核心支撑 Top 20**：按对当前库的边际贡献（主题独特性、来源多样性、证据角色）排序，不等于引用量或单篇质量排名。
-3. **外部建议补库 Top 20**：按单篇质量、相关性和主题缺口补充价值排序；统一为 `candidate_discovery`，在完成纳入/排除筛选前不得称为已纳入文献或 B 饱和证据。
+1. **资格与研究类型路由**：先用工程 PICO-T 判断 `eligible` / `possibly_eligible` / `out_of_scope`，再路由至 algorithm_ml、system_software、hardware_materials、field_observational、benchmark_dataset、review_guideline 或 qualitative_mixed 的专属检查项。
+2. **方法、可复核性与完整性分离**：方法学逐项输出 `pass` / `concern` / `fail` / `not_assessable`；代码、数据、全文和版本是可复核性证据；撤稿/更正独立作为完整性风险。缺少全文时仅可输出 `metadata_priority`，不得称为高质量。
+3. **三个不同目标的榜单**：优先精读按资格和已取得的评价证据排序；核心证据骨架按移除后主题/角色/独立来源缺口排序；外部补库统一为 `candidate_discovery`，筛选前不得进入正式库或 B 饱和度。
 
-外部 Top 20 默认需要已授权的 OpenAlex 自动检索（`automation.allow_search=true` 且允许 `openalex`）。无网络、未授权或查询失败时，写出 `paper-ranking-error.json` 并返回错误，绝不生成伪造的“全网 Top 20”。可用 `--external-candidates` 输入已保存快照进行可复现的离线重跑。
+引用、期刊/会议与开放性只作独立背景信号，不能裁决单篇质量。外部候选需要已授权 OpenAlex、已配置 `OPENALEX_API_KEY` 和可保存的快照；失败时写出 `paper-evaluation-error.json` 并返回错误。完整字段与依据见 `references/paper-evaluation-v2.md`。
 
 ## 与脚本的关系
 
 - `scripts/run_audit.py` — A–F 计算 + 报告生成（主入口）
+- `scripts/run_paper_evaluation.py` — 单篇文献证据评价 V2（资格、研究类型、方法、复核性、完整性、贡献与候选）
 - `scripts/search_for_eval.py` — 单轮 OpenAlex 诊断检索（支持 `--dev-set`/`--validation-set`/`--pico`）；必须传入已确认的 `--run-config`，并受 `automation.allow_search` 与 `allowed_sources` 约束
 - `scripts/search_iterator.py` — 多轮原子迭代验证（`validate` + `table` 命令）
 - `scripts/collect_open_sources.py` — 多源快照收集；必须传入已确认的 `--run-config`，且仅在 `automation.allow_search = true` 时执行，并遵守 `allowed_sources`

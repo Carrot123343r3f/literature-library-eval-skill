@@ -171,13 +171,13 @@ git clone https://github.com/Carrot123343r3f/literature-library-eval-skill.git \
 
 ### 可选模块：单篇文献价值与补库建议
 
-`scripts/rank_papers.py` 独立于 A–F 文献库准备度审计，输出库内单篇质量、库内核心支撑和外部补库候选三类可解释排名。它不会把引用量或期刊/会议名称当成研究质量裁决。
+`scripts/run_paper_evaluation.py`（`rank_papers.py` 兼容入口）独立于 A–F 文献库准备度审计，按“资格→研究类型路由→方法学评价→可复核性/完整性/影响信号→库内边际贡献”输出优先精读、核心证据骨架与外部补库候选。它不会把引用量或期刊/会议名称当成研究质量裁决，也不会输出跨研究设计通用的文章质量总分。详见 [V2 依据与字段说明](references/paper-evaluation-v2.md)。
 
 ```bash
-python scripts/rank_papers.py --library library.json --context context.json --run-config run-config.json --out paper-ranking
+python scripts/run_paper_evaluation.py --library library.json --context context.json --run-config run-config.json --out paper-evaluation
 ```
 
-外部候选默认使用 OpenAlex 自动检索，要求 `automation.allow_search=true` 且 `automation.allowed_sources` 包含 `openalex`。检索失败会退出并生成 `paper-ranking-error.json`，不会虚构“全网 Top 20”。使用 `--external-candidates` 可基于已保存的候选快照离线复跑。
+外部候选默认使用 OpenAlex 自动检索，要求 `automation.allow_search=true`、`automation.allowed_sources` 包含 `openalex`，并在已配置环境中提供 `OPENALEX_API_KEY`。检索失败会退出并生成 `paper-evaluation-error.json`，不会虚构“全网 Top 20”。使用 `--external-candidates` 可基于已保存的候选快照离线复跑。
 
 ## 路线图
 
