@@ -14,7 +14,7 @@ def invoke(script, *args):
 
 with tempfile.TemporaryDirectory() as temp:
     root = pathlib.Path(temp)
-    csv_input = root / "library.csv"; imported = root / "import"; screening = root / "screening"; actions = root / "actions"
+    csv_input = root / "library.csv"; imported = root / "import"; screening = root / "screening"; actions = root / "actions"; summary = root / "summary"
     csv_input.write_text("title,doi,year,abstract\nExample paper,10.1000/example,2025,Example abstract\n", encoding="utf-8")
     invoke("import_library.py", "--input", csv_input, "--out", imported)
     library = json.loads((imported / "library.json").read_text(encoding="utf-8"))
@@ -22,6 +22,12 @@ with tempfile.TemporaryDirectory() as temp:
     invoke("screen_candidates.py", "--candidates", imported / "library.json", "--out", screening)
     template = json.loads((screening / "screening-decisions.json").read_text(encoding="utf-8"))
     assert template["status"] == "template" and template["decisions"][0]["decision"] == "pending"
+    template["decisions"][0].update({"decision": "include", "reason": "matches frozen criteria"})
+    decision_path = root / "decisions.json"; decision_path.write_text(json.dumps(template), encoding="utf-8")
+    invoke("screen_candidates.py", "--candidates", imported / "library.json", "--decisions", decision_path, "--out", screening)
+    invoke("summarize_screening.py", "--candidates", imported / "library.json", "--decisions", screening / "screening-decisions.json", "--out", summary)
+    screening_meta = json.loads((summary / "screening-summary.json").read_text(encoding="utf-8"))
+    assert screening_meta["search_rounds"][0]["included_high"] == 1
     audit = {"indicator_register": [{"subproject": "A2", "meets_standard": "not_assessable", "description_and_action": "missing validation evidence"}]}
     audit_path = root / "audit.json"; audit_path.write_text(json.dumps(audit), encoding="utf-8")
     invoke("next_actions.py", "--audit", audit_path, "--out", actions)

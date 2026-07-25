@@ -8,7 +8,7 @@ Export collection as Better BibTeX JSON or CSL JSON → point `library.path` to 
 
 ### EndNote / Mendeley
 
-Export to RIS or BibTeX → convert to JSON. Direct format support: v1.x roadmap.
+Export to RIS, BibTeX or CSV → normalize with `scripts/import_library.py` before auditing. Zotero API synchronization remains a roadmap item.
 
 ## Literature Databases
 

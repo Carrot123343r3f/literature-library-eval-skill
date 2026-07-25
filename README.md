@@ -60,7 +60,7 @@ Run the audit **before** writing. In one command (or one conversation with an AI
 The AI will:
 
 1. Confirm your research question, review type, domain, and boundaries (max 3 questions)
-2. Accept your library — Zotero-exported JSON (Zotero → Better BibTeX JSON or CSL JSON export). BibTeX/RIS/CSV direct import and Zotero API integration are on the v1.x roadmap
+2. Accept JSON, CSV, RIS, or BibTeX through `import_library.py`; review the generated import preview before auditing.
 3. Execute single-round diagnostic search, help you iterate the query, compute all A–F indicators, and produce the audit package
 
 → [View example report](example-report.md)
@@ -180,7 +180,7 @@ External discovery uses OpenAlex only when `automation.allow_search=true`, `open
 | Phase | What | Status |
 |---|---|---|
 | v1.0 | Core A–F (21+3 indicators), CLI, 5 review types, 9 engineering profiles | ✅ Current |
-| v1.x | BibTeX/RIS/CSV import, Scopus/WoS/IEEE adapters, Crossref/Semantic Scholar API | 🔜 Next |
+| v1.x | Scopus/WoS/IEEE adapters and Semantic Scholar API | 🔜 Next |
 | v1.1 | `run_full_audit.py` — resumable guided workflow (import→collect→screen→audit→actions) | ✅ |
 | Future | `review-manuscript-audit` — PRISMA compliance, citation integrity, study quality tool matching | 💡 Planned |
 
@@ -188,7 +188,7 @@ External discovery uses OpenAlex only when `automation.allow_search=true`, `open
 
 MIT License. Issues and pull requests welcome. Areas particularly valuable:
 
-- Format importers (BibTeX, RIS, CSV, Zotero API)
+- Zotero API integration and institutional-source adapters
 - Source adapters (Scopus, Web of Science, IEEE Xplore)
 - Internationalization of report output
 - Additional engineering profiles and venue mappings

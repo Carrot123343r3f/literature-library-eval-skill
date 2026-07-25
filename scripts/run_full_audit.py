@@ -2,81 +2,91 @@
 """Guided, resumable orchestration for import → collect → screen → audit → actions."""
 import argparse
 import datetime as dt
+import hashlib
 import json
 import pathlib
 import subprocess
 import sys
 
-
-def write_state(out, steps, message=""):
-    state = {"schema_version": "1.0", "updated_at": dt.datetime.now(dt.timezone.utc).isoformat(), "steps": steps, "message": message}
-    (out / "workflow-state.json").write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+ROOT = pathlib.Path(__file__).resolve().parent
 
 
-def run(command, steps, name, out):
+def signature(args):
+    values = {key: str(value) for key, value in vars(args).items() if key not in {"out", "resume", "force", "command"} and value}
+    return hashlib.sha256(json.dumps(values, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def state_path(out): return out / "workflow-state.json"
+
+
+def load_state(out, run_signature, resume, force):
+    if resume and state_path(out).is_file() and not force:
+        old = json.loads(state_path(out).read_text(encoding="utf-8"))
+        if old.get("run_signature") == run_signature: return old.get("steps", {})
+        raise SystemExit("ERROR: inputs changed since the saved workflow. Re-run without --resume or use --force.")
+    return {}
+
+
+def write_state(out, steps, run_signature, message=""):
+    payload = {"schema_version": "1.1", "updated_at": dt.datetime.now(dt.timezone.utc).isoformat(), "run_signature": run_signature, "steps": steps, "message": message}
+    state_path(out).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def run(command, steps, name, out, run_signature, outputs, resume):
+    if resume and steps.get(name) == "complete" and all(path.is_file() for path in outputs):
+        steps[name] = "reused"; write_state(out, steps, run_signature); return
     try:
-        subprocess.run(command, check=True); steps[name] = "complete"; write_state(out, steps)
+        subprocess.run(command, check=True); steps[name] = "complete"; write_state(out, steps, run_signature)
     except subprocess.CalledProcessError as exc:
-        steps[name] = "failed"; write_state(out, steps, f"{name} failed with exit code {exc.returncode}")
-        raise SystemExit(exc.returncode)
+        steps[name] = "failed"; write_state(out, steps, run_signature, f"{name} failed with exit code {exc.returncode}"); raise SystemExit(exc.returncode)
+
+
+def script(name): return str(ROOT / name)
 
 
 def init_config(args):
     question = input("研究问题/题目：").strip(); review_type = input("综述类型 [narrative/systematic/scoping/rapid/umbrella]：").strip() or "narrative"
     library = input("文献库路径（可留空，后续导入）：").strip(); allow = input("允许联网检索？[y/N]：").strip().lower() in {"y", "yes"}
-    sources = [item.strip() for item in input("允许来源（逗号分隔，默认 openalex,crossref,arxiv）：").split(",") if item.strip()] if allow else []
-    config = {"schema_version": "1.0", "project": {"research_question": question, "review_type": review_type, "scope_status": "scope_uncertain"},
-              "library": {"provided": bool(library), "path": library or None, "format": "json" if library.endswith(".json") else None},
-              "automation": {"allow_search": allow, "allowed_sources": sources or (["openalex", "crossref", "arxiv"] if allow else [])},
-              "output": {"language": "zh-CN", "formats": ["html", "md", "json"]}}
+    sources = [item.strip() for item in input("允许来源（逗号分隔）：").split(",") if item.strip()] if allow else []
+    config = {"schema_version": "1.0", "project": {"research_question": question, "review_type": review_type, "scope_status": "scope_uncertain"}, "library": {"provided": bool(library), "path": library or None, "format": "json" if library.endswith(".json") else None}, "automation": {"allow_search": allow, "allowed_sources": sources or (["openalex", "crossref", "arxiv"] if allow else [])}, "output": {"language": "zh-CN", "formats": ["html", "md", "json"]}}
     pathlib.Path(args.out).write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"Created {args.out}. Review scope_status before a full A–F audit.")
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__); sub = parser.add_subparsers(dest="command", required=True)
-    init = sub.add_parser("init", help="Ask only essential questions and create run-config.json"); init.add_argument("--out", required=True)
-    status = sub.add_parser("status", help="Show resumable workflow state"); status.add_argument("--out", required=True)
-    execute = sub.add_parser("run", help="Run local import/audit steps and persist recovery state")
-    execute.add_argument("--run-config", required=True); execute.add_argument("--out", required=True); execute.add_argument("--library")
-    execute.add_argument("--context"); execute.add_argument("--benchmark"); execute.add_argument("--gold"); execute.add_argument("--query-hits"); execute.add_argument("--source-snapshot")
-    execute.add_argument("--screening-decisions"); execute.add_argument("--deduplication-log")
-    execute.add_argument("--query-plan", help="Persisted multi-source query plan; used only with --collect")
-    execute.add_argument("--collect", action="store_true", help="Run authorized multi-source collection and normalization")
-    execute.add_argument("--citation-seed", help="Optional library subset for authorized backward/forward citation discovery")
+    init = sub.add_parser("init"); init.add_argument("--out", required=True)
+    status = sub.add_parser("status"); status.add_argument("--out", required=True)
+    execute = sub.add_parser("run"); execute.add_argument("--run-config", required=True); execute.add_argument("--out", required=True); execute.add_argument("--library")
+    for name in ("context", "benchmark", "gold", "query-hits", "source-snapshot", "screening-decisions", "deduplication-log", "screening-summary"): execute.add_argument("--" + name)
+    execute.add_argument("--query-plan"); execute.add_argument("--collect", action="store_true"); execute.add_argument("--citation-seed"); execute.add_argument("--resume", action="store_true"); execute.add_argument("--force", action="store_true")
     args = parser.parse_args()
     if args.command == "init": return init_config(args)
     out = pathlib.Path(args.out); out.mkdir(parents=True, exist_ok=True)
-    if args.command == "status":
-        state = out / "workflow-state.json"; print(state.read_text(encoding="utf-8") if state.exists() else "No workflow state yet. Run `init` then `run`."); return
-    config = json.loads(pathlib.Path(args.run_config).read_text(encoding="utf-8")); library = args.library or config.get("library", {}).get("path")
-    if not library: raise SystemExit("ERROR: provide --library or library.path in run-config.")
-    steps = {"import": "skipped", "audit": "pending", "actions": "pending"}; canonical = pathlib.Path(library)
-    if canonical.suffix.lower() != ".json":
-        imported = out / "import"; run([sys.executable, "scripts/import_library.py", "--input", str(canonical), "--out", str(imported)], steps, "import", out); canonical = imported / "library.json"
-        config["library"] = {"provided": True, "path": str(canonical), "format": "json", "normalization_required": False}
-        resolved_config = out / "resolved-run-config.json"; resolved_config.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
-        args.run_config = str(resolved_config)
+    if args.command == "status": print(state_path(out).read_text(encoding="utf-8") if state_path(out).exists() else "No workflow state yet."); return
+    run_signature = signature(args); steps = load_state(out, run_signature, args.resume, args.force)
+    config = json.loads(pathlib.Path(args.run_config).read_text(encoding="utf-8")); library = pathlib.Path(args.library or config.get("library", {}).get("path") or "")
+    if not library.is_file(): raise SystemExit("ERROR: provide an existing --library or library.path in run-config.")
+    canonical = library
+    if library.suffix.lower() != ".json":
+        imported = out / "import"; run([sys.executable, script("import_library.py"), "--input", str(library), "--out", str(imported)], steps, "import", out, run_signature, [imported / "library.json", imported / "import-preview.json"], args.resume); canonical = imported / "library.json"
+        config["library"] = {"provided": True, "path": str(canonical), "format": "json", "normalization_required": False}; resolved = out / "resolved-run-config.json"; resolved.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8"); args.run_config = str(resolved)
     if args.collect:
         if not args.query_plan: raise SystemExit("ERROR: --collect requires --query-plan.")
-        collection = out / "collection"; steps["collection"] = "pending"; write_state(out, steps)
-        run([sys.executable, "scripts/collect_open_sources.py", "--run-config", args.run_config, "--plan", args.query_plan, "--out", str(collection)], steps, "collection", out)
-        normalization = out / "normalization"; steps["normalization"] = "pending"; write_state(out, steps)
-        run([sys.executable, "scripts/normalize_candidates.py", "--snapshot", str(collection / "source-snapshot.json"), "--out", str(normalization)], steps, "normalization", out)
-        args.source_snapshot = args.source_snapshot or str(collection / "source-snapshot.json")
-        args.deduplication_log = args.deduplication_log or str(normalization / "deduplication-log.json")
-        screening = out / "screening"; steps["screening_template"] = "pending"; write_state(out, steps)
-        run([sys.executable, "scripts/screen_candidates.py", "--candidates", str(normalization / "candidates.json"), "--out", str(screening)], steps, "screening_template", out)
+        collection = out / "collection"; run([sys.executable, script("collect_open_sources.py"), "--run-config", args.run_config, "--plan", args.query_plan, "--out", str(collection)], steps, "collection", out, run_signature, [collection / "source-snapshot.json"], args.resume)
+        normalized = out / "normalization"; run([sys.executable, script("normalize_candidates.py"), "--snapshot", str(collection / "source-snapshot.json"), "--out", str(normalized)], steps, "normalization", out, run_signature, [normalized / "candidates.json", normalized / "deduplication-log.json"], args.resume)
+        args.source_snapshot = args.source_snapshot or str(collection / "source-snapshot.json"); args.deduplication_log = args.deduplication_log or str(normalized / "deduplication-log.json")
+        screen = out / "screening"; run([sys.executable, script("screen_candidates.py"), "--candidates", str(normalized / "candidates.json"), "--out", str(screen)], steps, "screening_template", out, run_signature, [screen / "screening-decisions.json"], args.resume)
+    if args.screening_decisions:
+        candidates = out / "normalization" / "candidates.json"
+        if not candidates.is_file(): raise SystemExit("ERROR: screening decisions require normalized candidates from --collect.")
+        summary = out / "screening"; run([sys.executable, script("summarize_screening.py"), "--candidates", str(candidates), "--decisions", args.screening_decisions, "--out", str(summary)], steps, "screening_summary", out, run_signature, [summary / "screening-summary.json"], args.resume); args.screening_summary = args.screening_summary or str(summary / "screening-summary.json")
     if args.citation_seed:
-        citations = out / "citations"; steps["citation_discovery"] = "pending"; write_state(out, steps)
-        run([sys.executable, "scripts/citation_candidates.py", "--seed", args.citation_seed, "--run-config", args.run_config, "--out", str(citations)], steps, "citation_discovery", out)
-    audit_out = out / "audit"; context = args.context or ""
-    command = [sys.executable, "scripts/run_audit.py", "--library", str(canonical), "--out", str(audit_out), "--run-config", args.run_config]
-    for flag, value in (("--context", context), ("--benchmark", args.benchmark), ("--gold", args.gold), ("--query-hits", args.query_hits), ("--candidate-snapshots", args.source_snapshot), ("--decision-log", args.screening_decisions), ("--deduplication-log", args.deduplication_log)):
+        citations = out / "citations"; run([sys.executable, script("citation_candidates.py"), "--seed", args.citation_seed, "--run-config", args.run_config, "--out", str(citations)], steps, "citation_discovery", out, run_signature, [citations / "citation-candidates.json", citations / "manifest.json"], args.resume)
+    audit = out / "audit"; command = [sys.executable, script("run_audit.py"), "--library", str(canonical), "--out", str(audit), "--run-config", args.run_config]
+    for flag, value in (("--context", args.context), ("--benchmark", args.benchmark), ("--gold", args.gold), ("--query-hits", args.query_hits), ("--candidate-snapshots", args.source_snapshot), ("--decision-log", args.screening_decisions), ("--deduplication-log", args.deduplication_log), ("--search-meta", args.screening_summary)):
         if value: command.extend([flag, value])
-    run(command, steps, "audit", out)
-    run([sys.executable, "scripts/next_actions.py", "--audit", str(audit_out / "audit.json"), "--out", str(out)], steps, "actions", out)
-    print(f"Complete. Open {audit_out / 'audit.html'} and {out / 'next-actions.json'}.")
+    run(command, steps, "audit", out, run_signature, [audit / "audit.json", audit / "audit.html"], args.resume)
+    run([sys.executable, script("next_actions.py"), "--audit", str(audit / "audit.json"), "--out", str(out)], steps, "actions", out, run_signature, [out / "next-actions.json"], args.resume)
 
 
 if __name__ == "__main__": main()

@@ -14,6 +14,10 @@ out/
 └── .tmp/                 ← Auto-generated resolved config
 ```
 
+## Guided Workflow Outputs
+
+`run_full_audit.py` additionally writes `workflow-state.json` (signature-bound step state), `next-actions.json` (recoverable actions), and, when applicable, `import/import-preview.json`, `screening/screening-decisions.json`, `screening/screening-summary.json`, and `citations/citation-candidates.json` plus a manifest. Use `--resume` only with the same inputs; use a fresh run or `--force` when inputs change.
+
 > **Privacy**: No absolute paths recorded. Input files are copied with sha256 prefix only.
 
 ## Report Sections

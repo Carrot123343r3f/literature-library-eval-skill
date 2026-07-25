@@ -69,7 +69,6 @@ User Intake (run-config.json)
 | `build_query_plan.py` | Cross-database query plan from PICO | 📋 |
 | `execute_search.py` | Multi-source search with pagination | 📋 |
 | `refine_queries.py` | Constrained atomic query modification | 📋 |
-| `screen_candidates.py` | Automated screening with frozen rules | 📋 |
 | `build_evidence_sets.py` | Dev/validation set construction | 📋 |
 | `validate_run.py` | Pre-report completeness check | 📋 |
 

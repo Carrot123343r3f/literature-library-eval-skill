@@ -184,7 +184,7 @@ python scripts/run_paper_evaluation.py --library library.json --context context.
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | v1.0 | 核心 A–F（21+3 指标）、CLI、5 种综述类型、9 个工程 profile | ✅ 当前 |
-| v1.x | BibTeX/RIS/CSV 导入、Scopus/WoS/IEEE 适配器、Crossref/Semantic Scholar | 🔜 下一步 |
+| v1.x | Scopus/WoS/IEEE 适配器、Semantic Scholar | 🔜 下一步 |
 | v1.1 | `run_full_audit.py`——可恢复向导工作流（导入→采集→筛选→审计→行动） | ✅ |
 | 未来 | `review-manuscript-audit`——PRISMA 合规、引用完整性、研究质量工具匹配 | 💡 计划中 |
 
@@ -192,7 +192,7 @@ python scripts/run_paper_evaluation.py --library library.json --context context.
 
 MIT License。欢迎 Issue 和 Pull Request。特别有价值的贡献方向：
 
-- 格式导入器（BibTeX, RIS, CSV, Zotero API）
+- Zotero API 与机构数据库适配器
 - 数据源适配器（Scopus, Web of Science, IEEE Xplore）
 - 报告国际化
 - 更多工程领域 profile 和 venue 映射

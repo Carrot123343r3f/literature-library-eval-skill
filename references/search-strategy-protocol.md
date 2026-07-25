@@ -307,4 +307,4 @@ S3 确认完成（run-config.json 已输出）
 | `search_iterator.py`（新增） | 多轮原子迭代管理器 — 生成比较表 + 追踪改动 |
 | `run_audit.py` | 消耗协议产出的 context 字段，无感知迭代细节 |
 
-短期可以继续使用 `search_for_eval.py` 做首轮初探，由 AI 手动执行后续迭代（AI 在对话中执行检索→比对→记录→改词→再执行），`search_iterator.py` 作为验证/辅助脚本验证记录完整性。长期由 `search_iterator.py` 和 `run_full_audit.py` 编排全线。
+`search_for_eval.py` 可继续用于首轮诊断；`run_full_audit.py` 负责已授权采集、去重、筛选模板、审计和行动工件的持久化。多轮检索策略仍需由人或 Agent 明确记录，`search_iterator.py` 用于验证其完整性。
