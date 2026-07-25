@@ -154,7 +154,7 @@ git clone https://github.com/Carrot123343r3f/literature-library-eval-skill.git \
 |---|---|
 | Python 3.10+ | `run_audit.py`、`search_for_eval.py`、`search_iterator.py` |
 | 互联网 | OpenAlex、Crossref、arXiv 等开放 API |
-| **无需 API key** | 全部数据来源为开放获取 |
+| **不在对话中索取凭据** | 开放来源仍可能要求预先配置 API key；不要在对话或输出产物中粘贴密钥 |
 
 **开发依赖：** `pip install -r requirements-dev.txt` 安装 `pytest` 和 `jsonschema`，用于运行测试套件。
 
