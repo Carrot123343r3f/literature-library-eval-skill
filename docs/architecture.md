@@ -51,8 +51,13 @@ User Intake (run-config.json)
 | `search_for_eval.py` | Single-round diagnostic search | ✅ |
 | `search_iterator.py` | Multi-round iteration validator | ✅ |
 | `normalize_candidates.py` | Identifier dedup + version grouping | ✅ |
-| `run_audit.py` | A–F computation + report generation | ✅ |
-| `run_paper_evaluation.py` | Optional design-aware per-paper evidence evaluation, core support and external candidates | ✅ |
+| `run_audit.py` | A–F orchestration, computation and audit-package assembly | ✅ |
+| `run_paper_evaluation.py` | V2 orchestration for design-aware per-paper evidence evaluation, core support and external candidates | ✅ |
+| `audit_core/contracts.py` | Shared v1.0 configuration validation, report-cell normalization and recursive redaction | ✅ |
+| `audit_core/rendering.py` | Shared dependency-free Markdown-to-HTML renderer used by both report workflows | ✅ |
+| `paper_evaluation/contracts.py` | V2 paper-record contract and canonical identifiers | ✅ |
+| `paper_evaluation/evaluation.py` | V2 study-design routing, evidence appraisal and ranking signals | ✅ |
+| `paper_evaluation/external.py` | Authorized OpenAlex discovery, normalization and library de-duplication | ✅ |
 | `credentials.py` | Configured external-source credentials; never serializes secrets | ✅ |
 | `artifact_manifest.py` | Redacted input copies, hashes and standalone workflow step status | ✅ |
 | `build_query_plan.py` | Cross-database query plan from PICO | 📋 |
@@ -71,6 +76,7 @@ User Intake (run-config.json)
 - **manifest.json**: sha256, git commit, Python version — every input accounted for
 - **paper-evaluation.json**: V2 per-paper evidence output; its companion manifest records redacted input copies, hashes and step status
 - **paper-evaluation-schema.json**: Machine-readable V2 output contract
+- **audit_core public API**: shared components own cross-workflow concerns; workflow entry points must not import another workflow's private helpers
 
 ## Workflow Boundary
 
@@ -80,6 +86,6 @@ The repository intentionally does not claim that multi-round searching, screenin
 
 1. **New database sources**: Add syntax mapping + API adapter
 2. **New engineering profiles**: Entry in `PROFILES` dict + Tier-1 venue list
-3. **New indicators**: Add to indicator-registry.json → update run_audit.py → update report
-4. **New output formats**: Extend `write()` in run_audit.py
+3. **New indicators**: Add to indicator-registry.json → add the computation in `run_audit.py` → update the report assembly
+4. **New output formats**: Add a renderer beside `audit_core/rendering.py`; keep report data generation independent of presentation
 5. **New review types**: Add threshold row + schema enum value

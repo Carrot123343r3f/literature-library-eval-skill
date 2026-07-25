@@ -10,6 +10,7 @@ from paper_evaluation.contracts import clean, load_items
 from paper_evaluation.evaluation import add_contribution, evaluate_record, recommend
 from paper_evaluation.external import ExternalSearchError, normalize_openalex, require_openalex_authorization, search_openalex, without_library_duplicates
 from artifact_manifest import write_manifest
+from audit_core.rendering import render_markdown_html
 
 
 def sort_rows(rows, path):
@@ -43,8 +44,7 @@ def render(report):
           "- 方法学评价按研究类型路由；缺少全文级证据时为 `not_assessable`，不以零分替代。",
           "- 期刊、会议与原始引用数仅作为背景信号；不构成单篇质量裁决。"]
     markdown = "\n".join(md) + "\n"
-    from run_audit import _report_html
-    return markdown, _report_html(markdown)
+    return markdown, render_markdown_html(markdown, title="单篇文献证据评价 V2")
 
 
 def validate_configuration(config, context):

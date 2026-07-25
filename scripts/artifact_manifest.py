@@ -5,20 +5,12 @@ import json
 import pathlib
 import platform
 import sys
-import re
-
-
-SENSITIVE_TOKENS = ("token", "secret", "password", "api_key", "authorization", "credential")
+from audit_core.contracts import public_value
 
 
 def _public(value):
-    if isinstance(value, dict):
-        return {key: ("[redacted]" if any(token in key.lower() for token in SENSITIVE_TOKENS) else _public(item)) for key, item in value.items()}
-    if isinstance(value, list):
-        return [_public(item) for item in value]
-    if isinstance(value, str) and (re.match(r"^[A-Za-z]:[\\/]", value) or value.startswith("/")):
-        return "[redacted path]"
-    return value
+    """Compatibility alias for the shared public-artifact redactor."""
+    return public_value(value)
 
 
 def _sha256(payload):

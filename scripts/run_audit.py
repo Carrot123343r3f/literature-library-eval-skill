@@ -3,6 +3,8 @@
 import argparse, datetime as dt, hashlib, html, json, pathlib, re, shutil, sys, tempfile
 from collections import Counter
 from math import log
+from audit_core.contracts import compact as _shared_compact, public_value as _shared_public_value, validate_run_config as _shared_validate_run_config
+from audit_core.rendering import render_markdown_html
 
 # Review-type → default thresholds (narrative / systematic / scoping / rapid / umbrella)
 REVIEW_THRESHOLDS = {
@@ -712,10 +714,8 @@ def quality(library, context):
                        "E2_tier1": "screening" if tiers else "not_assessable"}}
 
 def compact(value):
-    if value is None or value == "": return "—"
-    if isinstance(value, float): return f"{value:.3f}"
-    if isinstance(value, (list, dict)): return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
-    return str(value).replace("|", "／").replace("\n", " ")
+    """Backward-compatible facade for the shared report-cell formatter."""
+    return _shared_compact(value)
 
 
 SENSITIVE_KEY_PARTS = ("token", "secret", "password", "api_key", "apikey", "authorization", "credential")
@@ -729,17 +729,8 @@ def _is_absolute_local_path(value):
 
 
 def _public_value(value, key=""):
-    """Recursively redact secrets and absolute local paths before report rendering."""
-    key_lower = str(key).casefold()
-    if any(part in key_lower for part in SENSITIVE_KEY_PARTS):
-        return "[REDACTED]"
-    if isinstance(value, dict):
-        return {str(k): _public_value(v, str(k)) for k, v in value.items()}
-    if isinstance(value, list):
-        return [_public_value(v, key) for v in value]
-    if _is_absolute_local_path(value):
-        return pathlib.PurePath(value).name or "[LOCAL_PATH]"
-    return value
+    """Backward-compatible facade for the shared public-artifact redactor."""
+    return _shared_public_value(value, key)
 
 def _input_evidence_table(report):
     """Generate the input evidence status table placed at the top of the report."""
@@ -1694,9 +1685,11 @@ def write(report, out, artifact_paths=None):
     md.append("### 局限与声明\n"); md.append("\n".join("- " + x for x in report["limitations"])); md.append("")
     markdown = "\n".join(md) + "\n"
     (out / "audit.md").write_text(markdown, encoding="utf-8")
-    (out / "audit.html").write_text(_report_html(markdown), encoding="utf-8")
+    (out / "audit.html").write_text(render_markdown_html(markdown), encoding="utf-8")
 
 def _validate_run_config(rc):
+    """Backward-compatible facade for the shared v1.0 configuration contract."""
+    return _shared_validate_run_config(rc)
     """Lightweight schema validation without jsonschema dependency. Returns list of error strings."""
     errors = []
     if not isinstance(rc, dict):

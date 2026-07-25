@@ -11,6 +11,17 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from collect_open_sources import load_authorized_plan
 from run_audit import _validate_run_config, stability
 from search_for_eval import compute_recall, entry_ids
+from audit_core.contracts import public_value
+from audit_core.rendering import render_markdown_html
+
+
+def test_shared_contracts_redact_and_renderer_escapes_html():
+    public = public_value({"api_key": "must-not-leak", "source": r"C:\private\library.json"})
+    assert public["api_key"] == "[REDACTED]"
+    assert public["source"] == "library.json"
+    rendered = render_markdown_html("# <unsafe>\n\n| A | B |\n| --- | --- |\n| 1 | 2 |")
+    assert "&lt;unsafe&gt;" in rendered
+    assert "<table>" in rendered
 
 
 def test_threshold_boundary_is_inclusive():
