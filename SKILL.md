@@ -89,3 +89,16 @@ S3 确认完成 → SRCH-1 工程 PICO 分解 → SRCH-2 构建开发集+验证�
 - `scripts/normalize_candidates.py` — 去重 + 版本族识别
 - `scripts/validate_registry.py` — registry 一致性校验
 - `compute.py` — 兼容性包装器（仅 A1 + 库健康，**勿用作主入口**）
+
+## 向导式工作流与人工确认
+
+优先使用 `scripts/run_full_audit.py`，而非要求用户自行串联脚本：
+
+1. `init --out run-config.json`：只询问研究问题、综述类型、文献库位置和联网授权，生成可审阅配置。
+2. `run --run-config ... --library ... --out ...`：持久化 `workflow-state.json`；失败时根据状态文件续跑，而不是重新猜测用户意图。
+3. 非 JSON 输入先由 `import_library.py` 转成规范 `library.json`，并交付 `import-preview.json` 供用户检查字段缺失。
+4. 需要外部发现时，显式使用 `--collect --query-plan ...`；仅在 `allow_search=true` 且来源在 `allowed_sources` 内时运行。采集、去重和筛选模板会分别持久化。
+5. `citation_candidates.py` 只产生后向/前向引文**候选**；`screen_candidates.py` 的人工 `include/exclude` 决定及理由才可作为 B/F5 的输入。
+6. 完成后读取 `next-actions.json`：它把 fail、warning、not_assessable 转为“为什么、需要什么证据、下一步做什么”。
+
+不要把 `candidate_discovery`、自动导入成功、或筛选模板的 `pending` 当成正式纳入或检索趋稳。

@@ -1,0 +1,35 @@
+#!/usr/bin/env python3
+"""Create reproducible backward/forward citation candidate snapshots from OpenAlex."""
+import argparse
+import json
+import pathlib
+import urllib.parse
+import urllib.request
+from credentials import require_openalex_api_key
+from collect_open_sources import load_search_authorization
+
+
+def get_json(url):
+    request = urllib.request.Request(url, headers={"User-Agent": "literature-library-eval/3.0"})
+    with urllib.request.urlopen(request, timeout=45) as response: return json.loads(response.read().decode("utf-8"))
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__); parser.add_argument("--seed", required=True); parser.add_argument("--run-config", required=True); parser.add_argument("--out", required=True); parser.add_argument("--limit", type=int, default=100)
+    args = parser.parse_args(); allowed = load_search_authorization(args.run_config)
+    if allowed is not None and "openalex" not in allowed: raise SystemExit("ERROR: OpenAlex is not authorized by automation.allowed_sources.")
+    key = require_openalex_api_key(); seeds = json.loads(pathlib.Path(args.seed).read_text(encoding="utf-8")); seeds = seeds if isinstance(seeds, list) else seeds.get("items", [])
+    candidates = []
+    for seed in seeds[:20]:
+        work_id = seed.get("openalex_id") or seed.get("id")
+        if not work_id: continue
+        work = get_json(f"https://api.openalex.org/works/{urllib.parse.quote(work_id.rsplit('/', 1)[-1])}?api_key={urllib.parse.quote(key)}")
+        for ref in work.get("referenced_works", []): candidates.append({"openalex_id": ref, "source": "openalex", "pathway": "backward_citation", "seed": work_id})
+        cited = get_json(f"https://api.openalex.org/works?filter=cites:{urllib.parse.quote(work_id)}&per-page={min(args.limit,200)}&api_key={urllib.parse.quote(key)}")
+        candidates.extend({"openalex_id": row.get("id"), "title": row.get("title"), "year": row.get("publication_year"), "source": "openalex", "pathway": "forward_citation", "seed": work_id} for row in cited.get("results", []))
+    output = pathlib.Path(args.out); output.mkdir(parents=True, exist_ok=True)
+    (output / "citation-candidates.json").write_text(json.dumps({"items": candidates, "status": "candidate_discovery", "note": "Candidates require human screening before formal inclusion."}, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"Wrote {len(candidates)} citation candidates.")
+
+
+if __name__ == "__main__": main()

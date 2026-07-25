@@ -33,7 +33,7 @@
       "properties": {
         "provided": {"type": "boolean"},
         "path": {"type": ["string", "null"], "description": "Path to library file. Relative paths are resolved against the directory containing run-config.json."},
-        "format": {"type": ["string", "null"], "enum": ["json", null], "description": "v1.0: only json is fully supported. bibtex/csv/ris/zotero_mcp/zotero_api are declared for forward compatibility."},
+        "format": {"type": ["string", "null"], "enum": ["json", "csv", "ris", "bibtex", null], "description": "Non-JSON formats are normalized to canonical JSON by scripts/import_library.py before auditing."},
         "record_count": {"type": ["integer", "null"]},
         "normalization_required": {"type": "boolean", "default": true}
       }

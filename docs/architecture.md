@@ -6,8 +6,9 @@
 > Steps 3–5 are partially automated (single-round diagnostic search,
 > automated candidate dedup) but rely on AI agent orchestration in
 > conversation for multi-round iteration, cross-database queries,
-> citation tracking, and formal screening. A one-shot end-to-end
-> orchestrator (`run_full_audit.py`) is planned for v2.0.
+> citation tracking, and formal screening are available as explicit, persisted workflow steps.
+> `run_full_audit.py` provides a resumable orchestration layer; it never silently
+> converts discovery candidates into screened inclusions.
 
 ```text
 User Intake (run-config.json)
@@ -51,6 +52,11 @@ User Intake (run-config.json)
 | `search_for_eval.py` | Single-round diagnostic search | ✅ |
 | `search_iterator.py` | Multi-round iteration validator | ✅ |
 | `normalize_candidates.py` | Identifier dedup + version grouping | ✅ |
+| `import_library.py` | JSON/CSV/RIS/BibTeX normalization + import preview | ✅ |
+| `run_full_audit.py` | Guided, resumable import → collect → screen → audit workflow | ✅ |
+| `screen_candidates.py` | Human screening template and decision-log validation | ✅ |
+| `citation_candidates.py` | Authorized OpenAlex forward/backward candidate discovery | ✅ |
+| `next_actions.py` | Decision-first recovery actions derived from audit output | ✅ |
 | `run_audit.py` | A–F orchestration, computation and audit-package assembly | ✅ |
 | `run_paper_evaluation.py` | V2 orchestration for design-aware per-paper evidence evaluation, core support and external candidates | ✅ |
 | `audit_core/contracts.py` | Shared v1.0 configuration validation, report-cell normalization and recursive redaction | ✅ |
@@ -66,7 +72,6 @@ User Intake (run-config.json)
 | `screen_candidates.py` | Automated screening with frozen rules | 📋 |
 | `build_evidence_sets.py` | Dev/validation set construction | 📋 |
 | `validate_run.py` | Pre-report completeness check | 📋 |
-| `run_full_audit.py` | End-to-end orchestrator | 📋 |
 
 ## Data Contracts
 
@@ -80,7 +85,7 @@ User Intake (run-config.json)
 
 ## Workflow Boundary
 
-The repository intentionally does not claim that multi-round searching, screening and evidence extraction are fully automatic. Until the planned end-to-end orchestrator exists, the Agent must persist each completed artifact before invoking a downstream stage. `run_paper_evaluation.py` is independently reproducible from its input artifacts and does not alter A–F evidence or saturation results.
+The repository intentionally does not claim that multi-round searching, screening and evidence extraction are fully automatic. The workflow persists each completed artifact and can resume from its state file. Discovery candidates remain `candidate_discovery` until a human creates final include/exclude decisions. `run_paper_evaluation.py` is independently reproducible from its input artifacts and does not alter A–F evidence or saturation results.
 
 ## Extension Points
 

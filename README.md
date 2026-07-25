@@ -44,13 +44,13 @@ Run the audit **before** writing. In one command (or one conversation with an AI
 
 ## Quickstart
 
-**Current capability** (v1.0): The audit computation engine, single-round diagnostic search, and iteration compliance validation are production-ready. The AI agent orchestrates the multi-step pipeline in conversation — search, screen, iterate, compute, report. A one-shot end-to-end CLI orchestrator (`run_full_audit.py`) is planned for v2.0.
+**Current capability**: A guided, resumable CLI workflow now covers import, authorized collection, deduplication, human screening templates, audit, and recovery actions. Online discovery remains opt-in and candidates never become formal inclusions without a human decision.
 
 | Status | Step |
 | :---: | --- |
 | ✅ Automated | Audit computation (`run_audit.py`), single-round diagnostic search (`search_for_eval.py`), candidate dedup (`normalize_candidates.py`), iteration validation (`search_iterator.py`), report generation |
-| 🔧 Semi-automated | Multi-round iteration, cross-database search, citation tracking, formal screening — orchestrated by AI agent in conversation |
-| 📋 Planned | End-to-end one-shot orchestrator (`run_full_audit.py`, v2.0) |
+| ✅ Guided workflow | `run_full_audit.py` produces `workflow-state.json` and `next-actions.json`; it can import JSON/CSV/RIS/BibTeX and resume safely |
+| 🔧 Human-confirmed | Multi-round iteration, cross-database search, citation tracking, and screening remain evidence-producing steps; candidates require explicit human decisions |
 
 ```text
 使用 literature-library-eval 评估我的文献库，
@@ -181,7 +181,7 @@ External discovery uses OpenAlex only when `automation.allow_search=true`, `open
 |---|---|---|
 | v1.0 | Core A–F (21+3 indicators), CLI, 5 review types, 9 engineering profiles | ✅ Current |
 | v1.x | BibTeX/RIS/CSV import, Scopus/WoS/IEEE adapters, Crossref/Semantic Scholar API | 🔜 Next |
-| v2.0 | `run_full_audit.py` — end-to-end orchestrator (search→screen→audit→report) | 📋 Planned |
+| v1.1 | `run_full_audit.py` — resumable guided workflow (import→collect→screen→audit→actions) | ✅ |
 | Future | `review-manuscript-audit` — PRISMA compliance, citation integrity, study quality tool matching | 💡 Planned |
 
 ## Contributing

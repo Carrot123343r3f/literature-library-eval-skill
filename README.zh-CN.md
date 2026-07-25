@@ -59,8 +59,8 @@ AI 会自动：
 | 状态 | 环节 |
 |:---:|---|
 | ✅ 已自动化 | 审计计算（`run_audit.py`）、单轮诊断检索（`search_for_eval.py`）、候选去重（`normalize_candidates.py`）、迭代验证（`search_iterator.py`）、报告生成 |
-| 🔧 半自动 | 多轮检索迭代、跨数据库检索、引文追踪、正式筛选——由 AI agent 在对话中手动编排 |
-| 📋 规划中 | 端到端一键编排（`run_full_audit.py`，计划 v2.0） |
+| ✅ 向导式工作流 | `run_full_audit.py` 产出可恢复的 `workflow-state.json` 与行动清单；支持 JSON/CSV/RIS/BibTeX 导入 |
+| 🔧 人工确认 | 多轮迭代、跨库检索、引文追踪与筛选会留下证据工件；候选必须由人工明确纳入/排除 |
 
 ```text
 输入确认 → 范围建模 → 检索计划 → 多源检索 → 去重 → 筛选 → 迭代优化 → A–F 计算 → 审计包
@@ -185,7 +185,7 @@ python scripts/run_paper_evaluation.py --library library.json --context context.
 |---|---|---|
 | v1.0 | 核心 A–F（21+3 指标）、CLI、5 种综述类型、9 个工程 profile | ✅ 当前 |
 | v1.x | BibTeX/RIS/CSV 导入、Scopus/WoS/IEEE 适配器、Crossref/Semantic Scholar | 🔜 下一步 |
-| v2.0 | `run_full_audit.py`——端到端编排（搜→筛→评→报一键执行） | 📋 规划中 |
+| v1.1 | `run_full_audit.py`——可恢复向导工作流（导入→采集→筛选→审计→行动） | ✅ |
 | 未来 | `review-manuscript-audit`——PRISMA 合规、引用完整性、研究质量工具匹配 | 💡 计划中 |
 
 ## 参与贡献
