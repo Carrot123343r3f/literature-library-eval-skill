@@ -1,0 +1,46 @@
+"""Create privacy-preserving manifests for standalone workflow modules."""
+import datetime as dt
+import hashlib
+import json
+import pathlib
+import platform
+import sys
+import re
+
+
+SENSITIVE_TOKENS = ("token", "secret", "password", "api_key", "authorization", "credential")
+
+
+def _public(value):
+    if isinstance(value, dict):
+        return {key: ("[redacted]" if any(token in key.lower() for token in SENSITIVE_TOKENS) else _public(item)) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_public(item) for item in value]
+    if isinstance(value, str) and (re.match(r"^[A-Za-z]:[\\/]", value) or value.startswith("/")):
+        return "[redacted path]"
+    return value
+
+
+def _sha256(payload):
+    return hashlib.sha256(payload).hexdigest()
+
+
+def write_manifest(out, module, schema_version, artifacts, step_status):
+    out = pathlib.Path(out); inputs = out / "inputs"; inputs.mkdir(parents=True, exist_ok=True)
+    manifest = {"schema_version": schema_version, "module": module, "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+                "python_version": sys.version.split()[0], "platform": platform.platform(), "record_source_paths": False,
+                "step_status": step_status, "input_files": {}}
+    for label, path in sorted(artifacts.items()):
+        entry = {"provided": bool(path)}
+        source = pathlib.Path(path) if path else None
+        if source and source.is_file():
+            payload = source.read_bytes()
+            if source.suffix.lower() == ".json":
+                try: payload = json.dumps(_public(json.loads(payload)), ensure_ascii=False, indent=2).encode("utf-8")
+                except (UnicodeDecodeError, json.JSONDecodeError): pass
+            digest = _sha256(payload); destination = inputs / f"{label}__{digest[:12]}{source.suffix}"
+            if not destination.exists(): destination.write_bytes(payload)
+            entry.update({"sha256": digest, "source_filename": source.name, "copied_to": str(destination.relative_to(out))})
+        manifest["input_files"][label] = entry
+    (out / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    return manifest

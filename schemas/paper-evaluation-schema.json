@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Carrot123343r3f/literature-library-eval-skill/schemas/paper-evaluation-schema.json",
+  "title": "Paper Evidence Evaluation Output",
+  "type": "object",
+  "required": ["schema_version", "module", "generated_at", "papers", "external_candidates", "reading_priority_top", "core_support_top", "external_candidate_top"],
+  "properties": {
+    "schema_version": {"const": "2.0"},
+    "module": {"const": "paper-evidence-evaluation"},
+    "papers": {"type": "array"},
+    "external_candidates": {"type": "array"},
+    "reading_priority_top": {"type": "array"},
+    "core_support_top": {"type": "array"},
+    "external_candidate_top": {"type": "array"}
+  }
+}

@@ -1,10 +1,10 @@
 import json
-import os
 import urllib.error
 import urllib.parse
 import urllib.request
 
 from .contracts import clean, norm, stable_ids
+from credentials import CredentialError, require_openalex_api_key
 
 
 class ExternalSearchError(RuntimeError):
@@ -16,10 +16,10 @@ def require_openalex_authorization(config):
     sources = {str(item).lower() for item in automation.get("allowed_sources", [])}
     if automation.get("allow_search") is not True or "openalex" not in sources:
         raise ExternalSearchError("External candidates require allow_search=true and openalex in allowed_sources.")
-    api_key = os.environ.get("OPENALEX_API_KEY")
-    if not api_key:
-        raise ExternalSearchError("OpenAlex is authorized but no configured OPENALEX_API_KEY is available; no external ranking was generated.")
-    return api_key
+    try:
+        return require_openalex_api_key()
+    except CredentialError as exc:
+        raise ExternalSearchError(str(exc)) from exc
 
 
 def search_openalex(query, api_key, limit=100):

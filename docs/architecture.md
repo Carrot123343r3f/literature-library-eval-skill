@@ -53,6 +53,8 @@ User Intake (run-config.json)
 | `normalize_candidates.py` | Identifier dedup + version grouping | ✅ |
 | `run_audit.py` | A–F computation + report generation | ✅ |
 | `run_paper_evaluation.py` | Optional design-aware per-paper evidence evaluation, core support and external candidates | ✅ |
+| `credentials.py` | Configured external-source credentials; never serializes secrets | ✅ |
+| `artifact_manifest.py` | Redacted input copies, hashes and standalone workflow step status | ✅ |
 | `build_query_plan.py` | Cross-database query plan from PICO | 📋 |
 | `execute_search.py` | Multi-source search with pagination | 📋 |
 | `refine_queries.py` | Constrained atomic query modification | 📋 |
@@ -67,6 +69,12 @@ User Intake (run-config.json)
 - **search_meta.json**: Bridge between search execution and audit computation
 - **audit.json**: Machine-readable output with full indicator register
 - **manifest.json**: sha256, git commit, Python version — every input accounted for
+- **paper-evaluation.json**: V2 per-paper evidence output; its companion manifest records redacted input copies, hashes and step status
+- **paper-evaluation-schema.json**: Machine-readable V2 output contract
+
+## Workflow Boundary
+
+The repository intentionally does not claim that multi-round searching, screening and evidence extraction are fully automatic. Until the planned end-to-end orchestrator exists, the Agent must persist each completed artifact before invoking a downstream stage. `run_paper_evaluation.py` is independently reproducible from its input artifacts and does not alter A–F evidence or saturation results.
 
 ## Extension Points
 

@@ -81,6 +81,8 @@ S3 确认完成 → SRCH-1 工程 PICO 分解 → SRCH-2 构建开发集+验证�
 
 - `scripts/run_audit.py` — A–F 计算 + 报告生成（主入口）
 - `scripts/run_paper_evaluation.py` — 单篇文献证据评价 V2（资格、研究类型、方法、复核性、完整性、贡献与候选）
+- `scripts/credentials.py` — 从已配置环境读取外部来源凭据；密钥永不写入报告、manifest 或对话
+- `scripts/artifact_manifest.py` — 独立模块的脱敏输入副本、哈希与步骤状态
 - `scripts/search_for_eval.py` — 单轮 OpenAlex 诊断检索（支持 `--dev-set`/`--validation-set`/`--pico`）；必须传入已确认的 `--run-config`，并受 `automation.allow_search` 与 `allowed_sources` 约束
 - `scripts/search_iterator.py` — 多轮原子迭代验证（`validate` + `table` 命令）
 - `scripts/collect_open_sources.py` — 多源快照收集；必须传入已确认的 `--run-config`，且仅在 `automation.allow_search = true` 时执行，并遵守 `allowed_sources`

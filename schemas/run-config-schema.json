@@ -81,6 +81,22 @@
         "include_standards_appendix": {"type": "boolean", "default": true}
       }
     },
+    "paper_evaluation": {
+      "type": "object",
+      "description": "Optional V2 single-paper evidence evaluation settings.",
+      "properties": {
+        "enabled": {"type": "boolean", "default": false},
+        "scope": {
+          "type": "object",
+          "properties": {
+            "object": {"type": "array", "items": {"type": "string"}},
+            "technology": {"type": "array", "items": {"type": "string"}},
+            "performance": {"type": "array", "items": {"type": "string"}},
+            "context": {"type": "array", "items": {"type": "string"}}
+          }
+        }
+      }
+    },
     "generated_by": {"type": "string", "description": "Agent name or session ID"},
     "generated_at": {"type": "string", "format": "date-time"}
   }

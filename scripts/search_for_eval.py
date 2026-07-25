@@ -22,6 +22,7 @@ dedup_rule（去重规则），供第三方从 query-hits.json 独立复算 yiel
 """
 import argparse, json, urllib.request, urllib.parse, re, time, sys, pathlib
 from collect_open_sources import load_search_authorization
+from credentials import CredentialError, require_openalex_api_key
 sys.stdout.reconfigure(encoding='utf-8')
 
 
@@ -147,6 +148,10 @@ def main():
         p.error(str(exc))
     if allowed_sources is not None and "openalex" not in allowed_sources:
         p.error("OpenAlex is not authorized by automation.allowed_sources")
+    try:
+        openalex_api_key = require_openalex_api_key()
+    except CredentialError as exc:
+        p.error(str(exc))
 
     library = json.load(open(a.library, encoding='utf-8'))
     ctx = json.load(open(a.context, encoding='utf-8'))
@@ -217,7 +222,7 @@ def main():
     all_hits, seen, queries_record, potential_add = [], set(), [], []
     for label, q in queries:
         url = (f'https://api.openalex.org/works?search={urllib.parse.quote(q)}'
-               f'&per-page={a.max_per_query}&sort=cited_by_count:desc&mailto=lit-eval@example.com')
+               f'&per-page={a.max_per_query}&sort=cited_by_count:desc&api_key={urllib.parse.quote(openalex_api_key)}')
         r = get(url)
         status = "complete"
         if isinstance(r, dict) and r.get("error"):

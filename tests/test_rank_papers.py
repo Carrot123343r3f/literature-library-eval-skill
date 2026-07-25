@@ -19,8 +19,8 @@ with tempfile.TemporaryDirectory() as tmp:
         {"title": "Strong unique robot localization paper", "DOI": "10.1/strong", "year": 2025, "cited_by_count": 50, "citation_normalized_percentile": 0.95, "study_type": "algorithm_ml", "topics": ["rare"], "evidence_roles": ["industrial_validation"], "source": "IEEE", "abstractNote": "robot localization", "open_access_url": "https://example.com", "method_appraisal": {"dataset_split": "pass", "baseline_fairness": "pass", "uncertainty_reporting": "pass", "ablation": "pass"}},
         {"title": "Common robot localization paper", "DOI": "10.1/common", "year": 2020, "cited_by_count": 100, "study_type": "algorithm_ml", "topics": ["common"], "source": "IEEE", "abstractNote": "robot localization"}
     ])
-    write(context, {"ranking_keywords": ["robot", "localization"]})
-    write(config, {"project": {"research_question": "robot localization"}, "automation": {"allow_search": True, "allowed_sources": ["openalex"]}})
+    write(context, {"ranking_keywords": ["robot", "localization"], "api_key": "must-not-leak", "private_path": str(root / "library.json")})
+    write(config, {"project": {"research_question": "robot localization"}, "automation": {"allow_search": True, "allowed_sources": ["openalex"]}, "paper_evaluation": {"scope": {"object": ["robot"], "technology": ["localization"]}}})
     write(candidates, [
         {"title": "Already in library", "DOI": "10.1/strong"},
         {"title": "External robot localization gap paper", "DOI": "10.1/external", "year": 2025, "cited_by_count": 30, "citation_normalized_percentile": 0.8, "topics": ["new-gap"], "source": "OpenAlex", "abstract": "robot localization", "open_access_url": "https://example.com"}
@@ -34,6 +34,13 @@ with tempfile.TemporaryDirectory() as tmp:
     assert report["external_candidate_top"][0]["recommendation"]["status"] == "candidate_discovery"
     assert report["papers"][1]["reading_priority"]["label"] == "metadata_priority"
     assert (out / "paper-evaluation.html").exists()
+    manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["step_status"]["report"] == "complete"
+    assert manifest["input_files"]["library"]["sha256"]
+    assert "original_path" not in str(manifest)
+    archived_context = next((out / "inputs").glob("context__*.json")).read_text(encoding="utf-8")
+    assert "must-not-leak" not in archived_context
+    assert str(root) not in archived_context
 
 with tempfile.TemporaryDirectory() as tmp:
     root = pathlib.Path(tmp); library = root / "library.json"; context = root / "context.json"; config = root / "run-config.json"; out = root / "out"

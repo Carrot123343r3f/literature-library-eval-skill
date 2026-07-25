@@ -7,6 +7,7 @@ import time
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
+from credentials import require_openalex_api_key
 
 
 MAX_RECORDS_PER_SOURCE_QUERY = 10_000
@@ -48,9 +49,10 @@ def get_json(url):
 
 
 def openalex(query, limit):
+    api_key = require_openalex_api_key()
     cursor, items, total = "*", [], None
     while len(items) < limit and cursor:
-        url = "https://api.openalex.org/works?per-page=200&cursor=" + urllib.parse.quote(cursor) + "&search=" + urllib.parse.quote(query)
+        url = "https://api.openalex.org/works?per-page=200&cursor=" + urllib.parse.quote(cursor) + "&search=" + urllib.parse.quote(query) + "&api_key=" + urllib.parse.quote(api_key)
         data = get_json(url); total = data.get("meta", {}).get("count", total)
         page = data.get("results", [])
         items.extend({"id": w.get("doi") or w.get("id"), "title": w.get("title"), "year": w.get("publication_year"), "source": "openalex"} for w in page)

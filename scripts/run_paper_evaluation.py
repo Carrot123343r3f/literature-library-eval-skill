@@ -9,6 +9,7 @@ import sys
 from paper_evaluation.contracts import clean, load_items
 from paper_evaluation.evaluation import add_contribution, evaluate_record, recommend
 from paper_evaluation.external import ExternalSearchError, normalize_openalex, require_openalex_authorization, search_openalex, without_library_duplicates
+from artifact_manifest import write_manifest
 
 
 def sort_rows(rows, path):
@@ -46,6 +47,17 @@ def render(report):
     return markdown, _report_html(markdown)
 
 
+def validate_configuration(config, context):
+    project = config.get("project")
+    automation = config.get("automation")
+    if not isinstance(project, dict) or not clean(project.get("research_question")):
+        raise ValueError("run-config.project.research_question is required for paper evaluation.")
+    if not isinstance(automation, dict) or not isinstance(automation.get("allow_search"), bool):
+        raise ValueError("run-config.automation.allow_search must be boolean.")
+    if not isinstance(context, dict):
+        raise ValueError("context must be a JSON object.")
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--library", required=True); p.add_argument("--context", required=True); p.add_argument("--run-config", required=True); p.add_argument("--out", required=True)
@@ -54,9 +66,17 @@ def main():
     a = p.parse_args()
     if not 1 <= a.top_n <= 100: p.error("--top-n must be between 1 and 100")
     out = pathlib.Path(a.out); out.mkdir(parents=True, exist_ok=True)
+    artifacts = {"library": a.library, "context": a.context, "run-config": a.run_config, "external-candidates": a.external_candidates}
+    step_status = {"input_validation": "pending", "library_evaluation": "pending", "external_discovery": "pending", "report": "pending"}
     try:
         library = load_items(a.library); context = json.loads(pathlib.Path(a.context).read_text(encoding="utf-8")); config = json.loads(pathlib.Path(a.run_config).read_text(encoding="utf-8"))
+        validate_configuration(config, context)
+        configured_scope = ((config.get("paper_evaluation") or {}).get("scope"))
+        if configured_scope and not context.get("paper_evaluation_scope"):
+            context["paper_evaluation_scope"] = configured_scope
+        step_status["input_validation"] = "complete"
         library_rows = add_contribution([evaluate_record(item, context, config) for item in library if isinstance(item, dict)])
+        step_status["library_evaluation"] = "complete"
         if a.external_candidates:
             candidates, search_log = load_items(a.external_candidates), {"source": "provided_snapshot", "status": "complete"}
         else:
@@ -66,6 +86,7 @@ def main():
             works, search_log = search_openalex(question, key, max(50, a.top_n * 3)); candidates = [normalize_openalex(work) for work in works]
         candidates = without_library_duplicates(candidates, library)
         external = recommend([evaluate_record(item, context, config, external=True) for item in candidates if isinstance(item, dict)], library_rows)
+        step_status["external_discovery"] = "complete"
         report = {"schema_version": "2.0", "module": "paper-evidence-evaluation", "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
                   "search_log": search_log, "library_record_count": len(library_rows), "external_candidate_count": len(external),
                   "papers": library_rows, "external_candidates": external,
@@ -77,8 +98,13 @@ def main():
         (out / "paper-evaluation.md").write_text(markdown, encoding="utf-8")
         (out / "paper-evaluation.html").write_text(html, encoding="utf-8")
         (out / "external-search-snapshot.json").write_text(json.dumps({"search_log": search_log, "candidates": candidates}, ensure_ascii=False, indent=2), encoding="utf-8")
+        step_status["report"] = "complete"
+        report["manifest"] = write_manifest(out, "paper-evidence-evaluation", "2.0", artifacts, step_status)
+        (out / "paper-evaluation.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"Evaluated {len(library_rows)} library papers and {len(external)} external candidates.")
     except (ValueError, ExternalSearchError) as exc:
+        step_status = {key: ("failed" if value == "pending" else value) for key, value in step_status.items()}
+        write_manifest(out, "paper-evidence-evaluation", "2.0", artifacts, step_status)
         (out / "paper-evaluation-error.json").write_text(json.dumps({"module": "paper-evidence-evaluation", "status": "error", "message": str(exc)}, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"ERROR: {exc}", file=sys.stderr); raise SystemExit(2)
 
