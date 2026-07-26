@@ -122,16 +122,23 @@ def method_strength(appraisal_data):
 
 def reading_priority(eligibility_data, appraisal_data, reproducibility_data, bibliometrics_data):
     if eligibility_data["verdict"] != "eligible":
-        return {"label": "not_ranked", "score": None, "reason": "not_eligible"}
+        return {"label": "not_ranked", "score": None, "reason": "not_eligible", "components": {}}
     method = method_strength(appraisal_data)
     impact = bibliometrics_data["field_year_percentile"]
     reproducible = reproducibility_data["available_count"] / 5
     if method is None:
         # Metadata may guide reading order but may not be named quality.
         score = round((impact if impact is not None else 0.5) * .6 + reproducible * .4, 3)
-        return {"label": "metadata_priority", "score": score, "reason": "method_not_fulltext_assessed"}
+        return {"label": "metadata_priority", "score": score, "reason": "method_not_fulltext_assessed",
+                "components": {"impact_signal": round((impact if impact is not None else 0.5) * .6, 3),
+                               "reproducibility_signal": round(reproducible * .4, 3),
+                               "method_signal": None}, "confidence": "low"}
     score = round(method * .65 + reproducible * .20 + (impact if impact is not None else .5) * .15, 3)
-    return {"label": "reading_priority", "score": score, "reason": "eligible_and_design_appraised"}
+    return {"label": "reading_priority", "score": score, "reason": "eligible_and_design_appraised",
+            "components": {"method_signal": round(method * .65, 3),
+                           "reproducibility_signal": round(reproducible * .20, 3),
+                           "impact_signal": round((impact if impact is not None else .5) * .15, 3)},
+            "confidence": "moderate" if impact is None else "higher"}
 
 
 def evaluate_record(record, context, config, external=False, now_year=None):

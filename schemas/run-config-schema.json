@@ -40,12 +40,16 @@
     },
     "automation": {
       "type": "object",
-      "description": "allow_search is enforced by every bundled online collector. When allowed_sources is provided, it is an enforced allowlist; an empty list authorizes no online source.",
+      "description": "Online access is confirmed during intake. Default is allowed for metadata enrichment; fully local execution requires an explicit user choice. Candidate discovery remains a separate permission.",
       "required": ["allow_search"],
       "properties": {
-        "allow_search": {"type": "boolean"},
+        "allow_search": {"type": "boolean", "default": true, "description": "Allow authorized online metadata/search operations."},
+        "allow_metadata_enrichment": {"type": "boolean", "default": true},
+        "allow_external_discovery": {"type": "boolean", "default": false},
+        "local_only_confirmed": {"type": "boolean", "default": false, "description": "True only after the user explicitly chose fully local execution."},
         "allow_query_refinement": {"type": "boolean", "default": false},
-        "allowed_sources": {"type": "array", "items": {"type": "string"}},
+        "allowed_sources": {"type": "array", "items": {"type": "string"}, "default": ["openalex"]},
+        "authorized_sources": {"type": "array", "items": {"type": "string"}, "description": "Names of sources for which the user has authorized a preconfigured connector/session; never store passwords or tokens here."},
         "stop_conditions": {"type": "array", "items": {"type": "string"}}
       }
     },

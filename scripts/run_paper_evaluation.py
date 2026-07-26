@@ -8,7 +8,7 @@ import sys
 
 from paper_evaluation.contracts import clean, load_items
 from paper_evaluation.evaluation import add_contribution, evaluate_record, recommend
-from paper_evaluation.external import ExternalSearchError, normalize_openalex, require_openalex_authorization, search_openalex, without_library_duplicates
+from paper_evaluation.external import ExternalSearchError, enrich_openalex_record, normalize_openalex, require_openalex_authorization, search_openalex, without_library_duplicates
 from artifact_manifest import write_manifest
 from audit_core.rendering import render_markdown_html
 
@@ -60,17 +60,34 @@ def validate_configuration(config, context):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--library", required=True); p.add_argument("--context", required=True); p.add_argument("--run-config", required=True); p.add_argument("--out", required=True)
+    source = p.add_mutually_exclusive_group(required=True)
+    source.add_argument("--library", help="JSON library array or object with items[].")
+    source.add_argument("--paper", help="One paper JSON object; convenient local-first mode.")
+    p.add_argument("--context", required=True); p.add_argument("--run-config", required=True); p.add_argument("--out", required=True)
     p.add_argument("--external-candidates", help="Reproducible saved candidate snapshot; otherwise an authorized OpenAlex search is required.")
+    p.add_argument("--external-search", action="store_true", help="Allow live OpenAlex candidate discovery in addition to metadata enrichment.")
+    p.add_argument("--offline", action="store_true", help="Disable all live lookups; must be chosen explicitly for a fully local run.")
     p.add_argument("--top-n", type=int, default=20)
     a = p.parse_args()
     if not 1 <= a.top_n <= 100: p.error("--top-n must be between 1 and 100")
     out = pathlib.Path(a.out); out.mkdir(parents=True, exist_ok=True)
-    artifacts = {"library": a.library, "context": a.context, "run-config": a.run_config, "external-candidates": a.external_candidates}
+    artifacts = {"library": a.library or a.paper, "context": a.context, "run-config": a.run_config, "external-candidates": a.external_candidates}
     step_status = {"input_validation": "pending", "library_evaluation": "pending", "external_discovery": "pending", "report": "pending"}
     try:
-        library = load_items(a.library); context = json.loads(pathlib.Path(a.context).read_text(encoding="utf-8")); config = json.loads(pathlib.Path(a.run_config).read_text(encoding="utf-8"))
+        if a.paper:
+            raw_paper = json.loads(pathlib.Path(a.paper).read_text(encoding="utf-8"))
+            if not isinstance(raw_paper, dict):
+                raise ValueError("--paper must point to one JSON object, not an array.")
+            library = [raw_paper]; input_mode = "single-paper"
+        else:
+            library = load_items(a.library); input_mode = "library"
+        context = json.loads(pathlib.Path(a.context).read_text(encoding="utf-8")); config = json.loads(pathlib.Path(a.run_config).read_text(encoding="utf-8"))
         validate_configuration(config, context)
+        enrichment_log = {"source": "none", "status": "not_requested"}
+        automation = config.get("automation") or {}
+        if a.paper and not a.offline and automation.get("allow_search") is True and automation.get("allow_metadata_enrichment", True) is True:
+            key = require_openalex_authorization(config)
+            library[0], enrichment_log = enrich_openalex_record(library[0], key)
         configured_scope = ((config.get("paper_evaluation") or {}).get("scope"))
         if configured_scope and not context.get("paper_evaluation_scope"):
             context["paper_evaluation_scope"] = configured_scope
@@ -79,7 +96,11 @@ def main():
         step_status["library_evaluation"] = "complete"
         if a.external_candidates:
             candidates, search_log = load_items(a.external_candidates), {"source": "provided_snapshot", "status": "complete"}
+        elif a.paper and not a.external_search:
+            candidates, search_log = [], {"source": "single_paper_metadata_only", "status": "skipped", "reason": "candidate discovery requires --external-search"}
         else:
+            if (config.get("automation") or {}).get("allow_external_discovery", False) is not True:
+                raise ExternalSearchError("External candidate discovery requires explicit automation.allow_external_discovery=true.")
             key = require_openalex_authorization(config)
             question = clean((config.get("project") or {}).get("research_question") or context.get("research_question"))
             if not question: raise ExternalSearchError("External search requires project.research_question.")
@@ -88,7 +109,8 @@ def main():
         external = recommend([evaluate_record(item, context, config, external=True) for item in candidates if isinstance(item, dict)], library_rows)
         step_status["external_discovery"] = "complete"
         report = {"schema_version": "2.0", "module": "paper-evidence-evaluation", "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
-                  "search_log": search_log, "library_record_count": len(library_rows), "external_candidate_count": len(external),
+                  "input_mode": input_mode,
+                  "search_log": search_log, "metadata_enrichment": enrichment_log, "library_record_count": len(library_rows), "external_candidate_count": len(external),
                   "papers": library_rows, "external_candidates": external,
                   "reading_priority_top": sort_rows([row for row in library_rows if row['reading_priority']['score'] is not None], ["reading_priority", "score"])[:a.top_n],
                   "core_support_top": sort_rows(library_rows, ["review_contribution", "rank_signal"])[:a.top_n],

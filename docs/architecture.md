@@ -53,6 +53,7 @@ User Intake (run-config.json)
 | `search_iterator.py` | Multi-round iteration validator | ✅ |
 | `normalize_candidates.py` | Identifier dedup + version grouping | ✅ |
 | `import_library.py` | JSON/CSV/RIS/BibTeX normalization + import preview | ✅ |
+| `enrich_library_metadata.py` | Authorized, resumable-friendly metadata enrichment; preserves original values and records gaps | ✅ |
 | `run_full_audit.py` | Guided, resumable import → collect → screen → audit workflow | ✅ |
 | `screen_candidates.py` | Human screening template and decision-log validation | ✅ |
 | `citation_candidates.py` | Authorized OpenAlex forward/backward candidate discovery | ✅ |
@@ -80,6 +81,8 @@ User Intake (run-config.json)
 - **manifest.json**: sha256, git commit, Python version — every input accounted for
 - **paper-evaluation.json**: V2 per-paper evidence output; its companion manifest records redacted input copies, hashes and step status
 - **paper-evaluation-schema.json**: Machine-readable V2 output contract
+- **single-paper mode**: `--paper one-paper.json` evaluates one JSON object without requiring a library wrapper; output remains schema-compatible with `papers[0]` and declares `input_mode: "single-paper"`.
+- **network authorization**: The first intake step records online enrichment, external discovery, local-only choice, allowed sources, and authorization state; see [network authorization confirmation](../references/network-authorization-confirmation.md).
 - **audit_core public API**: shared components own cross-workflow concerns; workflow entry points must not import another workflow's private helpers
 
 ## Workflow Boundary
@@ -93,3 +96,12 @@ The repository intentionally does not claim that multi-round searching, screenin
 3. **New indicators**: Add to indicator-registry.json → add the computation in `run_audit.py` → update the report assembly
 4. **New output formats**: Add a renderer beside `audit_core/rendering.py`; keep report data generation independent of presentation
 5. **New review types**: Add threshold row + schema enum value
+
+## Human-factors guardrails
+
+- Network permission is confirmed in intake before any search: metadata enrichment is allowed by default, candidate discovery is a separate permission, and full-local mode requires an explicit user choice.
+- Batch workflows run a resumable metadata-enrichment step before audit when online enrichment is allowed; unavailable credentials or source failures preserve the original library and produce a gap report instead of aborting the audit.
+- Source permissions are represented by source names and authorization state only; passwords, API keys and cookies never enter `run-config.json` or reports.
+- Treat `reading_priority`, `core_support_top`, and `external_candidate_top` as three different work queues, not one leaderboard.
+- Every numeric reading-priority signal includes `components` and a confidence label. Missing full-text appraisal becomes `metadata_priority`, never a quality claim.
+- Discovery candidates remain `candidate_discovery` until human screening; the single-paper path is intended to make local inspection easy without weakening that boundary.

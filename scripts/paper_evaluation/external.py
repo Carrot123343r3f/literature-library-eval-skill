@@ -16,6 +16,9 @@ def require_openalex_authorization(config):
     sources = {str(item).lower() for item in automation.get("allowed_sources", [])}
     if automation.get("allow_search") is not True or "openalex" not in sources:
         raise ExternalSearchError("External candidates require allow_search=true and openalex in allowed_sources.")
+    authorized = automation.get("authorized_sources")
+    if isinstance(authorized, list) and authorized and "openalex" not in {str(item).lower() for item in authorized}:
+        raise ExternalSearchError("OpenAlex is not included in the user's authorized_sources.")
     try:
         return require_openalex_api_key()
     except CredentialError as exc:
@@ -34,6 +37,39 @@ def search_openalex(query, api_key, limit=100):
     if not isinstance(payload.get("results"), list):
         raise ExternalSearchError("OpenAlex returned no usable results.")
     return payload["results"], {"source": "openalex", "query": query, "result_count": len(payload["results"]), "status": "complete"}
+
+
+def enrich_openalex_record(record, api_key):
+    """Fill missing metadata from one authorized OpenAlex lookup.
+
+    The returned record keeps user-supplied values and only fills blanks.
+    Matching is conservative: DOI match wins; otherwise normalized title and
+    publication year must agree. The lookup log is returned for provenance.
+    """
+    doi = clean(record.get("DOI") or record.get("doi"))
+    title = clean(record.get("title"))
+    query = doi or title
+    if not query:
+        return dict(record), {"source": "openalex", "status": "skipped", "reason": "missing_doi_and_title"}
+    works, log = search_openalex(query, api_key, limit=10)
+    wanted_title, wanted_year = norm(title), record.get("year") or record.get("publication_year")
+    wanted_year = int(wanted_year) if str(wanted_year).isdigit() else None
+    match = None
+    for work in works:
+        candidate = normalize_openalex(work)
+        if doi and stable_ids(candidate) & stable_ids(record):
+            match = candidate; break
+        candidate_year = candidate.get("publication_year")
+        if title and norm(candidate.get("title")) == wanted_title and (not wanted_year or candidate_year == wanted_year):
+            match = candidate; break
+    if not match:
+        return dict(record), {**log, "status": "no_confident_match", "match_confidence": "none"}
+    enriched = dict(record)
+    filled = []
+    for key, value in match.items():
+        if value not in (None, "", [], {}) and not enriched.get(key):
+            enriched[key] = value; filled.append(key)
+    return enriched, {**log, "status": "complete", "match_confidence": "doi_or_exact_title_year", "filled_fields": filled}
 
 
 def abstract(index):

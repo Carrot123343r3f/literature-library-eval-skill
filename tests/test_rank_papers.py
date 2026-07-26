@@ -48,17 +48,32 @@ with tempfile.TemporaryDirectory() as tmp:
     write(config, {"project": {"research_question": "robot"}, "automation": {"allow_search": False, "allowed_sources": []}})
     result = subprocess.run([sys.executable, str(ROOT / "scripts" / "rank_papers.py"), "--library", str(library), "--context", str(context), "--run-config", str(config), "--out", str(out)], capture_output=True, text=True)
     assert result.returncode == 2
-    assert "allow_search" in result.stderr
+    assert "allow_external_discovery" in result.stderr
     assert (out / "paper-evaluation-error.json").exists()
 
 with tempfile.TemporaryDirectory() as tmp:
     root = pathlib.Path(tmp); library = root / "library.json"; context = root / "context.json"; config = root / "run-config.json"; out = root / "out"
     write(library, []); write(context, {"ranking_keywords": ["robot"]})
-    write(config, {"project": {"research_question": "robot"}, "automation": {"allow_search": True, "allowed_sources": ["openalex"]}})
+    write(config, {"project": {"research_question": "robot"}, "automation": {"allow_search": True, "allow_external_discovery": True, "allowed_sources": ["openalex"]}})
     env = dict(os.environ); env.pop("OPENALEX_API_KEY", None)
     result = subprocess.run([sys.executable, str(ROOT / "scripts" / "run_paper_evaluation.py"), "--library", str(library), "--context", str(context), "--run-config", str(config), "--out", str(out)], capture_output=True, text=True, env=env)
     assert result.returncode == 2
     assert "OPENALEX_API_KEY" in result.stderr
     assert (out / "paper-evaluation-error.json").exists()
+
+# Single-paper mode is a convenience path for new users and must remain
+# schema-compatible with the normal library output.
+with tempfile.TemporaryDirectory() as tmp:
+    root = pathlib.Path(tmp)
+    paper = root / "paper.json"; context = root / "context.json"; config = root / "run-config.json"; out = root / "out"
+    write(paper, {"title": "One robot localization paper", "DOI": "10.1/one", "study_type": "algorithm_ml", "abstract": "robot localization"})
+    write(context, {"ranking_keywords": ["robot", "localization"]})
+    write(config, {"project": {"research_question": "robot localization"}, "automation": {"allow_search": True, "allow_metadata_enrichment": True, "allowed_sources": ["openalex"]}})
+    subprocess.run([sys.executable, str(ROOT / "scripts" / "run_paper_evaluation.py"), "--paper", str(paper), "--context", str(context), "--run-config", str(config), "--offline", "--out", str(out)], check=True)
+    report = json.loads((out / "paper-evaluation.json").read_text(encoding="utf-8"))
+    assert report["input_mode"] == "single-paper"
+    assert report["library_record_count"] == 1
+    assert report["metadata_enrichment"]["status"] == "not_requested"
+    assert "reproducibility_signal" in report["papers"][0]["reading_priority"]["components"]
 
 print("Paper ranking tests: PASSED")

@@ -18,6 +18,8 @@ out/
 
 `run_full_audit.py` additionally writes `workflow-state.json` (signature-bound step state), `next-actions.json` (recoverable actions), and, when applicable, `import/import-preview.json`, `screening/screening-decisions.json`, `screening/screening-summary.json`, and `citations/citation-candidates.json` plus a manifest. Use `--resume` only with the same inputs; use a fresh run or `--force` when inputs change.
 
+When online metadata enrichment is allowed, it also writes `enrichment/library-enriched.json` and `enrichment/metadata-enrichment.json`. The enriched library is used for downstream auditing, while user-provided fields always take precedence. Missing credentials, ambiguous matches, and source failures are recorded as gaps and do not silently become guessed values. Use `automation.local_only_confirmed=true` or the explicit local-only choice during intake to skip this step.
+
 > **Privacy**: No absolute paths recorded. Input files are copied with sha256 prefix only.
 
 ## Report Sections

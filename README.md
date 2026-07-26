@@ -44,7 +44,7 @@ Run the audit **before** writing. In one command (or one conversation with an AI
 
 ## Quickstart
 
-**Current capability**: A guided, resumable CLI workflow now covers import, authorized collection, deduplication, human screening templates, audit, and recovery actions. Online discovery remains opt-in and candidates never become formal inclusions without a human decision.
+**Current capability**: A guided, resumable CLI workflow now covers import, authorized metadata enrichment, collection, deduplication, human screening templates, audit, and recovery actions. Metadata enrichment is allowed by default after intake confirmation; external candidate discovery remains separately opt-in and candidates never become formal inclusions without a human decision.
 
 | Status | Step |
 | :---: | --- |
@@ -172,6 +172,16 @@ git clone https://github.com/Carrot123343r3f/literature-library-eval-skill.git \
 ```bash
 python scripts/run_paper_evaluation.py --library library.json --context context.json --run-config run-config.json --out paper-evaluation
 ```
+
+For a first pass on one article, use a JSON object with `--paper`:
+
+```bash
+python scripts/run_paper_evaluation.py --paper one-paper.json --context context.json --run-config run-config.json --out one-paper-evaluation
+```
+
+This keeps the evidence boundaries explicit: `metadata_priority` means “read/verify earlier”, not “high quality”. Method appraisal, reproducibility, integrity and review contribution remain separate, and the report exposes the components behind a reading-priority signal.
+
+Single-paper mode performs authorized metadata enrichment by default when `automation.allow_search=true`. Use `--external-candidates saved.json` for an offline candidate snapshot, `--external-search` for live candidate discovery, or `--offline` only after the user explicitly chooses fully local execution.
 
 External discovery uses OpenAlex only when `automation.allow_search=true`, `openalex` is permitted by `automation.allowed_sources`, and an already configured `OPENALEX_API_KEY` is available. If the query cannot run, the command exits with an error and writes `paper-evaluation-error.json`; it does not emit a fabricated external Top 20. A saved candidate snapshot can be supplied with `--external-candidates` for reproducible/offline reruns.
 
