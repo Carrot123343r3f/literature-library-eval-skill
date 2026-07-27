@@ -27,7 +27,9 @@ def md_table(rows, kind):
         if kind == "reading": basis = row["reading_priority"]["label"] + f" ({row['reading_priority']['score']})"
         elif kind == "core": basis = row["review_contribution"]["core_support_tier"] + ": " + ", ".join(row["review_contribution"]["unique_roles"] + row["review_contribution"]["topic_gap_if_removed"])
         else: basis = "候选发现；新增主题：" + ", ".join(row["recommendation"]["new_topics"])
-        lines.append(f"| {i} | {clean(row['title']).replace('|','\\|')} | {row.get('year') or '—'} | {row['eligibility']['verdict']} | {row['method_appraisal']['overall']} | {clean(basis).replace('|','\\|')} |")
+        title = clean(row["title"]).replace("|", "\\|")
+        safe_basis = clean(basis).replace("|", "\\|")
+        lines.append(f"| {i} | {title} | {row.get('year') or '—'} | {row['eligibility']['verdict']} | {row['method_appraisal']['overall']} | {safe_basis} |")
     return "\n".join(lines)
 
 

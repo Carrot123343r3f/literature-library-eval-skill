@@ -19,6 +19,7 @@ def test_shared_contracts_redact_and_renderer_escapes_html():
     public = public_value({"api_key": "must-not-leak", "source": r"C:\private\library.json"})
     assert public["api_key"] == "[REDACTED]"
     assert public["source"] == "library.json"
+    assert public_value({"source": "/private/library.json"})["source"] == "library.json"
     workbench = render_markdown_html("# Report", actions=[{"code": "A2", "title": "Search sensitivity", "verdict": "not_assessable", "why": "missing evidence", "next_step": "add validation set"}])
     assert "action-workbench" in workbench
     assert "localStorage" in workbench

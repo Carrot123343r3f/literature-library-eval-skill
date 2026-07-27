@@ -36,7 +36,9 @@ def public_value(value, key=""):
     if isinstance(value, list):
         return [public_value(v, key) for v in value]
     if is_absolute_local_path(value):
-        return pathlib.PurePath(value).name or "[LOCAL_PATH]"
+        # PurePath follows the host OS. Use Windows parsing explicitly so a
+        # Windows path is safely redacted when the audit runs on Linux CI.
+        return pathlib.PureWindowsPath(value).name or "[LOCAL_PATH]"
     return value
 
 
