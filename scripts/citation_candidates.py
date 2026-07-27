@@ -18,7 +18,7 @@ def get_json(url):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__); parser.add_argument("--seed", required=True); parser.add_argument("--run-config", required=True); parser.add_argument("--out", required=True); parser.add_argument("--limit", type=int, default=100)
-    args = parser.parse_args(); allowed = load_search_authorization(args.run_config)
+    args = parser.parse_args(); allowed = load_search_authorization(args.run_config, "allow_citation_tracking")
     if allowed is not None and "openalex" not in allowed: raise SystemExit("ERROR: OpenAlex is not authorized by automation.allowed_sources.")
     key = require_openalex_api_key(); seeds = json.loads(pathlib.Path(args.seed).read_text(encoding="utf-8")); seeds = seeds if isinstance(seeds, list) else seeds.get("items", [])
     candidates, search_log, seen = [], [], set()

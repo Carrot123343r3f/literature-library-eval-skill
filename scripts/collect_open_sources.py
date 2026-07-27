@@ -13,7 +13,7 @@ from credentials import require_openalex_api_key
 MAX_RECORDS_PER_SOURCE_QUERY = 10_000
 
 
-def load_search_authorization(run_config_path):
+def load_search_authorization(run_config_path, required_permission=None):
     """Return the persisted source allowlist after enforcing search consent."""
     try:
         with open(run_config_path, encoding="utf-8") as fh:
@@ -23,15 +23,17 @@ def load_search_authorization(run_config_path):
     automation = config.get("automation")
     if not isinstance(automation, dict) or automation.get("allow_search") is not True:
         raise PermissionError("automation.allow_search must be true before online collection")
+    if required_permission and automation.get(required_permission) is not True:
+        raise PermissionError(f"automation.{required_permission} must be true before this online operation")
     allowed = automation.get("allowed_sources")
     if allowed is not None and (not isinstance(allowed, list) or not all(isinstance(x, str) for x in allowed)):
         raise ValueError("automation.allowed_sources must be an array of source names")
     return None if allowed is None else {x.casefold() for x in allowed}
 
 
-def load_authorized_plan(run_config_path, plan_path):
+def load_authorized_plan(run_config_path, plan_path, required_permission=None):
     """Load a plan only after enforcing the user's persisted search consent."""
-    allowed_sources = load_search_authorization(run_config_path)
+    allowed_sources = load_search_authorization(run_config_path, required_permission)
     try:
         with open(plan_path, encoding="utf-8") as fh:
             plan = json.load(fh)
@@ -119,7 +121,7 @@ def main():
     if not 1 <= args.max_records <= MAX_RECORDS_PER_SOURCE_QUERY:
         parser.error(f"--max-records must be between 1 and {MAX_RECORDS_PER_SOURCE_QUERY}")
     try:
-        plan, allowed_sources = load_authorized_plan(args.run_config, args.plan)
+        plan, allowed_sources = load_authorized_plan(args.run_config, args.plan, "allow_external_discovery")
     except (ValueError, PermissionError) as exc:
         parser.error(str(exc))
     result = {"schema_version": "1.1", "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
@@ -148,7 +150,7 @@ def main():
                 collected = collector(row["query"], args.max_records); collected["status"] = "complete" if collected["complete"] else "partial"
                 entry["sources"][source] = collected
             except Exception as exc:
-                entry["sources"][source] = {"status": "failed", "error": str(exc)[:240]}
+                entry["sources"][source] = {"status": "failed", "error": f"source_request_failed:{type(exc).__name__}"}
         result["queries"].append(entry)
     with open(args.out, "w", encoding="utf-8") as fh: json.dump(result, fh, ensure_ascii=False, indent=2)
 

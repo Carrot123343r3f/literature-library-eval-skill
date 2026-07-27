@@ -144,6 +144,23 @@ def test_collector_requires_persisted_consent_and_source_allowlist():
         assert allowed == set()
 
 
+def test_collector_requires_discovery_specific_permission():
+    with tempfile.TemporaryDirectory() as temp:
+        root = pathlib.Path(temp)
+        plan = root / "plan.json"
+        config = root / "run-config.json"
+        plan.write_text(json.dumps({"queries": [{"id": "q1", "query": "test", "sources": ["openalex"]}]}), encoding="utf-8")
+        config.write_text(json.dumps({"automation": {"allow_search": True, "allow_external_discovery": False, "allowed_sources": ["openalex"]}}), encoding="utf-8")
+        try:
+            load_authorized_plan(config, plan, "allow_external_discovery")
+            raise AssertionError("collection without discovery permission must fail")
+        except PermissionError:
+            pass
+        config.write_text(json.dumps({"automation": {"allow_search": True, "allow_external_discovery": True, "allowed_sources": ["openalex"]}}), encoding="utf-8")
+        _, allowed = load_authorized_plan(config, plan, "allow_external_discovery")
+        assert allowed == {"openalex"}
+
+
 def test_report_does_not_disclose_workspace_path_or_secret_context():
     with tempfile.TemporaryDirectory() as temp:
         temp_root = pathlib.Path(temp)
@@ -196,6 +213,7 @@ if __name__ == "__main__":
     test_a2_uses_independent_validation_as_primary_value()
     test_config_requires_nested_review_fields_and_boolean_consent()
     test_collector_requires_persisted_consent_and_source_allowlist()
+    test_collector_requires_discovery_specific_permission()
     test_report_does_not_disclose_workspace_path_or_secret_context()
     test_first_run_register_reports_d2_and_missing_b_d3_evidence_explicitly()
     print("Security and contract tests: PASSED")

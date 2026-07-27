@@ -93,8 +93,15 @@ def validate_run_config(rc):
             errors.append("automation.allow_search is required")
         elif not isinstance(automation["allow_search"], bool):
             errors.append("automation.allow_search must be boolean")
-        if "allowed_sources" in automation and not isinstance(automation["allowed_sources"], list):
+        for permission in ("allow_metadata_enrichment", "allow_external_discovery", "allow_citation_tracking"):
+            if permission in automation and not isinstance(automation[permission], bool):
+                errors.append(f"automation.{permission} must be boolean")
+        allowed_sources = automation.get("allowed_sources", [])
+        supported_sources = {"openalex", "crossref", "arxiv", "europepmc"}
+        if not isinstance(allowed_sources, list):
             errors.append("automation.allowed_sources must be an array")
+        elif any(not isinstance(source, str) or source.casefold() not in supported_sources for source in allowed_sources):
+            errors.append("automation.allowed_sources contains an unsupported source")
     else:
         errors.append("automation is required and must be an object")
 

@@ -27,7 +27,9 @@ with tempfile.TemporaryDirectory() as temp:
     invoke("screen_candidates.py", "--candidates", imported / "library.json", "--decisions", decision_path, "--out", screening)
     invoke("summarize_screening.py", "--candidates", imported / "library.json", "--decisions", screening / "screening-decisions.json", "--out", summary)
     screening_meta = json.loads((summary / "screening-summary.json").read_text(encoding="utf-8"))
-    assert screening_meta["search_rounds"][0]["included_high"] == 1
+    assert screening_meta["search_rounds"] == []
+    assert screening_meta["screening_summary"]["included"] == 1
+    assert screening_meta["round_evidence_status"] == "requires_explicit_round_context"
     audit = {"indicator_register": [{"subproject": "A2", "meets_standard": "not_assessable", "description_and_action": "missing validation evidence"}]}
     audit_path = root / "audit.json"; audit_path.write_text(json.dumps(audit), encoding="utf-8")
     invoke("next_actions.py", "--audit", audit_path, "--out", actions)

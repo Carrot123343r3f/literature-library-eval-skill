@@ -85,7 +85,7 @@ def main():
         validate_configuration(config, context)
         enrichment_log = {"source": "none", "status": "not_requested"}
         automation = config.get("automation") or {}
-        if a.paper and not a.offline and automation.get("allow_search") is True and automation.get("allow_metadata_enrichment", True) is True:
+        if a.paper and not a.offline and automation.get("allow_search") is True and automation.get("allow_metadata_enrichment", False) is True:
             key = require_openalex_authorization(config)
             library[0], enrichment_log = enrich_openalex_record(library[0], key)
         configured_scope = ((config.get("paper_evaluation") or {}).get("scope"))
@@ -127,8 +127,8 @@ def main():
     except (ValueError, ExternalSearchError) as exc:
         step_status = {key: ("failed" if value == "pending" else value) for key, value in step_status.items()}
         write_manifest(out, "paper-evidence-evaluation", "2.0", artifacts, step_status)
-        (out / "paper-evaluation-error.json").write_text(json.dumps({"module": "paper-evidence-evaluation", "status": "error", "message": str(exc)}, ensure_ascii=False, indent=2), encoding="utf-8")
-        print(f"ERROR: {exc}", file=sys.stderr); raise SystemExit(2)
+        (out / "paper-evaluation-error.json").write_text(json.dumps({"module": "paper-evidence-evaluation", "status": "error", "message": "evaluation_failed", "error_type": type(exc).__name__}, ensure_ascii=False, indent=2), encoding="utf-8")
+        print("ERROR: online paper evaluation is unavailable. Check automation.allow_external_discovery and OPENALEX_API_KEY configuration.", file=sys.stderr); raise SystemExit(2)
 
 
 if __name__ == "__main__": main()

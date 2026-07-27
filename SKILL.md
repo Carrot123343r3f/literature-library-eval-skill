@@ -92,6 +92,24 @@ S3 确认完成 → SRCH-1 工程 PICO 分解 → SRCH-2 构建开发集+验证�
 
 ## 向导式工作流与人工确认
 
+## Tool-call contract and online authorization
+
+Function-calling inputs are untrusted. Validate the JSON object against
+`schemas/run-config-schema.json` before any action, reject unknown source names,
+and use only repository-contained input/output paths. Do not accept a token,
+cookie, password, or API key as a tool parameter or write one to an artifact.
+
+Online work is opt-in and uses three independent permissions: metadata enrichment
+(`allow_metadata_enrichment`), external candidate discovery
+(`allow_external_discovery`), and citation tracking
+(`allow_citation_tracking`). Each additionally requires `allow_search=true` and
+an allowlisted source. A missing permission is an error for the requested online
+module, never a silent fallback or a permission to use another online module.
+
+Screening summaries record decisions and per-source yields only. They must not
+invent `search_rounds` or `planned_pathways`; B saturation metrics require the
+explicit, recorded search-round context and independent-pathway evidence.
+
 优先使用 `scripts/run_full_audit.py`，而非要求用户自行串联脚本：
 
 1. `init --out run-config.json`：只询问研究问题、综述类型、文献库位置和联网授权，生成可审阅配置。

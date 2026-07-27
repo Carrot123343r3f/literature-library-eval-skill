@@ -40,15 +40,16 @@
     },
     "automation": {
       "type": "object",
-      "description": "Online access is confirmed during intake. Default is allowed for metadata enrichment; fully local execution requires an explicit user choice. Candidate discovery remains a separate permission.",
+      "description": "Online access is opt-in during intake. Metadata enrichment, candidate discovery, and citation tracking require separate explicit permissions.",
       "required": ["allow_search"],
       "properties": {
-        "allow_search": {"type": "boolean", "default": true, "description": "Allow authorized online metadata/search operations."},
-        "allow_metadata_enrichment": {"type": "boolean", "default": true},
+        "allow_search": {"type": "boolean", "default": false, "description": "Enable only explicitly authorized online operations."},
+        "allow_metadata_enrichment": {"type": "boolean", "default": false},
         "allow_external_discovery": {"type": "boolean", "default": false},
+        "allow_citation_tracking": {"type": "boolean", "default": false},
         "local_only_confirmed": {"type": "boolean", "default": false, "description": "True only after the user explicitly chose fully local execution."},
         "allow_query_refinement": {"type": "boolean", "default": false},
-        "allowed_sources": {"type": "array", "items": {"type": "string"}, "default": ["openalex"]},
+        "allowed_sources": {"type": "array", "items": {"enum": ["openalex", "crossref", "arxiv", "europepmc"]}, "default": []},
         "authorized_sources": {"type": "array", "items": {"type": "string"}, "description": "Names of sources for which the user has authorized a preconfigured connector/session; never store passwords or tokens here."},
         "stop_conditions": {"type": "array", "items": {"type": "string"}}
       }

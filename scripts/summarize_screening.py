@@ -23,7 +23,23 @@ def main():
     for pathway, items in grouped.items():
         included_here = sum(1 for item in items if str(item.get("DOI") or item.get("id") or f"row-{rows.index(item)}") in final and final[str(item.get("DOI") or item.get("id") or f"row-{rows.index(item)}")]["decision"] == "include")
         yields.append({"pathway": pathway, "candidates": len(items), "screened_high_confidence": included_here, "new_high_confidence": included_here, "dedup_rule": "canonical candidate identifiers", "screening_status": "screened_complete", "yield": round(included_here / len(items), 4) if items else 0})
-    result = {"schema_version": "1.0", "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(), "search_rounds": [{"pathway": "human-screening-round", "type": "db_boolean", "completed": True, "core_before": len(rows), "included_high": len(included), "screening_status": "screened_complete"}], "source_marginal_yields": yields, "planned_pathways": sorted(grouped), "screening_summary": {"candidate_count": len(rows), "included": len(included), "excluded": sum(row["decision"] == "exclude" for row in final.values()), "pending": len(rows) - len(final)}, "note": "One completed human screening round. B remains not_assessable until independent pathways and two qualified rounds are present."}
+    result = {
+        "schema_version": "1.1",
+        "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+        # A screening export has no reliable information about the actual search
+        # round or its planned pathways.  Do not fabricate those B inputs.
+        "search_rounds": [],
+        "planned_pathways": [],
+        "independent_pathways": [],
+        "source_marginal_yields": yields,
+        "screening_summary": {
+            "candidate_count": len(rows), "included": len(included),
+            "excluded": sum(row["decision"] == "exclude" for row in final.values()),
+            "pending": len(rows) - len(final),
+        },
+        "round_evidence_status": "requires_explicit_round_context",
+        "note": "Screening evidence only. Merge it with recorded search-round and pathway context before using it for B saturation metrics.",
+    }
     out = pathlib.Path(args.out); out.mkdir(parents=True, exist_ok=True); (out / "screening-summary.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
 
 

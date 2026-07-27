@@ -32,15 +32,15 @@ def main():
                   "source": "openalex", "status": "not_requested", "records_total": len(rows), "records_matched": 0,
                   "records_unchanged": 0, "records_ambiguous_or_missing": 0, "records": []}
         enriched_rows = [dict(row) if isinstance(row, dict) else row for row in rows]
-        if automation.get("allow_search") is not True or automation.get("allow_metadata_enrichment", True) is not True:
+        if automation.get("allow_search") is not True or automation.get("allow_metadata_enrichment", False) is not True:
             report.update(status="disabled_by_user", records_unchanged=len(rows))
         elif "openalex" not in {str(x).lower() for x in automation.get("allowed_sources", [])}:
             report.update(status="source_not_allowed", records_unchanged=len(rows))
         else:
             try:
                 key = require_openalex_authorization(config)
-            except ExternalSearchError as exc:
-                report.update(status="unavailable", reason=str(exc), records_unchanged=len(rows))
+            except ExternalSearchError:
+                report.update(status="unavailable", reason="credential_or_source_unavailable", records_unchanged=len(rows))
             else:
                 report["status"] = "complete_with_gaps"
                 cache = {}
@@ -57,7 +57,7 @@ def main():
                         try:
                             updated, lookup = enrich_openalex_record(row, key)
                         except Exception as exc:
-                            lookup = {"status": "source_error", "error": str(exc)[:240]}
+                            lookup = {"status": "source_error", "error_type": type(exc).__name__}
                             updated = dict(row)
                         cache[cache_key] = (dict(updated), dict(lookup))
                     enriched_rows[index] = updated
@@ -78,8 +78,8 @@ def main():
         (out / "metadata-enrichment.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"Metadata enrichment: {report['status']}; matched {report['records_matched']}/{len(rows)} records.")
     except (ValueError, OSError, json.JSONDecodeError) as exc:
-        (out / "metadata-enrichment-error.json").write_text(json.dumps({"module": "metadata-enrichment", "status": "error", "message": str(exc)}, ensure_ascii=False, indent=2), encoding="utf-8")
-        print(f"ERROR: {exc}", file=sys.stderr); raise SystemExit(2)
+        (out / "metadata-enrichment-error.json").write_text(json.dumps({"module": "metadata-enrichment", "status": "error", "message": "input_or_output_error", "error_type": type(exc).__name__}, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"ERROR: metadata enrichment failed ({type(exc).__name__}).", file=sys.stderr); raise SystemExit(2)
 
 
 if __name__ == "__main__":

@@ -9,10 +9,15 @@ import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent
+SUPPORTED_SOURCES = {"openalex", "crossref", "arxiv", "europepmc"}
 
 
 def signature(args):
-    values = {key: str(value) for key, value in vars(args).items() if key not in {"out", "resume", "force", "command"} and value}
+    values = {}
+    for key, value in vars(args).items():
+        if key in {"out", "resume", "force", "command"} or not value: continue
+        path = pathlib.Path(str(value))
+        values[key] = {"path": str(path.resolve()), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()} if path.is_file() else str(value)
     return hashlib.sha256(json.dumps(values, sort_keys=True).encode("utf-8")).hexdigest()
 
 
@@ -33,7 +38,7 @@ def write_state(out, steps, run_signature, message=""):
 
 
 def run(command, steps, name, out, run_signature, outputs, resume):
-    if resume and steps.get(name) == "complete" and all(path.is_file() for path in outputs):
+    if resume and steps.get(name) in {"complete", "reused"} and all(path.is_file() for path in outputs):
         steps[name] = "reused"; write_state(out, steps, run_signature); return
     try:
         subprocess.run(command, check=True); steps[name] = "complete"; write_state(out, steps, run_signature)
@@ -45,32 +50,29 @@ def script(name): return str(ROOT / name)
 
 
 def init_config_v2(args):
-    """Create a user-confirmed config with online enrichment enabled by default."""
+    """Create a user-confirmed config; every online capability is opt-in."""
     question = input("Research question/title: ").strip()
     review_type = input("Review type [narrative/systematic/scoping/rapid/umbrella] (default narrative): ").strip() or "narrative"
     library = input("Library path (optional; can be imported later): ").strip()
-    allow = input("Allow AI to enrich metadata online? [Y/n]: ").strip().lower() not in {"n", "no"}
+    allow = input("Allow online metadata enrichment? [y/N]: ").strip().lower() in {"y", "yes"}
     discover = input("Allow online discovery of new candidate papers? [y/N]: ").strip().lower() in {"y", "yes"}
+    citations = input("Allow online citation tracking? [y/N]: ").strip().lower() in {"y", "yes"}
     local_only = input("Run fully locally? [y/N]: ").strip().lower() in {"y", "yes"}
     if local_only:
-        allow = False; discover = False
-    sources = [item.strip().lower() for item in input("Allowed sources (comma-separated, default openalex): ").split(",") if item.strip()] if allow else []
-    if allow and not sources:
+        allow = False; discover = False; citations = False
+    allow_search = allow or discover or citations
+    sources = [item.strip().lower() for item in input("Allowed sources (comma-separated, default openalex): ").split(",") if item.strip()] if allow_search else []
+    if allow_search and not sources:
         sources = ["openalex"]
-    authorized = [item.strip().lower() for item in input("Sources with a preconfigured legal login/connector (comma-separated, optional): ").split(",") if item.strip()] if allow else []
+    unknown_sources = sorted(set(sources) - SUPPORTED_SOURCES)
+    if unknown_sources:
+        raise SystemExit(f"ERROR: unsupported source(s): {', '.join(unknown_sources)}")
+    authorized = [item.strip().lower() for item in input("Sources with a preconfigured legal login/connector (comma-separated, optional): ").split(",") if item.strip()] if allow_search else []
     config = {"schema_version": "1.0", "project": {"research_question": question, "review_type": review_type, "scope_status": "scope_uncertain"},
               "library": {"provided": bool(library), "path": library or None, "format": "json" if library.endswith(".json") else None},
-              "automation": {"allow_search": allow, "allow_metadata_enrichment": allow, "allow_external_discovery": discover,
+              "automation": {"allow_search": allow_search, "allow_metadata_enrichment": allow, "allow_external_discovery": discover, "allow_citation_tracking": citations,
                              "local_only_confirmed": local_only, "allowed_sources": sources, "authorized_sources": authorized},
               "output": {"language": "zh-CN", "formats": ["html", "md", "json"]}}
-    pathlib.Path(args.out).write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
-def init_config(args):
-    question = input("研究问题/题目：").strip(); review_type = input("综述类型 [narrative/systematic/scoping/rapid/umbrella]：").strip() or "narrative"
-    library = input("文献库路径（可留空，后续导入）：").strip(); allow = input("允许联网检索？[y/N]：").strip().lower() in {"y", "yes"}
-    sources = [item.strip() for item in input("允许来源（逗号分隔）：").split(",") if item.strip()] if allow else []
-    config = {"schema_version": "1.0", "project": {"research_question": question, "review_type": review_type, "scope_status": "scope_uncertain"}, "library": {"provided": bool(library), "path": library or None, "format": "json" if library.endswith(".json") else None}, "automation": {"allow_search": allow, "allowed_sources": sources or (["openalex", "crossref", "arxiv"] if allow else [])}, "output": {"language": "zh-CN", "formats": ["html", "md", "json"]}}
     pathlib.Path(args.out).write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
@@ -93,11 +95,12 @@ def main():
         imported = out / "import"; run([sys.executable, script("import_library.py"), "--input", str(library), "--out", str(imported)], steps, "import", out, run_signature, [imported / "library.json", imported / "import-preview.json"], args.resume); canonical = imported / "library.json"
         config["library"] = {"provided": True, "path": str(canonical), "format": "json", "normalization_required": False}; resolved = out / "resolved-run-config.json"; resolved.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8"); args.run_config = str(resolved)
     automation = config.get("automation") or {}
-    if automation.get("allow_search") is True and automation.get("allow_metadata_enrichment", True) is True and not automation.get("local_only_confirmed", False):
+    if automation.get("allow_search") is True and automation.get("allow_metadata_enrichment", False) is True and not automation.get("local_only_confirmed", False):
         enrichment = out / "enrichment"
         run([sys.executable, script("enrich_library_metadata.py"), "--library", str(canonical), "--run-config", args.run_config, "--out", str(enrichment)], steps, "metadata_enrichment", out, run_signature, [enrichment / "library-enriched.json", enrichment / "metadata-enrichment.json"], args.resume)
         canonical = enrichment / "library-enriched.json"
     if args.collect:
+        if automation.get("allow_search") is not True or automation.get("allow_external_discovery") is not True: raise SystemExit("ERROR: --collect requires automation.allow_search=true and automation.allow_external_discovery=true.")
         if not args.query_plan: raise SystemExit("ERROR: --collect requires --query-plan.")
         collection = out / "collection"; run([sys.executable, script("collect_open_sources.py"), "--run-config", args.run_config, "--plan", args.query_plan, "--out", str(collection)], steps, "collection", out, run_signature, [collection / "source-snapshot.json"], args.resume)
         normalized = out / "normalization"; run([sys.executable, script("normalize_candidates.py"), "--snapshot", str(collection / "source-snapshot.json"), "--out", str(normalized)], steps, "normalization", out, run_signature, [normalized / "candidates.json", normalized / "deduplication-log.json"], args.resume)
@@ -108,6 +111,7 @@ def main():
         if not candidates.is_file(): raise SystemExit("ERROR: screening decisions require normalized candidates from --collect.")
         summary = out / "screening"; run([sys.executable, script("summarize_screening.py"), "--candidates", str(candidates), "--decisions", args.screening_decisions, "--out", str(summary)], steps, "screening_summary", out, run_signature, [summary / "screening-summary.json"], args.resume); args.screening_summary = args.screening_summary or str(summary / "screening-summary.json")
     if args.citation_seed:
+        if automation.get("allow_search") is not True or automation.get("allow_citation_tracking") is not True: raise SystemExit("ERROR: --citation-seed requires automation.allow_search=true and automation.allow_citation_tracking=true.")
         citations = out / "citations"; run([sys.executable, script("citation_candidates.py"), "--seed", args.citation_seed, "--run-config", args.run_config, "--out", str(citations)], steps, "citation_discovery", out, run_signature, [citations / "citation-candidates.json", citations / "manifest.json"], args.resume)
     audit = out / "audit"; command = [sys.executable, script("run_audit.py"), "--library", str(canonical), "--out", str(audit), "--run-config", args.run_config]
     for flag, value in (("--context", args.context), ("--benchmark", args.benchmark), ("--gold", args.gold), ("--query-hits", args.query_hits), ("--candidate-snapshots", args.source_snapshot), ("--decision-log", args.screening_decisions), ("--deduplication-log", args.deduplication_log), ("--search-meta", args.screening_summary)):
