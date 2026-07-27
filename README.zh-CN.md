@@ -112,7 +112,7 @@ AI 会自动：
    ✅          ✅          🔧         🔧       ✅       🔧         🔧           ✅         ✅
 ```
 
-→ [查看示例报告](example-report.md)
+→ [查看完整示例报告](example-all-modules-report/audit/audit.html)
 
 ## 六维框架
 
@@ -224,7 +224,7 @@ git clone https://github.com/Carrot123343r3f/literature-library-eval-skill.git `
 
 | 读者 | 资源 |
 |---|---|
-| **新用户** | [英文 README](README.md) · [快速开始](#三分钟开始自己的审计) · [示例报告](example-report.md) |
+| **新用户** | [英文 README](README.md) · [快速开始](#三分钟开始自己的审计) · [示例报告](example-all-modules-report/audit/audit.html) |
 | **深度了解** | [方法学](docs/methodology.md) · [架构](docs/architecture.md) · [输出说明](docs/outputs.md) |
 | **集成** | [集成指南](docs/integrations.md) · Zotero / 数据库 / 配套 skill |
 | **标准参考** | [用户标准说明书](references/user-standards-guide.md) · [指标注册表](schemas/indicator-registry.json) |

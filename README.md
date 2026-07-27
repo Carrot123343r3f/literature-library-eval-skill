@@ -110,7 +110,7 @@ The AI will:
 2. Accept JSON, CSV, RIS, or BibTeX through `import_library.py`; review the generated import preview before auditing.
 3. Execute single-round diagnostic search, help you iterate the query, compute all A–F indicators, and produce the audit package
 
-→ [View example report](example-report.md)
+→ [View the complete example report](example-all-modules-report/audit/audit.html)
 
 ## Six-Dimension Framework
 
@@ -228,7 +228,7 @@ choose an online search or metadata-enrichment workflow.
 
 | Audience | Resources |
 |---|---|
-| **New users** | [README.zh-CN.md](README.zh-CN.md) · [Quickstart](#quickstart) · [Example report](example-report.md) |
+| **New users** | [README.zh-CN.md](README.zh-CN.md) · [Quickstart](#quickstart) · [Example report](example-all-modules-report/audit/audit.html) |
 | **Deep dive** | [Methodology](docs/methodology.md) · [Architecture](docs/architecture.md) · [Outputs](docs/outputs.md) |
 | **Integration** | [Integrations](docs/integrations.md) · [Zotero / databases / companion skills](docs/integrations.md) |
 | **Standards** | [User standards guide](references/user-standards-guide.md) · [Indicator registry](schemas/indicator-registry.json) |
