@@ -2,6 +2,9 @@
 
 ## The Audit Package
 
+`audit.html` is the only human-readable report. `audit.json`, `manifest.json`,
+and `inputs/` are retained for reproducibility and integration.
+
 Every run produces:
 
 ```text

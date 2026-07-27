@@ -34,8 +34,9 @@ with tempfile.TemporaryDirectory() as temp:
     assert "empty_topic" in audit["topic_balance"]["flags"]
     assert audit["balance"]["top_source_share"] == 0.5
     assert audit["recency"]["recent_share"] == 1.0
-    assert (out / "audit.md").exists() and (out / "audit.html").exists()
-    markdown = (out / "audit.md").read_text(encoding="utf-8")
+    assert not (out / "audit.md").exists()
+    assert (out / "audit.html").exists()
+    """Legacy Markdown-content assertions: reports are now HTML-only.
     assert "| 维度 | 编号 | 评估项 | 标准 | 判定 | 当前值 | 证据状态 | 说明与行动 |" in markdown
     assert "## 评估结论" in markdown
     assert "## 重点发现与解释" in markdown
@@ -45,9 +46,11 @@ with tempfile.TemporaryDirectory() as temp:
     assert markdown.index("## 评估结论") < markdown.index("## A–F 六维评估总表")
     assert markdown.index("## A–F 六维评估总表") < markdown.index("## 附录 B：证据与方法记录")
     assert "### 待补证据" in markdown
+    """
     rendered_html = (out / "audit.html").read_text(encoding="utf-8")
     assert "<table>" in rendered_html
     assert "<pre>" not in rendered_html
+    assert "action-workbench" in rendered_html
     register = audit["indicator_register"]
     assert len(register) == 21
     assert {row["subproject"] for row in register} >= {"A1", "B1", "C1", "D1", "E1", "F6"}

@@ -105,7 +105,7 @@ def main():
         collection = out / "collection"; run([sys.executable, script("collect_open_sources.py"), "--run-config", args.run_config, "--plan", args.query_plan, "--out", str(collection)], steps, "collection", out, run_signature, [collection / "source-snapshot.json"], args.resume)
         normalized = out / "normalization"; run([sys.executable, script("normalize_candidates.py"), "--snapshot", str(collection / "source-snapshot.json"), "--out", str(normalized)], steps, "normalization", out, run_signature, [normalized / "candidates.json", normalized / "deduplication-log.json"], args.resume)
         args.source_snapshot = args.source_snapshot or str(collection / "source-snapshot.json"); args.deduplication_log = args.deduplication_log or str(normalized / "deduplication-log.json")
-        screen = out / "screening"; run([sys.executable, script("screen_candidates.py"), "--candidates", str(normalized / "candidates.json"), "--out", str(screen)], steps, "screening_template", out, run_signature, [screen / "screening-decisions.json"], args.resume)
+        screen = out / "screening"; run([sys.executable, script("screen_candidates.py"), "--candidates", str(normalized / "candidates.json"), "--out", str(screen)], steps, "screening_template", out, run_signature, [screen / "screening-decisions.json", screen / "screening-template.csv", screen / "screening-workbench.html"], args.resume)
     if args.screening_decisions:
         candidates = out / "normalization" / "candidates.json"
         if not candidates.is_file(): raise SystemExit("ERROR: screening decisions require normalized candidates from --collect.")

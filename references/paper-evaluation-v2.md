@@ -18,7 +18,7 @@
 
 `context.paper_evaluation_scope` 可定义 `object`、`technology`、`performance` 和 `context`。题录可选字段包括 `study_type`、`topics`、`evidence_roles`、`method_appraisal`、`code_url`、`data_url`、`citation_normalized_percentile`、`fwci`、`retracted` 和 `corrected`。
 
-也可将范围写入 `run-config.json.paper_evaluation.scope`；当 context 未指定时，运行器以该持久化配置为准。成功运行会输出 `paper-evaluation.json`、Markdown/HTML、`external-search-snapshot.json` 与 `manifest.json`。manifest 仅保存输入文件名、哈希、脱敏副本和步骤状态，不保存绝对路径或密钥。
+也可将范围写入 `run-config.json.paper_evaluation.scope`；当 context 未指定时，运行器以该持久化配置为准。成功运行会输出 `paper-evaluation.html`、`paper-evaluation.json`、`external-search-snapshot.json` 与 `manifest.json`。manifest 仅保存输入文件名、哈希、脱敏副本和步骤状态，不保存绝对路径或密钥。
 
 ## 研究类型路由
 

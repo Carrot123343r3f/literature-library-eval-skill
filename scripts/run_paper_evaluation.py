@@ -117,13 +117,12 @@ def main():
                   "external_candidate_top": sort_rows(external, ["recommendation", "rank_signal"])[:a.top_n]}
         markdown, html = render(report)
         (out / "paper-evaluation.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
-        (out / "paper-evaluation.md").write_text(markdown, encoding="utf-8")
         (out / "paper-evaluation.html").write_text(html, encoding="utf-8")
         (out / "external-search-snapshot.json").write_text(json.dumps({"search_log": search_log, "candidates": candidates}, ensure_ascii=False, indent=2), encoding="utf-8")
         step_status["report"] = "complete"
         report["manifest"] = write_manifest(out, "paper-evidence-evaluation", "2.0", artifacts, step_status)
         (out / "paper-evaluation.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
-        print(f"Evaluated {len(library_rows)} library papers and {len(external)} external candidates.")
+        print(f"Evaluated {len(library_rows)} library papers and {len(external)} external candidates. HTML report created: paper-evaluation.html")
     except (ValueError, ExternalSearchError) as exc:
         step_status = {key: ("failed" if value == "pending" else value) for key, value in step_status.items()}
         write_manifest(out, "paper-evidence-evaluation", "2.0", artifacts, step_status)

@@ -2,6 +2,8 @@
 
 ## Reference Managers
 
+The workflow creates an import preview before auditing and an HTML screening workbench after candidate collection. Use JSON for lossless workflow artifacts; CSV is supported for convenient spreadsheet review and re-import of screening decisions.
+
 ### Zotero
 
 Export collection as Better BibTeX JSON or CSL JSON → point `library.path` to the file.

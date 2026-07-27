@@ -22,6 +22,8 @@ with tempfile.TemporaryDirectory() as temp:
     invoke("screen_candidates.py", "--candidates", imported / "library.json", "--out", screening)
     template = json.loads((screening / "screening-decisions.json").read_text(encoding="utf-8"))
     assert template["status"] == "template" and template["decisions"][0]["decision"] == "pending"
+    assert (screening / "screening-workbench.html").exists()
+    assert (screening / "screening-template.csv").exists()
     template["decisions"][0].update({"decision": "include", "reason": "matches frozen criteria"})
     decision_path = root / "decisions.json"; decision_path.write_text(json.dumps(template), encoding="utf-8")
     invoke("screen_candidates.py", "--candidates", imported / "library.json", "--decisions", decision_path, "--out", screening)
@@ -30,6 +32,9 @@ with tempfile.TemporaryDirectory() as temp:
     assert screening_meta["search_rounds"] == []
     assert screening_meta["screening_summary"]["included"] == 1
     assert screening_meta["round_evidence_status"] == "requires_explicit_round_context"
+    csv_screening = root / "csv-screening"
+    invoke("screen_candidates.py", "--candidates", imported / "library.json", "--decisions", screening / "screening-template.csv", "--out", csv_screening)
+    assert json.loads((csv_screening / "screening-decisions.json").read_text(encoding="utf-8"))["status"] == "human_screened"
     audit = {"indicator_register": [{"subproject": "A2", "meets_standard": "not_assessable", "description_and_action": "missing validation evidence"}]}
     audit_path = root / "audit.json"; audit_path.write_text(json.dumps(audit), encoding="utf-8")
     invoke("next_actions.py", "--audit", audit_path, "--out", actions)

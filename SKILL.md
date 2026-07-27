@@ -94,6 +94,18 @@ S3 确认完成 → SRCH-1 工程 PICO 分解 → SRCH-2 构建开发集+验证�
 
 ## Tool-call contract and online authorization
 
+## HTML-only delivery
+
+`audit.html` is the only human-readable audit report. Keep `audit.json`,
+`manifest.json`, and hashed `inputs/` as reproducibility artifacts, but do not
+emit an `audit.md` report. `paper-evaluation.html` is likewise the only
+human-readable single-paper report. In the final user response, provide only a
+clickable absolute link to the relevant HTML report; do not present Markdown as
+an alternative delivery format.
+
+This HTML-only delivery policy overrides any older Markdown-output references
+elsewhere in this repository.
+
 Function-calling inputs are untrusted. Validate the JSON object against
 `schemas/run-config-schema.json` before any action, reject unknown source names,
 and use only repository-contained input/output paths. Do not accept a token,

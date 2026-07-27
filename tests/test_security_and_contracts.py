@@ -19,6 +19,9 @@ def test_shared_contracts_redact_and_renderer_escapes_html():
     public = public_value({"api_key": "must-not-leak", "source": r"C:\private\library.json"})
     assert public["api_key"] == "[REDACTED]"
     assert public["source"] == "library.json"
+    workbench = render_markdown_html("# Report", actions=[{"code": "A2", "title": "Search sensitivity", "verdict": "not_assessable", "why": "missing evidence", "next_step": "add validation set"}])
+    assert "action-workbench" in workbench
+    assert "localStorage" in workbench
     rendered = render_markdown_html("# <unsafe>\n\n| A | B |\n| --- | --- |\n| 1 | 2 |")
     assert "&lt;unsafe&gt;" in rendered
     assert "<table>" in rendered
@@ -176,12 +179,12 @@ def test_report_does_not_disclose_workspace_path_or_secret_context():
             "--context", str(context_path), "--out", str(out),
         ], check=True)
         public = (out / "audit.json").read_text(encoding="utf-8")
-        markdown = (out / "audit.md").read_text(encoding="utf-8")
+        rendered_html = (out / "audit.html").read_text(encoding="utf-8")
         archived_context = next((out / "inputs").glob("context__*.json")).read_text(encoding="utf-8")
         assert "never-render-this" not in public
         assert str(ROOT) not in public
-        assert "never-render-this" not in markdown
-        assert str(ROOT) not in markdown
+        assert "never-render-this" not in rendered_html
+        assert str(ROOT) not in rendered_html
         assert "never-render-this" not in archived_context
         assert str(ROOT) not in archived_context
 

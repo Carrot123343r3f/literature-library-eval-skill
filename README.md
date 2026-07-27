@@ -44,7 +44,7 @@ Run the audit **before** writing. In one command (or one conversation with an AI
 
 ## Quickstart
 
-**Current capability**: A guided, resumable CLI workflow now covers import, authorized metadata enrichment, collection, deduplication, human screening templates, audit, and recovery actions. Metadata enrichment is allowed by default after intake confirmation; external candidate discovery remains separately opt-in and candidates never become formal inclusions without a human decision.
+**Current capability**: A guided, resumable CLI workflow now covers import, authorized metadata enrichment, collection, deduplication, HTML/CSV human screening workbenches, audit, and recovery actions. All online capabilities are opt-in; candidates never become formal inclusions without a human decision.
 
 | Status | Step |
 | :---: | --- |
@@ -82,6 +82,9 @@ The AI will:
 
 ## What You Get
 
+The user-facing report is HTML only (`audit.html`). JSON, manifest, and input
+snapshots remain machine-readable reproducibility artifacts.
+
 Every run produces a self-contained, reproducible audit package:
 
 ```text
@@ -95,6 +98,8 @@ out/
 ```
 
 → [Understanding outputs](docs/outputs.md)
+
+→ [User workflow](docs/user-workflow.md) · [Quality assurance](docs/quality-assurance.md)
 
 ## Can / Cannot
 

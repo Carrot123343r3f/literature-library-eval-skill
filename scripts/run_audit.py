@@ -1634,7 +1634,7 @@ def write(report, out, artifact_paths=None):
     report["context"] = _public_value(report.get("context", {}))
     report["artifacts"] = _public_value(report.get("artifacts", {}))
     # Rebind the rendering context after redaction.  Keeping the pre-redaction
-    # local reference here would leak absolute paths into audit.md/audit.html.
+    # local reference here would leak absolute paths into the rendered HTML.
     ctx = report["context"]
 
     (out / "audit.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -1652,6 +1652,12 @@ def write(report, out, artifact_paths=None):
     result_overview = _result_overview(report)
     focused_findings = _focused_findings(report)
     table_rows = [row[:-1] + (_short_report_note(row[-1]),) for row in rows]
+    action_items = [
+        {"code": code, "title": name, "verdict": verdict, "why": note,
+         "next_step": "Open the evidence appendix and add the smallest missing input described above."}
+        for _dimension, code, name, _standard, verdict, _current, _evidence, note in rows
+        if verdict in {"fail", "warning", "not_assessable"}
+    ]
 
     md = ["# 文献库评估报告\n"]
     # 1. 基本信息
@@ -1684,8 +1690,8 @@ def write(report, out, artifact_paths=None):
         md.append("")
     md.append("### 局限与声明\n"); md.append("\n".join("- " + x for x in report["limitations"])); md.append("")
     markdown = "\n".join(md) + "\n"
-    (out / "audit.md").write_text(markdown, encoding="utf-8")
-    (out / "audit.html").write_text(render_markdown_html(markdown), encoding="utf-8")
+    (out / "audit.html").write_text(render_markdown_html(markdown, actions=action_items), encoding="utf-8")
+    print("HTML report created: audit.html")
 
 def _validate_run_config(rc):
     """Backward-compatible facade for the shared v1.0 configuration contract."""
