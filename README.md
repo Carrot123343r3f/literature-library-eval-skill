@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/tests-test%20suite%20included-22c55e" alt="Tests">
+  <a href="https://github.com/Carrot123343r3f/literature-library-eval-skill/actions/workflows/ci.yml"><img src="https://github.com/Carrot123343r3f/literature-library-eval-skill/actions/workflows/ci.yml/badge.svg" alt="Tests"></a>
   <img src="https://img.shields.io/badge/license-MIT-3b82f6" alt="License">
   <img src="https://img.shields.io/badge/indicators-21%20(%2B3%20umbrella)-8b5cf6" alt="Indicators">
   <img src="https://img.shields.io/badge/platform-Claude%20%7C%20Codex-6366f1" alt="Platform">
