@@ -1,0 +1,40 @@
+{
+  "schema_version": "1.0",
+  "module": "metadata-enrichment",
+  "generated_at": "2026-07-26T08:51:09.100290+00:00",
+  "source": "openalex",
+  "status": "unavailable",
+  "records_total": 4,
+  "records_matched": 0,
+  "records_unchanged": 4,
+  "records_ambiguous_or_missing": 0,
+  "records": [],
+  "reason": "OpenAlex requires a configured OPENALEX_API_KEY; no request was sent.",
+  "manifest": {
+    "schema_version": "1.0",
+    "module": "metadata-enrichment",
+    "generated_at": "2026-07-26T08:51:09.132195+00:00",
+    "python_version": "3.13.5",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "record_source_paths": false,
+    "step_status": {
+      "input_validation": "complete",
+      "enrichment": "unavailable",
+      "report": "complete"
+    },
+    "input_files": {
+      "library": {
+        "provided": true,
+        "sha256": "41ccde2aa614e8f2f516d731cd8177c23c12c2832802501e0830c0dd411fbb83",
+        "source_filename": "library.json",
+        "copied_to": "inputs\\library__41ccde2aa614.json"
+      },
+      "run-config": {
+        "provided": true,
+        "sha256": "ea2e2062ff220a720ffabae02b05fbc9b42e404cb0a55c337d75187f6a4b50e4",
+        "source_filename": "run-config.json",
+        "copied_to": "inputs\\run-config__ea2e2062ff22.json"
+      }
+    }
+  }
+}

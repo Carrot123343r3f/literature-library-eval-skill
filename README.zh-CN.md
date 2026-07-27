@@ -10,10 +10,14 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/tests-18%20tests%20passing-22c55e" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-test%20suite%20included-22c55e" alt="Tests">
   <img src="https://img.shields.io/badge/license-MIT-3b82f6" alt="License">
   <img src="https://img.shields.io/badge/indicators-21%20(%2B3%20umbrella)-8b5cf6" alt="Indicators">
   <img src="https://img.shields.io/badge/platform-Claude%20%7C%20Codex-6366f1" alt="Platform">
+</p>
+
+<p align="center">
+  <a href="README.md">English README</a>
 </p>
 
 ---
@@ -41,7 +45,48 @@
 - 每个输入都以 sha256 哈希记录——审计可复现
 - 缺失的输入标为 `not_assessable` 而非隐藏——*"这是最便宜的修复方式"*
 
-## 三分钟开始
+## 三分钟体验 Demo：无需配置
+
+仓库自带一个完整的本地示例：
+[`example-all-modules-report/`](example-all-modules-report/)。里面已经准备好
+了一份小型示例文献库、研究问题、检索证据和审计结果。你可以先看懂输出，
+再换成自己的数据，也可以先查看[仓库内置的 HTML 报告](example-all-modules-report/audit/audit.html)。
+
+在仓库根目录运行：
+
+```bash
+python scripts/run_audit.py \
+  --run-config example-all-modules-report/run-config.json \
+  --out demo-output
+```
+
+然后用浏览器打开 [`demo-output/audit.html`](demo-output/audit.html)。
+
+在运行命令之前，也可以直接查看上面链接的仓库内置报告。
+
+这里的“无需配置”是指：Demo 所需的研究问题、示例文献库、检索记录和
+评估参数都已经随仓库提供，因此不需要 API Key、数据库账号或你自己的
+Zotero 文献库。它是一个可复现的产品体验，不代表对你自己的研究主题完成
+了审计。审计自己的课题时，需要换成自己的文献库并确认研究范围。
+
+如果这个 Demo 帮你发现了综述流程中的问题，欢迎给项目点一个 Star，
+也欢迎通过 Issue 分享结果或提出改进建议。
+
+## 它和其他工具有什么不同
+
+它位于“收集文献”和“开始写综述”之间：
+
+| 工具 | 主要用途 |
+|---|---|
+| Zotero | 保存和整理文献 |
+| 学术数据库 | 检索论文 |
+| 本项目 | 检查文献库和检索证据是否足以支撑综述 |
+
+它不是文献管理器、学术数据库，也不替代领域专家筛选。它的特点是：
+输出可复现、分证据等级的诊断，明确说明当前文献库能支撑什么、缺什么，
+以及下一步最应该做什么。
+
+## 三分钟开始自己的审计
 
 ```text
 使用 literature-library-eval 评估我的文献库，
@@ -141,11 +186,25 @@ git clone https://github.com/Carrot123343r3f/literature-library-eval-skill.git \
 
 重启 Claude 即可。
 
+Windows PowerShell：
+
+```powershell
+git clone https://github.com/Carrot123343r3f/literature-library-eval-skill.git `
+  "$env:USERPROFILE\.claude\skills\literature-library-eval"
+```
+
 ### Codex
 
 ```bash
 git clone https://github.com/Carrot123343r3f/literature-library-eval-skill.git \
   ~/.codex/skills/literature-library-eval
+```
+
+Windows PowerShell：
+
+```powershell
+git clone https://github.com/Carrot123343r3f/literature-library-eval-skill.git `
+  "$env:USERPROFILE\.codex\skills\literature-library-eval"
 ```
 
 ### 依赖
@@ -158,16 +217,20 @@ git clone https://github.com/Carrot123343r3f/literature-library-eval-skill.git \
 
 **开发依赖：** `pip install -r requirements-dev.txt` 安装 `pytest` 和 `jsonschema`，用于运行测试套件。
 
+本地 Demo 只使用 Python 标准库和仓库内置文件。只有在主动选择联网检索或
+元数据补齐时，才需要网络访问和相应数据源的凭据。
+
 ## 文档
 
 | 读者 | 资源 |
 |---|---|
-| **新用户** | [README.zh-CN.md](README.zh-CN.md) · [快速开始](#三分钟开始) · [示例报告](example-report.md) |
+| **新用户** | [英文 README](README.md) · [快速开始](#三分钟开始自己的审计) · [示例报告](example-report.md) |
 | **深度了解** | [方法学](docs/methodology.md) · [架构](docs/architecture.md) · [输出说明](docs/outputs.md) |
 | **集成** | [集成指南](docs/integrations.md) · Zotero / 数据库 / 配套 skill |
 | **标准参考** | [用户标准说明书](references/user-standards-guide.md) · [指标注册表](schemas/indicator-registry.json) |
 | **AI Agent** | [SKILL.md](SKILL.md) · [输入协议](references/intake-protocol.md) · [检索协议](references/search-strategy-protocol.md) |
 | **开发者** | [run-config-schema.json](schemas/run-config-schema.json) · [架构](docs/architecture.md) · [tests/](tests/) |
+| **贡献者** | [贡献指南](CONTRIBUTING.md) · [发布素材](docs/launch-kit.md) · [Issue 模板](https://github.com/Carrot123343r3f/literature-library-eval-skill/issues/new/choose) |
 
 ### 可选模块：单篇文献价值与补库建议
 

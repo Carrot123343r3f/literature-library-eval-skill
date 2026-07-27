@@ -1,0 +1,89 @@
+{
+  "review_type": "systematic",
+  "profile": "computer_ai",
+  "scope_status": "in_scope",
+  "year_start": 2020,
+  "year_end": 2026,
+  "languages": [
+    "en"
+  ],
+  "taxonomy": [
+    {
+      "name": "tracking",
+      "expected": true,
+      "high_confidence_records": 1
+    },
+    {
+      "name": "mapping",
+      "expected": true,
+      "high_confidence_records": 2
+    },
+    {
+      "name": "low-light",
+      "expected": true,
+      "high_confidence_records": 1
+    },
+    {
+      "name": "robustness",
+      "expected": true,
+      "high_confidence_records": 0
+    }
+  ],
+  "topic_source_counts": {
+    "tracking": {
+      "IEEE": 1
+    },
+    "mapping": {
+      "IEEE": 1,
+      "RSS": 1
+    },
+    "low-light": {
+      "OpenAlex": 1
+    },
+    "robustness": {}
+  },
+  "planned_pathways": [
+    "database",
+    "backward_citation",
+    "forward_citation"
+  ],
+  "search_rounds": [
+    {
+      "pathway": "database",
+      "completed": true,
+      "core_before": 3,
+      "included_high": 1,
+      "screening_status": "screened_complete"
+    },
+    {
+      "pathway": "backward_citation",
+      "completed": true,
+      "core_before": 4,
+      "included_high": 1,
+      "screening_status": "screened_complete"
+    }
+  ],
+  "source_marginal_yields": [
+    {
+      "pathway": "database",
+      "yield": 0.02,
+      "screening_status": "screened_complete"
+    },
+    {
+      "pathway": "backward_citation",
+      "yield": 0.04,
+      "screening_status": "screened_complete"
+    }
+  ],
+  "independent_validation_passed": true,
+  "last_successful_search": {
+    "openalex": "2026-07-26",
+    "crossref": "2026-07-26"
+  },
+  "frontier_coverage_verdict": "not_assessable",
+  "version_currency_verdict": "not_assessable",
+  "tier1_venues": [
+    "IEEE Robotics Letters",
+    "Robotics: Science and Systems"
+  ]
+}

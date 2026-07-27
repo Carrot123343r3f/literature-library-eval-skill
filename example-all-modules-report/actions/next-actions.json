@@ -1,0 +1,90 @@
+{
+  "schema_version": "1.0",
+  "status": "action_required",
+  "actions": [
+    {
+      "indicator": "A1",
+      "severity": "fail",
+      "action": "A1 高只说明找回了锚点，不等于主题无遗漏。实测 2/3（66.7%）。漏项：doi:10.1000/missing-anchor",
+      "needed": "见审计输入与证据记录",
+      "why": "A1 高只说明找回了锚点，不等于主题无遗漏。实测 2/3（66.7%）。漏项：doi:10.1000/missing-anchor"
+    },
+    {
+      "indicator": "B1",
+      "severity": "not_assessable",
+      "action": "完成两轮独立路径的人工筛选",
+      "needed": "含 screened_complete 的 search_rounds",
+      "why": "AI 候选 GGR=发现候选/轮次开始前核心库，只用于首轮补充和后续筛选排序，不能替代正式 GGR。B 趋稳仅在筛选决策真实、路径独立且多轮完成时才成立。GGR=需要至少两轮 search round。高置信新增/核心库。"
+    },
+    {
+      "indicator": "B2",
+      "severity": "not_assessable",
+      "action": "记录各路径筛选后的新增量",
+      "needed": "source_marginal_yields 与去重规则",
+      "why": "AI 候选路径发现率=该路径新候选/该路径候选，只用于首轮补充；正式 DRR 必须以筛选确认的纳入项复算。正式边际收益：[]。新路径高置信文献/候选量。"
+    },
+    {
+      "indicator": "B3",
+      "severity": "not_assessable",
+      "action": "完成计划中的独立检索路径",
+      "needed": "planned_pathways 和完成记录",
+      "why": "AI 候选执行率仅说明自动补充检索是否完成，不是独立验证。结论：**不可证明**。仅低 GGR/DRR 不够——需路径完成+独立验证+筛选真实同时成立。"
+    },
+    {
+      "indicator": "C1",
+      "severity": "not_assessable",
+      "action": "。各主题均有文献。",
+      "needed": "见审计输入与证据记录",
+      "why": "。各主题均有文献。"
+    },
+    {
+      "indicator": "C3",
+      "severity": "not_assessable",
+      "action": "未提供 topic_source_counts。",
+      "needed": "见审计输入与证据记录",
+      "why": "未提供 topic_source_counts。"
+    },
+    {
+      "indicator": "D1",
+      "severity": "not_assessable",
+      "action": "0 个来源有日期。来源在新鲜度窗口内。",
+      "needed": "见审计输入与证据记录",
+      "why": "0 个来源有日期。来源在新鲜度窗口内。"
+    },
+    {
+      "indicator": "D3",
+      "severity": "not_assessable",
+      "action": "前沿覆盖需 context.frontier_coverage_verdict。近期发表不等于前沿覆盖。",
+      "needed": "见审计输入与证据记录",
+      "why": "前沿覆盖需 context.frontier_coverage_verdict。近期发表不等于前沿覆盖。"
+    },
+    {
+      "indicator": "D4",
+      "severity": "not_assessable",
+      "action": "0 条预印本。未核验版本关系。",
+      "needed": "见审计输入与证据记录",
+      "why": "0 条预印本。未核验版本关系。"
+    },
+    {
+      "indicator": "E2",
+      "severity": "not_assessable",
+      "action": "已配置 0 个 venue。未配置 tier1_venues。",
+      "needed": "见审计输入与证据记录",
+      "why": "已配置 0 个 venue。未配置 tier1_venues。"
+    },
+    {
+      "indicator": "F6",
+      "severity": "not_assessable",
+      "action": "0 条标记。未经专门来源核验。",
+      "needed": "见审计输入与证据记录",
+      "why": "0 条标记。未经专门来源核验。"
+    },
+    {
+      "indicator": "F3",
+      "severity": "warning",
+      "action": "附件 0.0% | 开放链接 25.0% | 联合 25.0%。低于阈值。联合=v 附件或开放链接任一可用的记录比例，避免同一记录双渠道重复计数。",
+      "needed": "见审计输入与证据记录",
+      "why": "附件 0.0% | 开放链接 25.0% | 联合 25.0%。低于阈值。联合=v 附件或开放链接任一可用的记录比例，避免同一记录双渠道重复计数。"
+    }
+  ]
+}

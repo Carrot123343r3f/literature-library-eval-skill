@@ -1,0 +1,110 @@
+[
+  {
+    "title": "Gaussian Splatting for Real-Time SLAM",
+    "DOI": "10.1000/gs-slam",
+    "date": "2024",
+    "publicationTitle": "IEEE Robotics Letters",
+    "source": "IEEE",
+    "creators": [
+      "Li, Wei",
+      "Chen, Rui"
+    ],
+    "abstractNote": "A real-time SLAM system using Gaussian splatting with indoor and outdoor evaluation.",
+    "url": "https://doi.org/10.1000/gs-slam",
+    "open_access_url": "https://example.org/gs-slam",
+    "study_type": "algorithm_ml",
+    "topics": [
+      "tracking",
+      "mapping"
+    ],
+    "evidence_roles": [
+      "system_baseline"
+    ],
+    "citation_normalized_percentile": 0.82,
+    "cited_by_count": 42,
+    "fwci": 1.7,
+    "method_appraisal": {
+      "dataset_split": "pass",
+      "baseline_fairness": "pass",
+      "uncertainty_reporting": "concern",
+      "ablation": "pass"
+    },
+    "code_url": "https://example.org/gs-slam-code",
+    "data_url": "https://example.org/gs-slam-data"
+  },
+  {
+    "title": "Low-Light Gaussian SLAM Benchmark",
+    "DOI": "10.1000/low-light",
+    "date": "2025",
+    "publicationTitle": "Computer Vision Systems",
+    "source": "OpenAlex",
+    "creators": [
+      "Wang, Mei"
+    ],
+    "abstractNote": "A benchmark dataset and evaluation protocol for low-light visual localization.",
+    "url": "https://doi.org/10.1000/low-light",
+    "study_type": "benchmark_dataset",
+    "topics": [
+      "low-light",
+      "benchmark"
+    ],
+    "evidence_roles": [
+      "benchmark"
+    ],
+    "citation_normalized_percentile": 0.61,
+    "cited_by_count": 18,
+    "method_appraisal": {
+      "data_provenance": "pass",
+      "annotation_quality": "concern",
+      "split_leakage": "pass",
+      "license_and_version": "pass"
+    },
+    "data_url": "https://example.org/low-light-data"
+  },
+  {
+    "title": "Ablation Study of Splat-Based Mapping",
+    "DOI": "10.1000/ablation",
+    "date": "2023",
+    "publicationTitle": "Robotics: Science and Systems",
+    "source": "RSS",
+    "creators": [
+      "Zhao, Lin"
+    ],
+    "abstractNote": "An ablation study comparing representation and mapping choices for splat-based systems.",
+    "study_type": "algorithm_ml",
+    "topics": [
+      "mapping",
+      "ablation"
+    ],
+    "evidence_roles": [
+      "mechanism_evidence"
+    ],
+    "citation_normalized_percentile": 0.74,
+    "cited_by_count": 27,
+    "method_appraisal": {
+      "dataset_split": "pass",
+      "baseline_fairness": "concern",
+      "uncertainty_reporting": "not_assessable",
+      "ablation": "pass"
+    }
+  },
+  {
+    "title": "Preprint: Robust Gaussian Scene Reconstruction",
+    "date": "2024",
+    "publicationTitle": "arXiv",
+    "source": "arXiv",
+    "creators": [
+      "Qin, Tao"
+    ],
+    "abstractNote": "A preprint on robust scene reconstruction under sensor noise.",
+    "study_type": "algorithm_ml",
+    "topics": [
+      "robustness"
+    ],
+    "evidence_roles": [
+      "emerging_method"
+    ],
+    "citation_normalized_percentile": 0.4,
+    "cited_by_count": 5
+  }
+]

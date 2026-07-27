@@ -1,0 +1,510 @@
+{
+  "schema_version": "2.0",
+  "module": "paper-evidence-evaluation",
+  "generated_at": "2026-07-26T08:53:30.427378+00:00",
+  "input_mode": "single-paper",
+  "search_log": {
+    "source": "provided_snapshot",
+    "status": "complete"
+  },
+  "metadata_enrichment": {
+    "source": "none",
+    "status": "not_requested"
+  },
+  "library_record_count": 1,
+  "external_candidate_count": 1,
+  "papers": [
+    {
+      "title": "Gaussian Splatting for Real-Time SLAM",
+      "year": 2024,
+      "doi": "10.1000/gs-slam",
+      "openalex_id": "",
+      "source": "IEEE",
+      "topics": [
+        "tracking",
+        "mapping"
+      ],
+      "evidence_roles": [
+        "system_baseline"
+      ],
+      "eligibility": {
+        "verdict": "eligible",
+        "basis": "provided",
+        "matched_terms": []
+      },
+      "study_type": "algorithm_ml",
+      "study_type_evidence": "declared",
+      "method_appraisal": {
+        "router": "algorithm_ml",
+        "items": [
+          {
+            "id": "dataset_split",
+            "verdict": "pass",
+            "evidence": ""
+          },
+          {
+            "id": "baseline_fairness",
+            "verdict": "pass",
+            "evidence": ""
+          },
+          {
+            "id": "uncertainty_reporting",
+            "verdict": "concern",
+            "evidence": ""
+          },
+          {
+            "id": "ablation",
+            "verdict": "pass",
+            "evidence": ""
+          }
+        ],
+        "overall": "concern",
+        "evidence_status": "fulltext_assessed"
+      },
+      "reproducibility": {
+        "checks": {
+          "fulltext_access": true,
+          "data_access": false,
+          "code_access": true,
+          "materials_or_protocol": false,
+          "version_pinned": true
+        },
+        "available_count": 3,
+        "status": "metadata_checked"
+      },
+      "integrity": {
+        "verdict": "not_assessable",
+        "publication_status": "",
+        "version_identified": true
+      },
+      "bibliometric_signals": {
+        "field_year_percentile": 0.82,
+        "fwci": 1.0,
+        "raw_citations": 42,
+        "publication_year": 2024,
+        "snapshot_year": 2026,
+        "status": "field_normalized"
+      },
+      "reading_priority": {
+        "label": "reading_priority",
+        "score": 0.535,
+        "reason": "eligible_and_design_appraised",
+        "components": {
+          "method_signal": 0.293,
+          "reproducibility_signal": 0.12,
+          "impact_signal": 0.123
+        },
+        "confidence": "higher"
+      },
+      "external_candidate_status": null,
+      "limitations": [],
+      "review_contribution": {
+        "topic_gap_if_removed": [
+          "tracking",
+          "mapping"
+        ],
+        "unique_roles": [
+          "system_baseline"
+        ],
+        "independent_source_support": true,
+        "substitutability": "low",
+        "core_support_tier": "core",
+        "rank_signal": 8
+      }
+    }
+  ],
+  "external_candidates": [
+    {
+      "title": "Cross-Modal Gaussian SLAM Under Illumination Shift",
+      "year": 2025,
+      "doi": "10.1000/external-illumination",
+      "openalex_id": "",
+      "source": "OpenAlex",
+      "topics": [
+        "low-light",
+        "domain-shift"
+      ],
+      "evidence_roles": [],
+      "eligibility": {
+        "verdict": "possibly_eligible",
+        "basis": "lexical_pre_screen",
+        "matched_terms": [
+          "gaussian",
+          "low-light",
+          "slam",
+          "splatting",
+          "under"
+        ]
+      },
+      "study_type": "unclassified",
+      "study_type_evidence": "not_assessable",
+      "method_appraisal": {
+        "router": "unclassified",
+        "items": [],
+        "overall": "not_assessable",
+        "evidence_status": "metadata_only"
+      },
+      "reproducibility": {
+        "checks": {
+          "fulltext_access": true,
+          "data_access": false,
+          "code_access": false,
+          "materials_or_protocol": false,
+          "version_pinned": true
+        },
+        "available_count": 2,
+        "status": "metadata_checked"
+      },
+      "integrity": {
+        "verdict": "not_assessable",
+        "publication_status": "",
+        "version_identified": true
+      },
+      "bibliometric_signals": {
+        "field_year_percentile": 0.76,
+        "fwci": null,
+        "raw_citations": 21,
+        "publication_year": 2025,
+        "snapshot_year": 2026,
+        "status": "field_normalized"
+      },
+      "reading_priority": {
+        "label": "not_ranked",
+        "score": null,
+        "reason": "not_eligible",
+        "components": {}
+      },
+      "external_candidate_status": "candidate_discovery",
+      "limitations": [
+        "外部候选尚未经过正式筛选。",
+        "未提供全文级方法学评价。"
+      ],
+      "recommendation": {
+        "status": "candidate_discovery",
+        "new_topics": [
+          "low-light",
+          "domain-shift"
+        ],
+        "rank_signal": 11,
+        "screening_required": true
+      }
+    }
+  ],
+  "reading_priority_top": [
+    {
+      "title": "Gaussian Splatting for Real-Time SLAM",
+      "year": 2024,
+      "doi": "10.1000/gs-slam",
+      "openalex_id": "",
+      "source": "IEEE",
+      "topics": [
+        "tracking",
+        "mapping"
+      ],
+      "evidence_roles": [
+        "system_baseline"
+      ],
+      "eligibility": {
+        "verdict": "eligible",
+        "basis": "provided",
+        "matched_terms": []
+      },
+      "study_type": "algorithm_ml",
+      "study_type_evidence": "declared",
+      "method_appraisal": {
+        "router": "algorithm_ml",
+        "items": [
+          {
+            "id": "dataset_split",
+            "verdict": "pass",
+            "evidence": ""
+          },
+          {
+            "id": "baseline_fairness",
+            "verdict": "pass",
+            "evidence": ""
+          },
+          {
+            "id": "uncertainty_reporting",
+            "verdict": "concern",
+            "evidence": ""
+          },
+          {
+            "id": "ablation",
+            "verdict": "pass",
+            "evidence": ""
+          }
+        ],
+        "overall": "concern",
+        "evidence_status": "fulltext_assessed"
+      },
+      "reproducibility": {
+        "checks": {
+          "fulltext_access": true,
+          "data_access": false,
+          "code_access": true,
+          "materials_or_protocol": false,
+          "version_pinned": true
+        },
+        "available_count": 3,
+        "status": "metadata_checked"
+      },
+      "integrity": {
+        "verdict": "not_assessable",
+        "publication_status": "",
+        "version_identified": true
+      },
+      "bibliometric_signals": {
+        "field_year_percentile": 0.82,
+        "fwci": 1.0,
+        "raw_citations": 42,
+        "publication_year": 2024,
+        "snapshot_year": 2026,
+        "status": "field_normalized"
+      },
+      "reading_priority": {
+        "label": "reading_priority",
+        "score": 0.535,
+        "reason": "eligible_and_design_appraised",
+        "components": {
+          "method_signal": 0.293,
+          "reproducibility_signal": 0.12,
+          "impact_signal": 0.123
+        },
+        "confidence": "higher"
+      },
+      "external_candidate_status": null,
+      "limitations": [],
+      "review_contribution": {
+        "topic_gap_if_removed": [
+          "tracking",
+          "mapping"
+        ],
+        "unique_roles": [
+          "system_baseline"
+        ],
+        "independent_source_support": true,
+        "substitutability": "low",
+        "core_support_tier": "core",
+        "rank_signal": 8
+      }
+    }
+  ],
+  "core_support_top": [
+    {
+      "title": "Gaussian Splatting for Real-Time SLAM",
+      "year": 2024,
+      "doi": "10.1000/gs-slam",
+      "openalex_id": "",
+      "source": "IEEE",
+      "topics": [
+        "tracking",
+        "mapping"
+      ],
+      "evidence_roles": [
+        "system_baseline"
+      ],
+      "eligibility": {
+        "verdict": "eligible",
+        "basis": "provided",
+        "matched_terms": []
+      },
+      "study_type": "algorithm_ml",
+      "study_type_evidence": "declared",
+      "method_appraisal": {
+        "router": "algorithm_ml",
+        "items": [
+          {
+            "id": "dataset_split",
+            "verdict": "pass",
+            "evidence": ""
+          },
+          {
+            "id": "baseline_fairness",
+            "verdict": "pass",
+            "evidence": ""
+          },
+          {
+            "id": "uncertainty_reporting",
+            "verdict": "concern",
+            "evidence": ""
+          },
+          {
+            "id": "ablation",
+            "verdict": "pass",
+            "evidence": ""
+          }
+        ],
+        "overall": "concern",
+        "evidence_status": "fulltext_assessed"
+      },
+      "reproducibility": {
+        "checks": {
+          "fulltext_access": true,
+          "data_access": false,
+          "code_access": true,
+          "materials_or_protocol": false,
+          "version_pinned": true
+        },
+        "available_count": 3,
+        "status": "metadata_checked"
+      },
+      "integrity": {
+        "verdict": "not_assessable",
+        "publication_status": "",
+        "version_identified": true
+      },
+      "bibliometric_signals": {
+        "field_year_percentile": 0.82,
+        "fwci": 1.0,
+        "raw_citations": 42,
+        "publication_year": 2024,
+        "snapshot_year": 2026,
+        "status": "field_normalized"
+      },
+      "reading_priority": {
+        "label": "reading_priority",
+        "score": 0.535,
+        "reason": "eligible_and_design_appraised",
+        "components": {
+          "method_signal": 0.293,
+          "reproducibility_signal": 0.12,
+          "impact_signal": 0.123
+        },
+        "confidence": "higher"
+      },
+      "external_candidate_status": null,
+      "limitations": [],
+      "review_contribution": {
+        "topic_gap_if_removed": [
+          "tracking",
+          "mapping"
+        ],
+        "unique_roles": [
+          "system_baseline"
+        ],
+        "independent_source_support": true,
+        "substitutability": "low",
+        "core_support_tier": "core",
+        "rank_signal": 8
+      }
+    }
+  ],
+  "external_candidate_top": [
+    {
+      "title": "Cross-Modal Gaussian SLAM Under Illumination Shift",
+      "year": 2025,
+      "doi": "10.1000/external-illumination",
+      "openalex_id": "",
+      "source": "OpenAlex",
+      "topics": [
+        "low-light",
+        "domain-shift"
+      ],
+      "evidence_roles": [],
+      "eligibility": {
+        "verdict": "possibly_eligible",
+        "basis": "lexical_pre_screen",
+        "matched_terms": [
+          "gaussian",
+          "low-light",
+          "slam",
+          "splatting",
+          "under"
+        ]
+      },
+      "study_type": "unclassified",
+      "study_type_evidence": "not_assessable",
+      "method_appraisal": {
+        "router": "unclassified",
+        "items": [],
+        "overall": "not_assessable",
+        "evidence_status": "metadata_only"
+      },
+      "reproducibility": {
+        "checks": {
+          "fulltext_access": true,
+          "data_access": false,
+          "code_access": false,
+          "materials_or_protocol": false,
+          "version_pinned": true
+        },
+        "available_count": 2,
+        "status": "metadata_checked"
+      },
+      "integrity": {
+        "verdict": "not_assessable",
+        "publication_status": "",
+        "version_identified": true
+      },
+      "bibliometric_signals": {
+        "field_year_percentile": 0.76,
+        "fwci": null,
+        "raw_citations": 21,
+        "publication_year": 2025,
+        "snapshot_year": 2026,
+        "status": "field_normalized"
+      },
+      "reading_priority": {
+        "label": "not_ranked",
+        "score": null,
+        "reason": "not_eligible",
+        "components": {}
+      },
+      "external_candidate_status": "candidate_discovery",
+      "limitations": [
+        "外部候选尚未经过正式筛选。",
+        "未提供全文级方法学评价。"
+      ],
+      "recommendation": {
+        "status": "candidate_discovery",
+        "new_topics": [
+          "low-light",
+          "domain-shift"
+        ],
+        "rank_signal": 11,
+        "screening_required": true
+      }
+    }
+  ],
+  "manifest": {
+    "schema_version": "2.0",
+    "module": "paper-evidence-evaluation",
+    "generated_at": "2026-07-26T08:53:30.433760+00:00",
+    "python_version": "3.13.5",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "record_source_paths": false,
+    "step_status": {
+      "input_validation": "complete",
+      "library_evaluation": "complete",
+      "external_discovery": "complete",
+      "report": "complete"
+    },
+    "input_files": {
+      "context": {
+        "provided": true,
+        "sha256": "b65c5b6584ad4dcf51dc6392dab92e32d6d5a0f13968cfa590c26d4bdbd15da4",
+        "source_filename": "context.json",
+        "copied_to": "inputs\\context__b65c5b6584ad.json"
+      },
+      "external-candidates": {
+        "provided": true,
+        "sha256": "0efd0ec4cbe0a07d7aae5f7570a9986e381726ec6723d43840c38ccb1d3de552",
+        "source_filename": "external-candidates.json",
+        "copied_to": "inputs\\external-candidates__0efd0ec4cbe0.json"
+      },
+      "library": {
+        "provided": true,
+        "sha256": "a24da03fe6d744226ba9e5b071f3524bfdbf8bbc513dcfd8e537928dfa604a53",
+        "source_filename": "one-paper.json",
+        "copied_to": "inputs\\library__a24da03fe6d7.json"
+      },
+      "run-config": {
+        "provided": true,
+        "sha256": "ea2e2062ff220a720ffabae02b05fbc9b42e404cb0a55c337d75187f6a4b50e4",
+        "source_filename": "run-config.json",
+        "copied_to": "inputs\\run-config__ea2e2062ff22.json"
+      }
+    }
+  }
+}

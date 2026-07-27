@@ -9,10 +9,14 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/tests-18%20tests%20passing-22c55e" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-test%20suite%20included-22c55e" alt="Tests">
   <img src="https://img.shields.io/badge/license-MIT-3b82f6" alt="License">
   <img src="https://img.shields.io/badge/indicators-21%20(%2B3%20umbrella)-8b5cf6" alt="Indicators">
   <img src="https://img.shields.io/badge/platform-Claude%20%7C%20Codex-6366f1" alt="Platform">
+</p>
+
+<p align="center">
+  <a href="README.zh-CN.md">中文说明</a>
 </p>
 
 ---
@@ -41,6 +45,49 @@ Run the audit **before** writing. In one command (or one conversation with an AI
 - Six independent dimensions of readiness — no single score hides a fatal flaw
 - Every input accounted for with sha256 hashes — the audit is reproducible
 - Missing inputs are flagged as `not_assessable`, not hidden — *"here's the cheapest way to fix this"*
+
+## Try the Demo — No Configuration Required
+
+The repository includes a complete local example in
+[`example-all-modules-report/`](example-all-modules-report/). It contains a small
+sample library, a research question, search evidence, and the expected audit
+artifacts. You can inspect the [bundled HTML report](example-all-modules-report/audit/audit.html)
+before preparing your own data.
+
+From the repository root, run:
+
+```bash
+python scripts/run_audit.py \
+  --run-config example-all-modules-report/run-config.json \
+  --out demo-output
+```
+
+Then open [`demo-output/audit.html`](demo-output/audit.html) in a browser. Before
+running the command, the same kind of result is available in the bundled report
+linked above.
+
+This demo needs no API key, database account, research question, or personal
+literature library because all required inputs are included locally. It is a
+reproducible product tour, not an audit of your own research topic. To audit
+your project, replace the example inputs with your own library and confirmed
+research scope.
+
+If the demo helps you find a gap in your review workflow, a GitHub Star is a
+small way to help other engineering researchers discover the project.
+
+## Why This Project
+
+This project fills the gap between collecting papers and writing the review:
+
+| Tool | Main job |
+|---|---|
+| Zotero | Store and organize references |
+| Scholarly databases | Find papers |
+| This project | Check whether the library and search evidence can support the review |
+
+It is not a replacement for a reference manager, a database, or domain-expert
+screening. Its distinctive output is a reproducible, evidence-graded diagnosis
+of what the current library supports and what should happen next.
 
 ## Quickstart
 
@@ -142,11 +189,25 @@ git clone https://github.com/Carrot123343r3f/literature-library-eval-skill.git \
 
 Restart Claude. That's it.
 
+On Windows PowerShell, use:
+
+```powershell
+git clone https://github.com/Carrot123343r3f/literature-library-eval-skill.git `
+  "$env:USERPROFILE\.claude\skills\literature-library-eval"
+```
+
 ### Codex
 
 ```bash
 git clone https://github.com/Carrot123343r3f/literature-library-eval-skill.git \
   ~/.codex/skills/literature-library-eval
+```
+
+On Windows PowerShell, use:
+
+```powershell
+git clone https://github.com/Carrot123343r3f/literature-library-eval-skill.git `
+  "$env:USERPROFILE\.codex\skills\literature-library-eval"
 ```
 
 ### Requirements
@@ -159,6 +220,10 @@ git clone https://github.com/Carrot123343r3f/literature-library-eval-skill.git \
 
 **Development:** `pip install -r requirements-dev.txt` adds `pytest` and `jsonschema` for running the test suite.
 
+The local Demo uses the Python standard library and the files included in this
+repository. Network access and source credentials are only relevant when you
+choose an online search or metadata-enrichment workflow.
+
 ## Documentation
 
 | Audience | Resources |
@@ -169,6 +234,7 @@ git clone https://github.com/Carrot123343r3f/literature-library-eval-skill.git \
 | **Standards** | [User standards guide](references/user-standards-guide.md) · [Indicator registry](schemas/indicator-registry.json) |
 | **AI Agents** | [SKILL.md](SKILL.md) · [Intake protocol](references/intake-protocol.md) · [Search protocol](references/search-strategy-protocol.md) |
 | **Developers** | [run-config-schema.json](schemas/run-config-schema.json) · [Architecture](docs/architecture.md) · [tests/](tests/) |
+| **Contributors** | [Contributing guide](CONTRIBUTING.md) · [Launch kit](docs/launch-kit.md) · [Issue templates](https://github.com/Carrot123343r3f/literature-library-eval-skill/issues/new/choose) |
 
 ### Optional paper-value-ranking module
 

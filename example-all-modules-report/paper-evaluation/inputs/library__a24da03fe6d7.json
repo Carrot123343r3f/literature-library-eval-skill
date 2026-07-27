@@ -1,0 +1,28 @@
+{
+  "title": "Gaussian Splatting for Real-Time SLAM",
+  "DOI": "10.1000/gs-slam",
+  "date": "2024",
+  "publicationTitle": "IEEE Robotics Letters",
+  "source": "IEEE",
+  "abstractNote": "A real-time SLAM system using Gaussian splatting with indoor and outdoor evaluation.",
+  "study_type": "algorithm_ml",
+  "eligibility_verdict": "eligible",
+  "topics": [
+    "tracking",
+    "mapping"
+  ],
+  "evidence_roles": [
+    "system_baseline"
+  ],
+  "citation_normalized_percentile": 0.82,
+  "cited_by_count": 42,
+  "fwci": 1.7,
+  "method_appraisal": {
+    "dataset_split": "pass",
+    "baseline_fairness": "pass",
+    "uncertainty_reporting": "concern",
+    "ablation": "pass"
+  },
+  "open_access_url": "https://example.org/gs-slam",
+  "code_url": "https://example.org/gs-slam-code"
+}

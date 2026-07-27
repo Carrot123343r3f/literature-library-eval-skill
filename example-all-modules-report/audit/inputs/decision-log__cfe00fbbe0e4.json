@@ -1,0 +1,1 @@
+{"schema_version":"1.0","decisions":[{"id":"doi:10.1000/gs-slam","decision":"include","reason":"Directly evaluates the target SLAM system."},{"id":"doi:10.1000/low-light","decision":"include","reason":"Covers the low-light benchmark gap."},{"id":"doi:10.1000/ablation","decision":"include","reason":"Provides mechanism-level comparison."}]}

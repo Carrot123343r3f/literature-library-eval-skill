@@ -1,0 +1,40 @@
+{
+  "schema_version": "2.0",
+  "module": "paper-evidence-evaluation",
+  "generated_at": "2026-07-26T08:53:30.433760+00:00",
+  "python_version": "3.13.5",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "record_source_paths": false,
+  "step_status": {
+    "input_validation": "complete",
+    "library_evaluation": "complete",
+    "external_discovery": "complete",
+    "report": "complete"
+  },
+  "input_files": {
+    "context": {
+      "provided": true,
+      "sha256": "b65c5b6584ad4dcf51dc6392dab92e32d6d5a0f13968cfa590c26d4bdbd15da4",
+      "source_filename": "context.json",
+      "copied_to": "inputs\\context__b65c5b6584ad.json"
+    },
+    "external-candidates": {
+      "provided": true,
+      "sha256": "0efd0ec4cbe0a07d7aae5f7570a9986e381726ec6723d43840c38ccb1d3de552",
+      "source_filename": "external-candidates.json",
+      "copied_to": "inputs\\external-candidates__0efd0ec4cbe0.json"
+    },
+    "library": {
+      "provided": true,
+      "sha256": "a24da03fe6d744226ba9e5b071f3524bfdbf8bbc513dcfd8e537928dfa604a53",
+      "source_filename": "one-paper.json",
+      "copied_to": "inputs\\library__a24da03fe6d7.json"
+    },
+    "run-config": {
+      "provided": true,
+      "sha256": "ea2e2062ff220a720ffabae02b05fbc9b42e404cb0a55c337d75187f6a4b50e4",
+      "source_filename": "run-config.json",
+      "copied_to": "inputs\\run-config__ea2e2062ff22.json"
+    }
+  }
+}

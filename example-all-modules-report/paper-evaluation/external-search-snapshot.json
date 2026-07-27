@@ -1,0 +1,23 @@
+{
+  "search_log": {
+    "source": "provided_snapshot",
+    "status": "complete"
+  },
+  "candidates": [
+    {
+      "title": "Cross-Modal Gaussian SLAM Under Illumination Shift",
+      "DOI": "10.1000/external-illumination",
+      "date": "2025",
+      "publicationTitle": "International Journal of Computer Vision",
+      "source": "OpenAlex",
+      "abstract": "Gaussian Splatting SLAM under low-light illumination shift.",
+      "topics": [
+        "low-light",
+        "domain-shift"
+      ],
+      "citation_normalized_percentile": 0.76,
+      "cited_by_count": 21,
+      "open_access_url": "https://example.org/external-illumination"
+    }
+  ]
+}

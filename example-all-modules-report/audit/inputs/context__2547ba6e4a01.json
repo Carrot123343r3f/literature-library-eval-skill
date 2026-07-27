@@ -1,0 +1,13 @@
+{
+  "review_type": "systematic",
+  "profile": "computer_ai",
+  "year_start": 2020,
+  "year_end": 2026,
+  "languages": [
+    "en"
+  ],
+  "scope_status": "in_scope",
+  "standards": {
+    "confirmed_by_user": true
+  }
+}
