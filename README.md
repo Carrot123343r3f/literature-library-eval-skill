@@ -95,7 +95,7 @@ of what the current library supports and what should happen next.
 
 | Status | Step |
 | :---: | --- |
-| ✅ Automated | Audit computation (`run_audit.py`), single-round diagnostic search (`search_for_eval.py`), candidate dedup (`normalize_candidates.py`), iteration validation (`search_iterator.py`), report generation |
+| ✅ Automated | Audit computation (`run_audit.py`), single-round diagnostic search (`search_for_eval.py`), candidate dedup (`normalize_candidates.py`), optimization harness (`optimization.py`), counterexample/active-screening/drift checks (`quality_optimization.py`), experiment attribution/eval-set audit (`experiment_attribution.py`/`evalset_audit.py`), iteration validation/sync (`search_iterator.py`), report generation |
 | ✅ Guided workflow | `run_full_audit.py` produces `workflow-state.json` and `next-actions.json`; it can import JSON/CSV/RIS/BibTeX and resume safely |
 | 🔧 Human-confirmed | Multi-round iteration, cross-database search, citation tracking, and screening remain evidence-producing steps; candidates require explicit human decisions |
 
@@ -136,7 +136,7 @@ Every run produces a self-contained, reproducible audit package:
 
 ```text
 out/
-├── audit.md          ← Human-readable report with prioritized actions
+├── audit.html        ← Human-readable report with prioritized actions
 ├── audit.html        ← Rendered HTML
 ├── audit.json        ← Machine-readable with full indicator register
 ├── manifest.json     ← sha256, git commit, Python version
@@ -214,7 +214,7 @@ git clone https://github.com/Carrot123343r3f/literature-library-eval-skill.git `
 
 | Dependency | Why |
 |---|---|
-| Python 3.10+ | `run_audit.py`, `search_for_eval.py`, `search_iterator.py` |
+| Python 3.10+ | `run_audit.py`, `search_for_eval.py`, `search_iterator.py`, `optimization.py`, `quality_optimization.py`, `experiment_attribution.py`, `evalset_audit.py` |
 | Internet access | OpenAlex, Crossref, arXiv (open-access APIs) |
 | **No credentials in prompts** | Open sources may still require a preconfigured API key; never paste keys into chat or output artifacts |
 

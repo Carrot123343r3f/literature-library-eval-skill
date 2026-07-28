@@ -6,6 +6,7 @@ __pycache__/
 audit-output/
 demo-output/
 outputs/
+academic-library-data/
 simulation-audit-output/
 audit.json
 audit.html

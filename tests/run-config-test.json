@@ -48,7 +48,6 @@
   "output": {
     "language": "en",
     "formats": [
-      "md",
       "html",
       "json"
     ],

@@ -103,7 +103,7 @@ AI 会自动：
 
 | 状态 | 环节 |
 |:---:|---|
-| ✅ 已自动化 | 审计计算（`run_audit.py`）、单轮诊断检索（`search_for_eval.py`）、候选去重（`normalize_candidates.py`）、迭代验证（`search_iterator.py`）、报告生成 |
+| ✅ 已自动化 | 审计计算（`run_audit.py`）、单轮诊断检索（`search_for_eval.py`）、候选去重（`normalize_candidates.py`）、优化模块（`optimization.py`）、反例/主动筛选/漂移检测（`quality_optimization.py`）、实验归因/评估集审计（`experiment_attribution.py`/`evalset_audit.py`）、迭代验证/同步（`search_iterator.py`）、报告生成 |
 | ✅ 向导式工作流 | `run_full_audit.py` 产出可恢复的 `workflow-state.json` 与行动清单；支持 JSON/CSV/RIS/BibTeX 导入 |
 | 🔧 人工确认 | 多轮迭代、跨库检索、引文追踪与筛选会留下证据工件；候选必须由人工明确纳入/排除 |
 
@@ -135,7 +135,7 @@ AI 会自动：
 
 ```text
 out/
-├── audit.md          ← 人读报告（优先行动项置顶）
+├── audit.html        ← 人读报告（优先行动项置顶）
 ├── audit.html        ← 渲染 HTML
 ├── audit.json        ← 机读（含完整 indicator_register）
 ├── manifest.json     ← sha256、git commit、Python 版本
@@ -211,7 +211,7 @@ git clone https://github.com/Carrot123343r3f/literature-library-eval-skill.git `
 
 | 依赖 | 用途 |
 |---|---|
-| Python 3.10+ | `run_audit.py`、`search_for_eval.py`、`search_iterator.py` |
+| Python 3.10+ | `run_audit.py`、`search_for_eval.py`、`search_iterator.py`、`optimization.py`、`quality_optimization.py`、`experiment_attribution.py`、`evalset_audit.py` |
 | 互联网 | OpenAlex、Crossref、arXiv 等开放 API |
 | **不在对话中索取凭据** | 开放来源仍可能要求预先配置 API key；不要在对话或输出产物中粘贴密钥 |
 

@@ -389,13 +389,13 @@ with tempfile.TemporaryDirectory() as temp:
         capture_output=True, text=True, encoding="utf-8", errors="replace"
     )
     combined = (r.stderr or "") + (r.stdout or "")
-    assert r.returncode != 0, f"Should refuse out_of_scope without --allow-out-of-scope\nerr: {combined}"
+    assert r.returncode != 0, f"Should refuse out_of_scope evaluation\nerr: {combined}"
     assert "out_of_scope" in combined.lower(), \
         f"Error should mention out_of_scope\noutput: {combined}"
 
 print("Scope guard (out_of_scope refusal): PASSED")
 
-# ── Test: scope — out_of_scope + --allow-out-of-scope runs successfully ──
+# ── Test: scope — out_of_scope cannot be overridden into full evaluation ──
 with tempfile.TemporaryDirectory() as temp:
     oos_rc = pathlib.Path(temp) / "oos_run_config.json"
     oos_rc.write_text(json.dumps({
@@ -405,7 +405,6 @@ with tempfile.TemporaryDirectory() as temp:
         "automation": {"allow_search": False},
         "output": {}
     }), encoding="utf-8")
-    out = pathlib.Path(temp) / "out"
     r = subprocess.run(
         [sys.executable, str(root / "scripts" / "run_audit.py"),
          "--run-config", str(oos_rc), "--allow-out-of-scope",
@@ -413,16 +412,9 @@ with tempfile.TemporaryDirectory() as temp:
         capture_output=True, text=True, encoding="utf-8", errors="replace"
     )
     combined = (r.stderr or "") + (r.stdout or "")
-    assert r.returncode == 0, f"Should succeed with --allow-out-of-scope\noutput: {combined}"
-    audit = json.loads((out / "audit.json").read_text(encoding="utf-8"))
-    # out_of_scope override must be recorded in context
-    ctx = audit.get("context", {})
-    assert ctx.get("_scope_override_active") is True, \
-        f"_scope_override_active should be True in context, got: {ctx}"
-    assert ctx.get("scope_status") == "out_of_scope", \
-        f"scope_status should be out_of_scope, got: {ctx.get('scope_status')}"
+    assert r.returncode != 0, f"out_of_scope must not be overridable into full A-F\noutput: {combined}"
 
-print("Scope guard (allow-out-of-scope override): PASSED")
+print("Scope guard (out_of_scope override rejected): PASSED")
 
 # ── Test: schema — research_question empty is rejected ──
 with tempfile.TemporaryDirectory() as temp:

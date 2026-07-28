@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/literature-library-eval/experiment-attribution.schema.json",
+  "title": "Experiment attribution report",
+  "type": "object",
+  "required": ["schema_version", "baseline", "candidates", "pareto_front"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "baseline": {"type": "object"},
+    "candidates": {"type": "array"},
+    "pareto_front": {"type": "array", "items": {"type": "string"}},
+    "tolerance": {"type": "number", "minimum": 0}
+  }
+}

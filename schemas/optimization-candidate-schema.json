@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/literature-library-eval/optimization-candidate.schema.json",
+  "title": "Atomic optimization candidate",
+  "type": "object",
+  "required": ["schema_version", "candidate_id", "parent_candidate", "change_type", "patch", "candidate_hash"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "candidate_id": {"type": "string", "minLength": 1},
+    "parent_candidate": {"type": ["string", "null"]},
+    "change_type": {"type": "string", "minLength": 1},
+    "state": {"enum": ["proposed", "under_evaluation", "accepted", "rejected", "deferred", "reverted"]},
+    "patch": {"type": "object"},
+    "candidate_hash": {"type": "string", "minLength": 1}
+  },
+  "additionalProperties": true
+}

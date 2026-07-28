@@ -11,6 +11,7 @@ from paper_evaluation.evaluation import add_contribution, evaluate_record, recom
 from paper_evaluation.external import ExternalSearchError, enrich_openalex_record, normalize_openalex, require_openalex_authorization, search_openalex, without_library_duplicates
 from artifact_manifest import write_manifest
 from audit_core.rendering import render_markdown_html
+from audit_core.contracts import validate_run_config
 
 
 def sort_rows(rows, path):
@@ -50,6 +51,14 @@ def render(report):
 
 
 def validate_configuration(config, context):
+    if not isinstance(config, dict):
+        raise ValueError("run-config must be a JSON object")
+    # v1 configs use the shared strict contract; the paper module retains a
+    # small legacy adapter for pre-v1 local ranking fixtures.
+    if "schema_version" in config:
+        config_errors = validate_run_config(config)
+        if config_errors:
+            raise ValueError("invalid run-config: " + "; ".join(config_errors))
     project = config.get("project")
     automation = config.get("automation")
     if not isinstance(project, dict) or not clean(project.get("research_question")):

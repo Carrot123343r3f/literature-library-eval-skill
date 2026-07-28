@@ -38,7 +38,7 @@ User Intake (run-config.json)
   │       run_audit.py — deterministic computation + report
   │
   └─→ [9] Audit Package
-        audit.md + audit.html + audit.json + manifest.json + inputs/
+        audit.html + audit.json + manifest.json + inputs/
 ```
 
 ## Component Map
@@ -50,7 +50,13 @@ User Intake (run-config.json)
 | `search-strategy-protocol.md` | Query iteration protocol | ✅ |
 | `indicator-registry.json` | Machine-readable indicator definitions | ✅ |
 | `search_for_eval.py` | Single-round diagnostic search | ✅ |
-| `search_iterator.py` | Multi-round iteration validator | ✅ |
+| `search_iterator.py` | Legacy search-iteration validator | ✅ |
+| `optimization.py` | Reusable two-store optimization harness and persistent decision history | ✅ |
+| `check_consistency.py` | Cross-file references, schema JSON, and CLI consistency checks | ✅ |
+| `quality_optimization.py` | Counterexamples, active human-screening queue, and drift canary | ✅ |
+| `experiment_attribution.py` | Candidate-to-metric attribution and Pareto comparison | ✅ |
+| `evalset_audit.py` | Development/validation independence and composition audit | ✅ |
+| `lle_core/` | Domain state, stage transitions, contracts, artifact lineage and durable runtime context | ✅ |
 | `normalize_candidates.py` | Identifier dedup + version grouping | ✅ |
 | `import_library.py` | JSON/CSV/RIS/BibTeX normalization + import preview | ✅ |
 | `enrich_library_metadata.py` | Authorized, resumable-friendly metadata enrichment; preserves original values and records gaps | ✅ |
@@ -91,11 +97,42 @@ The repository intentionally does not claim that multi-round searching, screenin
 
 ## Extension Points
 
+### Optimization module
+
+Any workflow that needs iterative improvement should call `scripts/optimization.py`
+and create an isolated run with separate Skill Repo, Eval Repo, and Run
+Workspace paths. The workflow-specific evaluator may provide its own metrics,
+but it must write only aggregate `observation-v1` records to the Run Workspace
+and record one atomic `diagnosis → candidate_revision → redacted_evidence →
+outcome` tuple per round. `search_iterator.py sync` is the adapter for the
+existing search-iteration protocol.
+
+The optimization harness exposes four evaluation stages (`probe`, `pr_val`,
+`regression`, `heldout`), a candidate lifecycle with rollback, history retrieval,
+and vector metrics with explicit constraints. The held-out stage is an
+aggregate-only measurement surface and is never a source for a new revision.
+
 1. **New database sources**: Add syntax mapping + API adapter
 2. **New engineering profiles**: Entry in `PROFILES` dict + Tier-1 venue list
 3. **New indicators**: Add to indicator-registry.json → add the computation in `run_audit.py` → update the report assembly
 4. **New output formats**: Add a renderer beside `audit_core/rendering.py`; keep report data generation independent of presentation
 5. **New review types**: Add threshold row + schema enum value
+
+## Architecture kernel and stage contracts
+
+The dependency-free `scripts/lle_core/` package is the architecture kernel.
+CLI scripts remain the user-facing entry points, while the kernel owns durable
+workflow state, stage transitions, input/output contracts, and artifact
+lineage. `run_full_audit.py` keeps the historical `steps` field for backward
+compatibility but now also records the v2 `stage`, `status`, `artifacts`, and
+`errors` fields. A stage cannot be marked complete when a declared output is
+missing or escapes the run directory.
+
+The contract sources are `schemas/run-config-schema.json`,
+`schemas/workflow-state-schema.json`, `schemas/artifact-manifest-schema.json`,
+and `schemas/stage-contract-schema.json`. The optimization workspace remains
+an explicitly validated external input and is not copied into the audit
+artifact tree.
 
 ## Human-factors guardrails
 

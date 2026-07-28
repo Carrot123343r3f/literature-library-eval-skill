@@ -38,6 +38,10 @@ The iterations.json schema:
 """
 import argparse, json, sys, pathlib
 from collections import Counter
+try:
+    from optimization import record_iteration, validate_run
+except ImportError:  # package-style import
+    from scripts.optimization import record_iteration, validate_run
 sys.stdout.reconfigure(encoding='utf-8')
 
 ALLOWED_CHANGE_TYPES = {
@@ -63,14 +67,22 @@ def load_json(path):
 def validate(data, strict=False):
     """Validate iterations against the search strategy protocol. Returns (errors, warnings)."""
     errors, warnings = [], []
+    if not isinstance(data, dict):
+        return ["iterations input must be a JSON object"], warnings
 
     # ── Dev set ──
     dev = data.get("dev_set", [])
+    if not isinstance(dev, list):
+        errors.append("dev_set must be an array")
+        dev = []
     if len(dev) < MIN_DEV_SET_SIZE:
         errors.append(f"Dev set needs at least {MIN_DEV_SET_SIZE} entries, got {len(dev)}")
 
     # ── Validation set ──
     val = data.get("validation_set", [])
+    if not isinstance(val, list):
+        errors.append("validation_set must be an array")
+        val = []
     if not val:
         warnings.append("No independent validation set — A2 will use dev_set as proxy "
                         "(evidence status: estimated)")
@@ -86,11 +98,16 @@ def validate(data, strict=False):
 
     # ── Iterations ──
     iterations = data.get("iterations", [])
+    if not isinstance(iterations, list):
+        return errors + ["iterations must be an array"], warnings
     if not iterations:
         errors.append("At least one iteration required")
         return errors, warnings
 
     for i, it in enumerate(iterations):
+        if not isinstance(it, dict):
+            errors.append(f"iteration #{i} must be an object")
+            continue
         it_id = it.get("iteration_id", f"#{i}")
 
         # Change type
@@ -111,6 +128,9 @@ def validate(data, strict=False):
 
         # Results fields
         results = it.get("results", {})
+        if not isinstance(results, dict):
+            errors.append(f"{it_id}: results must be an object")
+            continue
         for field in ("dev_recall",):
             if field not in results:
                 warnings.append(f"{it_id}: missing recommended field 'results.{field}'")
@@ -124,7 +144,7 @@ def validate(data, strict=False):
                 errors.append("Last two validation_recall values must be numbers in [0, 1]")
                 a2_stopped = False
             else:
-                a2_stopped = all(last_two[i] - last_two[i-1] < A2_STOP_DELTA
+                a2_stopped = all(0 <= last_two[i] - last_two[i-1] < A2_STOP_DELTA
                                  for i in range(1, len(last_two)))
         else:
             a2_stopped = None
@@ -224,6 +244,44 @@ def generate_pathway_matrix(data):
     return "\n".join(lines)
 
 
+def sync_to_optimization(data, optimization_run):
+    """Persist validated search rounds in the shared optimization harness."""
+    errors, warnings = validate(data)
+    if errors:
+        raise ValueError("search iterations are not valid: " + "; ".join(errors))
+    synced = []
+    for it in data.get("iterations", []):
+        result = it.get("results", {})
+        item = {
+            "iteration_id": it.get("iteration_id"),
+            "parent_iteration": it.get("parent_iteration"),
+            "diagnosis": {
+                "description": it.get("change_source", ""),
+                "failure_pattern": it.get("change_description", ""),
+            },
+            "candidate_revision": {
+                "change_type": it.get("change_type"),
+                "description": it.get("change_description"),
+                "queries": it.get("queries", {}),
+            },
+            "evidence": {
+                "stage": "probe",
+                "dev_recall": result.get("dev_recall"),
+                "validation_recall": result.get("validation_recall"),
+                "discovery_candidates": result.get("discovery_candidates"),
+                "contains_validation_items": False,
+            },
+            "outcome": {
+                "validation_score": result.get("validation_recall"),
+                "dev_score": result.get("dev_recall"),
+                "decision": it.get("decision"),
+            },
+        }
+        record_iteration(optimization_run, item)
+        synced.append(it.get("iteration_id"))
+    return synced
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sp = p.add_subparsers(dest="command")
@@ -235,6 +293,10 @@ def main():
     tp = sp.add_parser("table", help="Generate comparison table from iterations.json")
     tp.add_argument("--iterations", required=True, help="iterations.json file")
     tp.add_argument("--output", help="Output markdown file (stdout if omitted)")
+
+    xp = sp.add_parser("sync", help="Persist validated rounds in the shared optimization run")
+    xp.add_argument("--iterations", required=True, help="iterations.json file")
+    xp.add_argument("--optimization-run", required=True, help="optimization.py run root")
 
     a = p.parse_args()
 
@@ -269,6 +331,10 @@ def main():
             print(f"Comparison table written to {a.output}")
         else:
             print(output)
+
+    elif a.command == "sync":
+        data = load_json(a.iterations)
+        print(json.dumps({"synced_iteration_ids": sync_to_optimization(data, a.optimization_run)}, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":

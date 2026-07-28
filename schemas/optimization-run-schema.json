@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/literature-library-eval/optimization-run.schema.json",
+  "title": "Two-store optimization run",
+  "type": "object",
+  "required": ["schema_version", "run_id", "topic", "objective", "stores"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "run_id": {"type": "string", "minLength": 1},
+    "topic": {"type": "string", "minLength": 1},
+    "objective": {"type": "string", "minLength": 1},
+    "review_type": {"type": "string"},
+    "max_iterations": {"type": "integer", "minimum": 1},
+    "current_candidate": {"type": ["string", "null"]},
+    "evaluation_stages": {"type": "array", "items": {"enum": ["probe", "pr_val", "regression", "heldout"]}},
+    "metric_weights": {"type": "object", "additionalProperties": {"type": "number"}},
+    "metric_constraints": {"type": "object"},
+    "metric_specs": {"type": "object", "additionalProperties": {"type": "object"}},
+    "stores": {
+      "type": "object",
+      "required": ["optimization", "validation", "decision_history"],
+      "properties": {
+        "optimization": {"type": "string", "minLength": 1},
+        "validation": {"type": "string", "minLength": 1},
+        "decision_history": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "status": {"enum": ["initialized", "iterating", "stopped", "completed"]},
+    "stop_reason": {"type": ["string", "null"]}
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/literature-library-eval/quality-optimization.schema.json",
+  "title": "Quality optimization artifacts",
+  "oneOf": [
+    {
+      "title": "Counterexample",
+      "type": "object",
+      "required": ["schema_version", "counterexample_id", "type", "diagnosis", "observed", "expected"],
+      "properties": {"schema_version": {"const": "1.0"}, "counterexample_id": {"type": "string"}, "type": {"enum": ["false_positive", "false_negative", "boundary", "source_conflict", "tool_failure"]}, "diagnosis": {}, "observed": {}, "expected": {}}
+    },
+    {
+      "title": "Canary result",
+      "type": "object",
+      "required": ["schema_version", "status", "changes", "alerts"],
+      "properties": {"schema_version": {"const": "1.0"}, "status": {"enum": ["stable", "drift"]}, "changes": {"type": "array"}, "alerts": {"type": "array"}}
+    }
+  ]
+}

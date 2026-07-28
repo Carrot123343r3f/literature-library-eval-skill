@@ -184,6 +184,9 @@ def main():
     if validate_warnings:
         for w in validate_warnings:
             print(f"WARNING: {w}", file=sys.stderr)
+    if not isinstance(snapshot, dict) or not isinstance(snapshot.get("queries"), list):
+        print("ERROR: snapshot must contain a queries array.", file=sys.stderr)
+        sys.exit(1)
 
     stable = defaultdict(list)
     uncertain = defaultdict(list)
@@ -191,9 +194,19 @@ def main():
     source_status = {}
 
     for query in snapshot.get("queries", []):
-        for source, result in query.get("sources", {}).items():
+        if not isinstance(query, dict):
+            continue
+        sources = query.get("sources", {})
+        if not isinstance(sources, dict):
+            continue
+        for source, result in sources.items():
+            if not isinstance(result, dict):
+                continue
             source_status[f"{query.get('id')}:{source}"] = result.get("status", "unknown")
-            for row in result.get("items", []):
+            items = result.get("items", [])
+            if not isinstance(items, list):
+                continue
+            for row in items:
                 if not isinstance(row, dict):
                     continue
                 item = dict(row)

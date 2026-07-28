@@ -8,6 +8,7 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from credentials import require_openalex_api_key
+from audit_core.contracts import validate_run_config
 
 
 MAX_RECORDS_PER_SOURCE_QUERY = 10_000
@@ -21,6 +22,10 @@ def load_search_authorization(run_config_path, required_permission=None):
     except (OSError, json.JSONDecodeError) as exc:
         raise ValueError(f"invalid run-config: {exc}") from exc
     automation = config.get("automation")
+    if "schema_version" in config:
+        config_errors = validate_run_config(config)
+        if config_errors:
+            raise ValueError("invalid run-config: " + "; ".join(config_errors))
     if not isinstance(automation, dict) or automation.get("allow_search") is not True:
         raise PermissionError("automation.allow_search must be true before online collection")
     if required_permission and automation.get(required_permission) is not True:
@@ -47,7 +52,10 @@ def load_authorized_plan(run_config_path, plan_path, required_permission=None):
 def get_json(url):
     request = urllib.request.Request(url, headers={"User-Agent": "literature-library-eval/3.0"})
     with urllib.request.urlopen(request, timeout=45) as response:
-        return json.loads(response.read().decode("utf-8"))
+        payload = response.read(20 * 1024 * 1024 + 1)
+        if len(payload) > 20 * 1024 * 1024:
+            raise ValueError("remote JSON response exceeds 20 MiB safety limit")
+        return json.loads(payload.decode("utf-8"))
 
 
 def openalex(query, limit):

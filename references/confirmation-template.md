@@ -68,9 +68,8 @@
 
 ### 2.4 输出格式
 
-- **Markdown + JSON**（推荐）：`audit.md` 人读 + `audit.json` 机读
-- **加 HTML**：额外 `audit.html`
-- **加 PDF**：额外 `audit.pdf`（需 pandoc/weasyprint）
+- **HTML + JSON**（默认）：`audit.html` 人读 + `audit.json` 机读
+- **PDF**：仅作为额外导出格式，不属于默认审计产物，需单独配置渲染工具
 
 **AI 应对批次二**：若用户说"直接开始"或"评估我的库"——全用推荐默认值，不回问批次二。
 

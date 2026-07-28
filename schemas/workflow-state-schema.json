@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/literature-library-eval/workflow-state.schema.json",
+  "title": "Durable workflow state",
+  "type": "object",
+  "required": ["schema_version", "run_id", "run_signature", "stage", "status", "steps", "artifacts"],
+  "properties": {
+    "schema_version": {"const": "2.0"},
+    "run_id": {"type": "string", "minLength": 1},
+    "run_signature": {"type": "string", "minLength": 1},
+    "stage": {"enum": ["created", "config_validated", "library_ready", "collection_ready", "screening_ready", "audit_ready", "report_ready", "completed"]},
+    "status": {"enum": ["active", "failed", "completed"]},
+    "steps": {"type": "object", "additionalProperties": {"enum": ["complete", "reused", "failed"]}},
+    "artifacts": {"type": "object", "additionalProperties": {"$ref": "#/$defs/artifact"}},
+    "errors": {"type": "array", "items": {"type": "object"}},
+    "created_at": {"type": "string"},
+    "updated_at": {"type": "string"}
+  },
+  "$defs": {
+    "artifact": {
+      "type": "object",
+      "required": ["path", "sha256", "size", "producer", "kind"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "size": {"type": "integer", "minimum": 0},
+        "producer": {"type": "string", "minLength": 1},
+        "kind": {"type": "string", "enum": ["input", "output", "checkpoint"]}
+      }
+    }
+  }
+}

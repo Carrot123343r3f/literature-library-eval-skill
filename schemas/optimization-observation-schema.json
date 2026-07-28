@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/literature-library-eval/optimization-observation.schema.json",
+  "title": "Redacted optimization observation",
+  "type": "object",
+  "required": ["schema_version", "observation_id", "stage", "candidate_id", "outcome", "validation_payload"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "observation_id": {"type": "string", "minLength": 1},
+    "stage": {"enum": ["probe", "pr_val", "regression", "heldout"]},
+    "candidate_id": {"type": "string", "minLength": 1},
+    "outcome": {"type": "object"},
+    "validation_payload": {"const": "aggregate-only"}
+  },
+  "additionalProperties": true
+}

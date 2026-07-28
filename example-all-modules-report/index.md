@@ -14,7 +14,7 @@
 | 文献库 | [library.json](library.json) |
 | 元数据补齐 | [metadata-enrichment.json](enrichment/metadata-enrichment.json) |
 | A–F 审计（HTML） | [audit.html](audit/audit.html) |
-| A–F 审计（Markdown） | [audit.md](audit/audit.md) |
+| A–F 审计（HTML） | [audit.html](audit/audit.html) |
 | A–F 审计（JSON） | [audit.json](audit/audit.json) |
 | 可恢复行动 | [next-actions.json](actions/next-actions.json) |
 | 单文章评价（HTML） | [paper-evaluation.html](paper-evaluation/paper-evaluation.html) |

@@ -27,12 +27,19 @@ def write_manifest(out, module, schema_version, artifacts, step_status):
         source = pathlib.Path(path) if path else None
         if source and source.is_file():
             payload = source.read_bytes()
+            archive_status = "hash_only_non_json"
             if source.suffix.lower() == ".json":
                 try: payload = json.dumps(_public(json.loads(payload)), ensure_ascii=False, indent=2).encode("utf-8")
-                except (UnicodeDecodeError, json.JSONDecodeError): pass
-            digest = _sha256(payload); destination = inputs / f"{label}__{digest[:12]}{source.suffix}"
-            if not destination.exists(): destination.write_bytes(payload)
-            entry.update({"sha256": digest, "source_filename": source.name, "copied_to": str(destination.relative_to(out))})
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    archive_status = "hash_only_unparseable_json"
+                else:
+                    archive_status = "redacted_json_copy"
+            digest = _sha256(payload)
+            entry.update({"sha256": digest, "source_filename": source.name, "archive_status": archive_status})
+            if archive_status == "redacted_json_copy":
+                destination = inputs / f"{label}__{digest[:12]}.json"
+                if not destination.exists(): destination.write_bytes(payload)
+                entry["copied_to"] = str(destination.relative_to(out))
         manifest["input_files"][label] = entry
     (out / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     return manifest

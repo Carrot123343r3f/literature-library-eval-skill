@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/literature-library-eval/evalset-audit.schema.json",
+  "title": "Evaluation set audit",
+  "type": "object",
+  "required": ["schema_version", "status", "development", "validation", "overlap_count", "errors", "warnings"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "status": {"enum": ["valid", "invalid"]},
+    "development": {"type": "object"},
+    "validation": {"type": "object"},
+    "overlap_count": {"type": "integer", "minimum": 0},
+    "overlap_digest": {"type": ["string", "null"]},
+    "errors": {"type": "array"},
+    "warnings": {"type": "array"}
+  }
+}

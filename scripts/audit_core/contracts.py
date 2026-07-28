@@ -50,6 +50,10 @@ def validate_run_config(rc):
     if rc.get("schema_version") != "1.0":
         errors.append(f"schema_version: expected '1.0', got {rc.get('schema_version')!r}")
 
+    allowed_top = {"schema_version", "project", "library", "automation", "evidence_inputs",
+                   "standards", "output", "paper_evaluation", "optimization", "quality",
+                   "generated_by", "generated_at"}
+    errors.extend(f"unknown top-level field: {key}" for key in sorted(set(rc) - allowed_top))
     for field in ("project", "library", "automation", "output"):
         if field not in rc:
             errors.append(f"Missing required top-level field: '{field}'")
@@ -58,6 +62,9 @@ def validate_run_config(rc):
 
     project = rc.get("project", {})
     if isinstance(project, dict):
+        allowed_project = {"research_question", "review_type", "engineering_profile", "scope_status",
+                           "scope_rationale", "time_range", "languages", "allowed_assessment_level"}
+        errors.extend(f"unknown project field: {key}" for key in sorted(set(project) - allowed_project))
         question = project.get("research_question")
         if not isinstance(question, str) or not question.strip():
             errors.append("project.research_question is required (non-empty string)")
@@ -80,6 +87,8 @@ def validate_run_config(rc):
 
     library = rc.get("library", {})
     if isinstance(library, dict):
+        allowed_library = {"provided", "path", "format", "record_count", "normalization_required"}
+        errors.extend(f"unknown library field: {key}" for key in sorted(set(library) - allowed_library))
         if not isinstance(library.get("provided"), bool):
             errors.append("library.provided is required and must be boolean")
         if library.get("provided") and not library.get("path"):
@@ -91,6 +100,10 @@ def validate_run_config(rc):
 
     automation = rc.get("automation", {})
     if isinstance(automation, dict):
+        allowed_automation = {"allow_search", "allow_metadata_enrichment", "allow_external_discovery",
+                              "allow_citation_tracking", "local_only_confirmed", "allow_query_refinement",
+                              "allowed_sources", "authorized_sources", "stop_conditions"}
+        errors.extend(f"unknown automation field: {key}" for key in sorted(set(automation) - allowed_automation))
         if "allow_search" not in automation:
             errors.append("automation.allow_search is required")
         elif not isinstance(automation["allow_search"], bool):
@@ -98,6 +111,14 @@ def validate_run_config(rc):
         for permission in ("allow_metadata_enrichment", "allow_external_discovery", "allow_citation_tracking"):
             if permission in automation and not isinstance(automation[permission], bool):
                 errors.append(f"automation.{permission} must be boolean")
+        if automation.get("local_only_confirmed") is True and any(
+                automation.get(permission) is True
+                for permission in ("allow_search", "allow_metadata_enrichment", "allow_external_discovery", "allow_citation_tracking")):
+            errors.append("automation.local_only_confirmed cannot coexist with online permissions")
+        if automation.get("allow_search") is not True and any(
+                automation.get(permission) is True
+                for permission in ("allow_metadata_enrichment", "allow_external_discovery", "allow_citation_tracking")):
+            errors.append("online capability permissions require automation.allow_search=true")
         allowed_sources = automation.get("allowed_sources", [])
         supported_sources = {"openalex", "crossref", "arxiv", "europepmc"}
         if not isinstance(allowed_sources, list):
@@ -106,6 +127,22 @@ def validate_run_config(rc):
             errors.append("automation.allowed_sources contains an unsupported source")
     else:
         errors.append("automation is required and must be an object")
+
+    evidence = rc.get("evidence_inputs", {})
+    if evidence is not None:
+        if not isinstance(evidence, dict):
+            errors.append("evidence_inputs must be an object")
+        else:
+            allowed_evidence = {"benchmark", "gold", "query_log", "query_hits", "query_plan",
+                                "source_snapshot", "screening_decisions", "deduplication_log",
+                                "search_meta", "failed_sources"}
+            errors.extend(f"unknown evidence_inputs field: {key}" for key in sorted(set(evidence) - allowed_evidence))
+            for key, value in evidence.items():
+                if key == "failed_sources":
+                    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+                        errors.append("evidence_inputs.failed_sources must be an array of strings")
+                elif value is not None and not isinstance(value, str):
+                    errors.append(f"evidence_inputs.{key} must be a string or null")
 
     standards = rc.get("standards", {})
     if isinstance(standards, dict):
@@ -116,6 +153,15 @@ def validate_run_config(rc):
             for key in ("b_ggr_threshold", "b_drr_threshold"):
                 if key in overrides and (not isinstance(overrides[key], (int, float)) or isinstance(overrides[key], bool) or overrides[key] < 0):
                     errors.append(f"standards.user_overrides.{key} must be a non-negative number")
-    if not isinstance(rc.get("output", {}), dict):
+    output = rc.get("output", {})
+    if not isinstance(output, dict):
         errors.append("output is required and must be an object")
+    else:
+        allowed_output = {"language", "formats", "include_standards_appendix"}
+        errors.extend(f"unknown output field: {key}" for key in sorted(set(output) - allowed_output))
+        formats = output.get("formats", ["html", "json"])
+        if not isinstance(formats, list) or not formats or any(item not in {"html", "json"} for item in formats):
+            errors.append("output.formats must contain only html and/or json; Markdown output is not supported")
+        if "language" in output and not isinstance(output["language"], str):
+            errors.append("output.language must be a string")
     return errors

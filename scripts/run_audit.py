@@ -90,14 +90,27 @@ def title(row):
 def load_items(path):
     with open(path, encoding="utf-8") as fh:
         data = json.load(fh)
-    return data if isinstance(data, list) else data.get("items", [])
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict) and isinstance(data.get("items", []), list):
+        return data["items"]
+    raise ValueError("items input must be an array or an object with items[]")
 
 def load_snapshot(path):
     with open(path, encoding="utf-8") as fh:
         data = json.load(fh)
+    if not isinstance(data, dict):
+        raise ValueError("source snapshot must be a JSON object")
+    queries = data.get("queries", [])
+    if not isinstance(queries, list):
+        raise ValueError("source snapshot queries must be an array")
     sources = {}
-    for query in data.get("queries", []):
+    for query in queries:
+        if not isinstance(query, dict):
+            raise ValueError("source snapshot query entries must be objects")
         for name, result in query.get("sources", {}).items():
+            if not isinstance(result, dict) or not isinstance(result.get("items", []), list):
+                raise ValueError("source snapshot source results must contain items[]")
             bucket = sources.setdefault(name, {"items": [], "statuses": [], "completion_flags": [],
                                                "scope_filters": data.get("scope_filters"), "dedup_rule": data.get("dedup_rule")})
             bucket["items"].extend(result.get("items", []))
@@ -1577,9 +1590,9 @@ def copy_inputs_and_manifest(report, artifact_paths, out):
         entry = {"provided": bool(src)}
         if src and pathlib.Path(src).is_file():
             src_path = pathlib.Path(src)
-            # Context often carries Agent session metadata. Archive a redacted
-            # JSON representation instead of copying its raw source verbatim.
-            if label == "context":
+            # All JSON inputs are untrusted. Archive only a redacted JSON
+            # representation; malformed JSON is retained as a hash only.
+            if src_path.suffix.lower() == ".json":
                 try:
                     raw_context = json.loads(src_path.read_text(encoding="utf-8"))
                     payload = json.dumps(_public_value(raw_context), ensure_ascii=False, indent=2).encode("utf-8")
@@ -1591,24 +1604,38 @@ def copy_inputs_and_manifest(report, artifact_paths, out):
             entry["sha256"] = h
             safe_prefix = f"{label}__{h[:12]}" if h != "unreadable" else label
             dst = inputs_dir / f"{safe_prefix}{src_path.suffix}"
-            if not dst.exists() or hash_file(dst) != h:
-                if payload is not None:
-                    dst.write_bytes(payload)
-                else:
-                    shutil.copy2(src, dst)
-            entry["copied_to"] = str(dst.relative_to(out))
+            if payload is not None and (not dst.exists() or hash_file(dst) != h):
+                dst.write_bytes(payload)
+            elif src_path.suffix.lower() != ".json" and (not dst.exists() or hash_file(dst) != h):
+                shutil.copy2(src, dst)
+            if payload is not None or src_path.suffix.lower() != ".json":
+                entry["copied_to"] = str(dst.relative_to(out))
+            else:
+                entry["archive_status"] = "hash_only_unparseable_json"
             entry["source_filename"] = src_path.name
         manifest["input_files"][label] = entry
     # Also record the library file
     lib_path = report.get("context", {}).get("library_path", "")
     if lib_path and pathlib.Path(lib_path).is_file():
-        h = hash_file(lib_path) or "unreadable"
-        entry = {"provided": True, "sha256": h, "source_filename": pathlib.Path(lib_path).name}
+        lib_source = pathlib.Path(lib_path)
+        payload = None
+        if lib_source.suffix.lower() == ".json":
+            try:
+                payload = json.dumps(_public_value(json.loads(lib_source.read_text(encoding="utf-8"))), ensure_ascii=False, indent=2).encode("utf-8")
+            except (OSError, json.JSONDecodeError):
+                payload = None
+        h = hashlib.sha256(payload).hexdigest() if payload is not None else (hash_file(lib_path) or "unreadable")
+        entry = {"provided": True, "sha256": h, "source_filename": lib_source.name}
         safe_prefix = f"library__{h[:12]}" if h != "unreadable" else "library"
-        dst = inputs_dir / f"{safe_prefix}{pathlib.Path(lib_path).suffix}"
-        if not dst.exists() or hash_file(dst) != h:
+        dst = inputs_dir / f"{safe_prefix}{lib_source.suffix}"
+        if payload is not None and (not dst.exists() or hash_file(dst) != h):
+            dst.write_bytes(payload)
+        elif lib_source.suffix.lower() != ".json" and (not dst.exists() or hash_file(dst) != h):
             shutil.copy2(lib_path, dst)
-        entry["copied_to"] = str(dst.relative_to(out))
+        if payload is not None or lib_source.suffix.lower() != ".json":
+            entry["copied_to"] = str(dst.relative_to(out))
+        else:
+            entry["archive_status"] = "hash_only_unparseable_json"
         manifest["input_files"]["library"] = entry
     (out / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     return manifest
@@ -1782,8 +1809,6 @@ def main():
     p.add_argument("--deduplication-log"); p.add_argument("--run-log"); p.add_argument("--search-meta",
                    help="search_meta.json from search_for_eval.py — auto-detected alongside --query-hits if omitted")
     p.add_argument("--out", required=True)
-    p.add_argument("--allow-out-of-scope", action="store_true",
-                   help="Force full A-F even when scope_status=out_of_scope (report will carry permanent caveats)")
     a = p.parse_args()
 
     # ── run-config mode: auto-resolve all inputs from run-config.json ──
@@ -1802,22 +1827,17 @@ def main():
             print("run-config validation errors:", file=sys.stderr)
             for e in rc_errors:
                 print(f"  - {e}", file=sys.stderr)
-            # non-fatal for known fields; fatal for missing required fields
-            fatal = any("required" in e.lower() or "must be" in e.lower() for e in rc_errors)
-            if fatal:
-                p.error("run-config has fatal validation errors (see above).")
+            # Any contract violation is fatal. Continuing with a partially
+            # accepted configuration can silently change scope, permissions,
+            # thresholds, or output semantics.
+            p.error("run-config has validation errors (see above).")
 
         scope_status = rc.get("project", {}).get("scope_status", "scope_uncertain")
         allowed_level = rc.get("project", {}).get("allowed_assessment_level", "full")
-        if scope_status in ("out_of_scope",) or allowed_level == "stop":
-            if not a.allow_out_of_scope:
-                print(f"ERROR: scope_status={scope_status}, allowed_assessment_level={allowed_level} — refusing to run full A-F.")
-                print("  Use --allow-out-of-scope to force (report will carry permanent caveats),")
-                print("  or use --mode metadata-health / --mode search-design for downgraded service.")
-                p.exit(1)
-            else:
-                print("WARNING: scope_status=out_of_scope but --allow-out-of-scope active — continuing with permanent caveats in report.")
-                rc_ctx_overrides["_scope_override_active"] = True
+        if scope_status in ("out_of_scope", "scope_uncertain") or allowed_level == "stop":
+            print(f"ERROR: scope_status={scope_status}, allowed_assessment_level={allowed_level} — refusing to run full A-F.")
+            print("  Resolve scope in run-config.json first, or use the documented downgraded service.")
+            p.exit(1)
 
         # Resolve relative paths against the run-config directory
         rc_base = rc_base_dir
@@ -1872,13 +1892,10 @@ def main():
     ctx = resolve_thresholds(ctx)
     # ── Unified scope guard (covers both run-config and direct CLI paths) ──
     scope_status = ctx.get("scope_status", "")
-    if scope_status == "out_of_scope" and not a.allow_out_of_scope:
-        print(f"ERROR: scope_status=out_of_scope — refusing to run full A-F.")
-        print("  Use --allow-out-of-scope to force (report will carry permanent caveats),")
-        print("  or provide a library within the supported engineering scope.")
+    if scope_status in {"out_of_scope", "scope_uncertain"}:
+        print(f"ERROR: scope_status={scope_status} — refusing to run full A-F.")
+        print("  Resolve scope in run-config.json before running the full evaluation.")
         p.exit(1)
-    if scope_status == "out_of_scope":
-        print("WARNING: scope_status=out_of_scope — --allow-out-of-scope active. Report will carry permanent caveats.")
     # ── Consume search_meta.json if present and merge search iterations / evidence status ──
     search_meta_path = a.search_meta
     if not search_meta_path:
@@ -2091,6 +2108,12 @@ def main():
             "伞式综述专用子项 C4 的 CCA 计算需要纳入综述的原始研究引用列表，超出自动范围；方法类型分布为标题 keyword 推断，不做最终分类。",
             "伞式综述专用子项 F7 仅报告就绪度——AMSTAR-2 的 16 项评分和 ROBIS 偏倚风险评估需人工或专用工具完成，本报告不代替实际质量评估。"
         ])
+    report["scope_routing"] = {
+        "status": "cross_domain_manual_routing" if ctx.get("scope_status") == "cross_domain" else "standard",
+        "scope_status": ctx.get("scope_status", ""),
+    }
+    if ctx.get("scope_status") == "cross_domain":
+        report["limitations"].append("本次为跨领域范围；当前自动指标只代表适用部分，非适用维度必须由人工标注或降级，不得把全表结果解释为跨领域整体结论。")
     write(report, pathlib.Path(a.out),
           artifact_paths={k: v for k, v in {
                          "library": a.library,
@@ -2107,4 +2130,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+        print(f"ERROR: invalid audit input: {exc}", file=sys.stderr)
+        raise SystemExit(2)

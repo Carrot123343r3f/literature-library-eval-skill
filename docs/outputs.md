@@ -9,7 +9,7 @@ Every run produces:
 
 ```text
 out/
-├── audit.md              ← Human-readable report
+├── audit.html            ← Human-readable report
 ├── audit.html            ← Rendered HTML
 ├── audit.json            ← Machine-readable (full indicator register)
 ├── manifest.json         ← sha256, git commit, Python version
@@ -19,7 +19,14 @@ out/
 
 ## Guided Workflow Outputs
 
-`run_full_audit.py` additionally writes `workflow-state.json` (signature-bound step state), `next-actions.json` (recoverable actions), and, when applicable, `import/import-preview.json`, `screening/screening-decisions.json`, `screening/screening-summary.json`, and `citations/citation-candidates.json` plus a manifest. Use `--resume` only with the same inputs; use a fresh run or `--force` when inputs change.
+`run_full_audit.py` additionally writes `workflow-state.json` (v2 durable
+stage state, signature-bound steps, artifact hashes, and recoverable errors),
+`next-actions.json` (recoverable actions), and, when applicable,
+`import/import-preview.json`, `screening/screening-decisions.json`,
+`screening/screening-summary.json`, and `citations/citation-candidates.json`
+plus manifests. Use `--resume` only with the same inputs; use a fresh run or
+`--force` when inputs change. Older v1.1 step-only state remains readable, but
+new runs write the v2 contract.
 
 When online metadata enrichment is allowed, it also writes `enrichment/library-enriched.json` and `enrichment/metadata-enrichment.json`. The enriched library is used for downstream auditing, while user-provided fields always take precedence. Missing credentials, ambiguous matches, and source failures are recorded as gaps and do not silently become guessed values. Use `automation.local_only_confirmed=true` or the explicit local-only choice during intake to skip this step.
 

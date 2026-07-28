@@ -66,10 +66,22 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--candidates", required=True); parser.add_argument("--out", required=True); parser.add_argument("--decisions")
     args = parser.parse_args(); output = pathlib.Path(args.out); output.mkdir(parents=True, exist_ok=True)
-    raw = json.loads(pathlib.Path(args.candidates).read_text(encoding="utf-8")); rows = raw if isinstance(raw, list) else raw.get("items", raw.get("additions", []))
+    try:
+        raw = json.loads(pathlib.Path(args.candidates).read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        parser.error(f"cannot parse candidates: {exc}")
+    if not isinstance(raw, (list, dict)):
+        parser.error("candidates must be a JSON array or object")
+    rows = raw if isinstance(raw, list) else raw.get("items", raw.get("additions", []))
     rows = [item for item in rows if isinstance(item, dict)]; ids = {candidate_id(item, index) for index, item in enumerate(rows)}
+    if len(ids) != len(rows):
+        raise SystemExit("ERROR: candidate identifiers must be unique before screening; run normalization first.")
     if args.decisions:
-        decisions = load_decisions(args.decisions); validate(decisions, ids)
+        try:
+            decisions = load_decisions(args.decisions)
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            parser.error(f"cannot parse decisions: {exc}")
+        validate(decisions, ids)
         status, note = "human_screened", "Only human-confirmed includes may contribute to B metrics."
     else:
         decisions = [{"candidate_id": candidate_id(item, index), "title": item.get("title", ""), "decision": "pending", "reason": ""} for index, item in enumerate(rows)]

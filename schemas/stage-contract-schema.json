@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/literature-library-eval/stage-contract.schema.json",
+  "title": "Workflow stage contract",
+  "type": "object",
+  "required": ["stage", "inputs", "outputs", "human_gate"],
+  "properties": {
+    "stage": {"type": "string", "minLength": 1},
+    "inputs": {"type": "array", "items": {"type": "string"}},
+    "outputs": {"type": "array", "items": {"type": "string"}},
+    "human_gate": {"type": "boolean"},
+    "failure_recovery": {"type": "string"}
+  }
+}
