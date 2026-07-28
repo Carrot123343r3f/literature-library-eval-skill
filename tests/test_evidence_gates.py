@@ -69,6 +69,8 @@ def test_validated_iterations_are_recorded_as_evidence(tmp_path):
     report = json.loads((out / "audit.json").read_text(encoding="utf-8"))
     assert report["context"]["evidence_validation"]["independent_validation"] == "validated"
     assert report["context"]["independent_validation_passed"] is True
+    assert report["context"]["gold_independence_status"] == "independence_confirmed"
+    assert report["context"]["gold_independence_record_check"]["source"] == "validated_search_iterations"
     assert report["artifacts"]["search-iterations"]["provided"] is True
 
 
@@ -239,6 +241,29 @@ def test_a2_requires_record_and_metadata_independence_for_measured_evidence(tmp_
     assert result.returncode == 0, result.stderr
     report = json.loads((out / "audit.json").read_text(encoding="utf-8"))
     row = next(item for item in report["indicator_register"] if item["subproject"] == "A2")
+    assert report["context"]["gold_independence_status"] == "distinct_records_unverified"
+    assert row["evidence_status"] == "estimated"
+
+    iterations = {
+        "dev_validation_overlap_check": True,
+        "dev_set": [{"doi": f"10.1000/dev{i}"} for i in range(3)],
+        "validation_set": [{"doi": f"10.1000/validation{i}"} for i in range(3)],
+        "iterations": [{
+            "iteration_id": "v1", "change_type": "initial", "change_description": "initial query",
+            "change_source": "user_confirmed", "queries": {"db": "title:test"},
+            "execution_date": "2026-07-28", "results": {"dev_recall": 1.0}, "decision": "continue",
+        }],
+    }
+    iteration_path = tmp_path / "iterations.json"
+    iteration_path.write_text(json.dumps(iterations), encoding="utf-8")
+    result, out = run_audit(
+        tmp_path, context,
+        "--benchmark", benchmark, "--gold", gold, "--query-hits", hits,
+        "--search-iterations", iteration_path,
+    )
+    assert result.returncode == 0, result.stderr
+    report = json.loads((out / "audit.json").read_text(encoding="utf-8"))
+    row = next(item for item in report["indicator_register"] if item["subproject"] == "A2")
     assert report["context"]["gold_independence_status"] == "independence_confirmed"
     assert row["evidence_status"] == "measured"
     assert row["decision_status"] == "standards_unconfirmed"
@@ -251,4 +276,53 @@ def test_decision_status_and_html_language_are_explicit(tmp_path):
     rows = {row["subproject"]: row for row in report["indicator_register"]}
     assert rows["C1"]["decision_status"] == "evidence_missing"
     assert rows["A3"]["decision_status"] == "descriptive_only"
+    assert "C 主题平衡 不可评估" in report["summary"]
     assert "<html lang='zh-CN'>" in (out / "audit.html").read_text(encoding="utf-8")
+
+
+def test_run_config_alone_maps_iteration_query_plan_and_search_meta(tmp_path):
+    benchmark = tmp_path / "benchmark.json"
+    gold = tmp_path / "gold.json"
+    hits = tmp_path / "hits.json"
+    iterations = tmp_path / "iterations.json"
+    query_plan = tmp_path / "query-plan.json"
+    search_meta = tmp_path / "search-meta.json"
+    benchmark.write_text(json.dumps([{"doi": "10.1000/dev"}]), encoding="utf-8")
+    gold.write_text(json.dumps([{"doi": "10.1000/validation"}]), encoding="utf-8")
+    hits.write_text(json.dumps([{"doi": "10.1000/validation"}]), encoding="utf-8")
+    iterations.write_text(json.dumps({
+        "dev_validation_overlap_check": True,
+        "dev_set": [{"doi": f"10.1000/dev{i}"} for i in range(3)],
+        "validation_set": [{"doi": f"10.1000/validation{i}"} for i in range(3)],
+        "iterations": [{
+            "iteration_id": "v1", "change_type": "initial", "change_description": "initial",
+            "change_source": "user_confirmed", "queries": {"db": "title:test"},
+            "execution_date": "2026-07-28", "results": {"dev_recall": 1.0}, "decision": "continue",
+        }],
+    }), encoding="utf-8")
+    query_plan.write_text(json.dumps({"arxiv": "title:test"}), encoding="utf-8")
+    search_meta.write_text(json.dumps({
+        "queries": [{"status": "complete"}], "a2_evidence_status": "measured",
+        "validation_recall": 1.0, "validation_recall_total": 1, "validation_recall_matched": 1,
+    }), encoding="utf-8")
+    config = json.loads((ROOT / "tests" / "run-config-test.json").read_text(encoding="utf-8"))
+    config["library"]["path"] = str(ROOT / "tests" / "library.json")
+    config["evidence_inputs"]["source_snapshot"] = None
+    config["evidence_inputs"].update({
+        "benchmark": str(benchmark), "gold": str(gold), "query_hits": str(hits),
+        "query_plan": str(query_plan), "search_meta": str(search_meta),
+        "search_iterations": str(iterations),
+    })
+    config_path = tmp_path / "run-config.json"
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+    out = tmp_path / "out"
+    result = subprocess.run([
+        sys.executable, str(ROOT / "scripts" / "run_audit.py"),
+        "--run-config", str(config_path), "--out", str(out),
+    ], capture_output=True, text=True, encoding="utf-8")
+    assert result.returncode == 0, result.stderr
+    report = json.loads((out / "audit.json").read_text(encoding="utf-8"))
+    assert report["context"]["gold_independence_status"] == "independence_confirmed"
+    assert report["artifacts"]["query-plan"]["provided"] is True
+    assert report["artifacts"]["search-meta"]["provided"] is True
+    assert report["artifacts"]["search-iterations"]["provided"] is True

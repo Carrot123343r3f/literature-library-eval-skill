@@ -375,8 +375,11 @@ def gold_independence(benchmark_path, gold_path, context):
                          and all(isinstance(meta.get(field), str) and meta[field].strip() for field in required)
                          and meta.get("dev_validation_overlap_check") is True
                          and meta.get("validation_set_frozen") is True)
+    # Free-text metadata is useful provenance, but it is still a declaration.
+    # Only a validated search-iterations artifact can promote this result to
+    # independence_confirmed later in the workflow.
     assessment["metadata_verified"] = metadata_verified
-    assessment["status"] = "independence_confirmed" if metadata_verified else "distinct_records_unverified"
+    assessment["status"] = "distinct_records_unverified"
     return assessment
 
 def balance(library, standards=None):
@@ -1324,6 +1327,7 @@ def indicator_rows(report):
         verdict = ("pass" if chk(p, "B3_pathway_completion") == "pass" and chk(p, "B3_independent_validation") == "pass"
                    else "fail" if chk(p, "B3_pathway_completion") == "fail" or chk(p, "B3_independent_validation") == "fail"
                    else "not_assessable")
+        evidence = "measured" if verdict in {"pass", "fail"} else "not_assessable"
         iv_label = ('通过' if p.get('independent_validation_passed') is True
                     else ('未通过' if p.get('independent_validation_passed') is False else '未提供'))
         complete = p.get('pathway_completion')
@@ -1337,7 +1341,7 @@ def indicator_rows(report):
                            if candidate_planned else "未执行 AI 候选检索")
         return (verdict,
                 f"正式路径 {pathway_label} | 独立验证 {iv_label}；AI 候选执行 {candidate_label}",
-                p.get("status"),
+                evidence,
                 f"AI 候选执行率仅说明自动补充检索是否完成，不是独立验证。结论：**{bv}**。"
                 f"仅低 GGR/DRR 不够——需路径完成+独立验证+筛选真实同时成立。")
 
@@ -1932,9 +1936,12 @@ def main():
         if ev.get("gold") and not a.gold: a.gold = _resolve(ev.get("gold"))
         if ev.get("query_log") and not a.run_log: a.run_log = _resolve(ev["query_log"])
         if ev.get("query_hits") and not a.query_hits: a.query_hits = _resolve(ev["query_hits"])
+        if ev.get("query_plan") and not a.query_plan: a.query_plan = _resolve(ev["query_plan"])
         if ev.get("source_snapshot") and not a.candidate_snapshots: a.candidate_snapshots = _resolve(ev["source_snapshot"])
         if ev.get("screening_decisions") and not a.decision_log: a.decision_log = _resolve(ev["screening_decisions"])
         if ev.get("deduplication_log") and not a.deduplication_log: a.deduplication_log = _resolve(ev["deduplication_log"])
+        if ev.get("search_meta") and not a.search_meta: a.search_meta = _resolve(ev["search_meta"])
+        if ev.get("search_iterations") and not a.search_iterations: a.search_iterations = _resolve(ev["search_iterations"])
 
         if not a.context:
             ctx_from_rc = {
@@ -2027,6 +2034,18 @@ def main():
                 ctx["independent_validation_passed"] = bool(iterations.get("validation_set"))
                 ctx["evidence_validation"]["independent_validation"] = "validated"
                 ctx["evidence_validation"]["iteration_warnings"] = iteration_warnings + validation.get("warnings", [])
+                # This artifact has undergone structural validation and a
+                # stable-ID overlap audit, so it is the authoritative A2
+                # independence source—not a context self-declaration.
+                ctx["gold_independence_status"] = "independence_confirmed"
+                ctx["gold_independence_record_check"] = {
+                    "status": "independence_confirmed",
+                    "source": "validated_search_iterations",
+                    "comparison_records": len(iterations.get("dev_set", [])),
+                    "gold_records": len(iterations.get("validation_set", [])),
+                    "overlap_records": 0,
+                    "metadata_verified": True,
+                }
         except (OSError, ValueError, json.JSONDecodeError) as exc:
             ctx["independent_validation_passed"] = False
             ctx["evidence_validation"]["independent_validation"] = "unparseable"
@@ -2235,7 +2254,11 @@ def main():
     else: summary += " 未检测到阻断项。"
     summary += f"\n\nA1 基准集召回 {_fmt_pct(cov['a1'].get('recall'))}（{_fmt_num(cov['a1'].get('matched'))}/{_fmt_num(cov['a1'].get('total'))}），"
     summary += f"A3 多源下界 {_fmt_num(cov['a3'].get('deduplicated_candidate_lower_bound'))} 篇，"
-    summary += f"B 饱和度 {proc.get('verdict','—')}，C 主题平衡 {'含空主题' if 'empty_topic' in tbal.get('flags',[]) else '正常'}，"
+    c1_verdict = tbal.get("checks", {}).get("C1_topic_balance", "not_assessable")
+    c_summary = ("不可评估（未提供主题分类）" if c1_verdict == "not_assessable"
+                 else "含空主题" if c1_verdict == "fail"
+                 else "未发现明显偏斜")
+    summary += f"B 饱和度 {proc.get('verdict','—')}，C 主题平衡 {c_summary}，"
     summary += f"D 近年占比 {_fmt_pct(rec.get('recent_share'))}，E h-core={_fmt_num(qual.get('h_core'))}，"
     summary += f"F 摘要覆盖 {_fmt_pct(libh.get('field_completeness',{}).get('abstractNote'))}。"
     summary += " 各维度不合成总分；\"不可评估\"不是失败。"
@@ -2264,7 +2287,8 @@ def main():
               "artifacts": artifacts({"query-plan": a.query_plan, "source-snapshot": a.source_snapshot,
                                       "benchmark": a.benchmark, "gold": a.gold,
                                       "decision-log": a.decision_log, "deduplication-log": a.deduplication_log,
-                                      "run-log": a.run_log, "search-iterations": a.search_iterations,
+                                      "run-log": a.run_log, "search-meta": search_meta_path,
+                                      "search-iterations": a.search_iterations,
                                       "citation-seed-plan": a.citation_seed_plan,
                                       "citation-discovery": a.citation_discovery}),
               "summary": summary,
@@ -2297,6 +2321,7 @@ def main():
                          "decision-log": a.decision_log,
                          "deduplication-log": a.deduplication_log,
                          "run-log": a.run_log,
+                         "search-meta": search_meta_path,
                          "search-iterations": a.search_iterations,
                          "citation-seed-plan": a.citation_seed_plan,
                          "citation-discovery": a.citation_discovery,
