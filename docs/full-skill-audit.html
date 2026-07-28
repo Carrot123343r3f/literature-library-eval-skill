@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<title>Skill 全流程审计记录</title>
+<style>body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;max-width:1100px;margin:40px auto;padding:0 24px;line-height:1.7;color:#222}table{border-collapse:collapse;width:100%;margin:12px 0 28px}th,td{border:1px solid #ccc;padding:8px;vertical-align:top}th{background:#f3f5f7}code{background:#f3f5f7;padding:2px 4px}</style>
+<h1>Skill 全流程审计记录</h1>
+<p>审计范围：入口协议、<code>run-config</code> 契约、范围路由、A–F 评估、外部检索、候选筛选、优化模块、输出归档、恢复执行和文档/示例一致性。审计日期：2026-07-28。</p>
+<h2>致命 Bug（已修复）</h2>
+<table><tr><th>问题</th><th>修改方案与结果</th></tr>
+<tr><td><code>scope_uncertain</code> 可继续完整评估</td><td>现在直接拒绝，必须补充范围或走明确的降级服务。</td></tr>
+<tr><td><code>out_of_scope</code> 可通过 CLI 覆盖</td><td>删除 <code>--allow-out-of-scope</code> 及覆盖路径。</td></tr>
+<tr><td>离线承诺与联网权限冲突</td><td>共享契约拒绝矛盾组合及未开启搜索却开启联网子权限。</td></tr>
+<tr><td>未知配置字段和 Markdown 输出未统一拒绝</td><td>代码契约与 JSON Schema 同时启用白名单；正式报告固定为 HTML。</td></tr>
+<tr><td>输入归档可能泄露敏感字段</td><td>JSON 脱敏；不可解析 JSON 与非 JSON 只保留哈希。</td></tr>
+<tr><td>外部文本可能伪装成指令</td><td>明确标记为不可信数据，HTML 渲染统一转义。</td></tr>
+<tr><td>优化历史普通追加</td><td>统一使用原子 JSONL 追加，并校验安全 ID。</td></tr></table>
+<h2>功能优化（已修复）</h2>
+<ul><li>搜索迭代器不再把负向回退误判为 A2 平台期。</li><li>异常 JSON、非对象 iteration、畸形 snapshot 现在返回可读错误。</li><li>外部 API 响应增加 20 MiB 安全上限。</li><li>纸面评估接入 v1 配置契约，并保留显式 legacy adapter。</li><li>示例和文档统一为 <code>audit.html</code> + <code>audit.json</code>。</li></ul>
+<h2>验证结果</h2>
+<ul><li><code>python -m pytest -q</code>：71 passed。</li><li><code>python scripts/check_consistency.py --strict</code>：CONSISTENCY OK。</li><li>已覆盖未知字段、非法格式、权限冲突、相对路径、大小写 DOI、畸形输入、HTML 注入和归档泄露反例。</li></ul>
+<h2>有意保留的边界</h2>
+<p>跨领域项目不会把不适用维度擅自填成零分；报告写入人工路由限制，要求人工标注适用性后再解释整体结论。</p>
+</html>
