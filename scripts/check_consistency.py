@@ -63,6 +63,14 @@ def check_delivery_contract():
     outputs = (ROOT / "docs" / "outputs.md").read_text(encoding="utf-8")
     if outputs.count("├── audit.html") != 1:
         errors.append("docs/outputs.md must describe audit.html exactly once")
+    for relative in ("README.md", "README.zh-CN.md"):
+        text = (ROOT / relative).read_text(encoding="utf-8")
+        if text.count("├── audit.html") != 1:
+            errors.append(f"{relative} must describe audit.html exactly once")
+    for forbidden in ("example-all-modules-report/audit/audit.md",
+                      "example-all-modules-report/paper-evaluation/paper-evaluation.md"):
+        if (ROOT / forbidden).exists():
+            errors.append(f"HTML-only contract forbids tracked artifact {forbidden}")
     for path in ROOT.rglob("*.md"):
         try:
             path.read_text(encoding="utf-8")
@@ -115,8 +123,10 @@ def check_scripts():
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--strict", action="store_true", help="reserved for CI compatibility")
-    parser.parse_args()
-    errors = check_references() + check_example_links() + check_json() + check_delivery_contract() + check_scripts()
+    args = parser.parse_args()
+    errors = check_references() + check_example_links() + check_json() + check_scripts()
+    if args.strict:
+        errors += check_delivery_contract()
     if errors:
         print("CONSISTENCY FAILED")
         print("\n".join(f"- {error}" for error in errors))
