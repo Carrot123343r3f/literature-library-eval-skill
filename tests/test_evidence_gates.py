@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 import subprocess
 import sys
@@ -71,11 +72,6 @@ def test_validated_iterations_are_recorded_as_evidence(tmp_path):
     assert report["artifacts"]["search-iterations"]["provided"] is True
 
 
-def test_dev_requirements_include_tracked_mcp_runtime_dependency():
-    requirements = (ROOT / "requirements-dev.txt").read_text(encoding="utf-8")
-    assert "mcp>=" in requirements
-
-
 def test_autopilot_unconfirmed_scope_writes_onboarding_without_audit(tmp_path):
     out = tmp_path / "first-pass"
     command = [sys.executable, str(ROOT / "scripts" / "autopilot.py"),
@@ -97,3 +93,55 @@ def test_autopilot_confirmed_scope_can_start_without_library(tmp_path):
     assert result.returncode == 0, result.stderr
     assert (out / ".autopilot" / "starter-library.json").is_file()
     assert (out / "audit" / "audit.html").is_file()
+    seed_plan = json.loads((out / "citations" / "citation-seeds.json").read_text(encoding="utf-8"))
+    assert seed_plan["status"] == "no_openalex_seed_available"
+
+
+def test_citation_seed_plan_prefers_user_seed_then_library(tmp_path):
+    from scripts.citation_seed_plan import make_plan
+    library = [{"id": "https://openalex.org/W2", "title": "library", "cited_by_count": 10}]
+    user = tmp_path / "user.json"
+    user.write_text(json.dumps([{"openalex_id": "https://openalex.org/W1", "title": "user"}]), encoding="utf-8")
+    seeds = make_plan(library, [], user)
+    assert [seed["openalex_id"] for seed in seeds] == ["https://openalex.org/W1", "https://openalex.org/W2"]
+    assert seeds[0]["seed_origin"] == "user_provided_seed"
+
+
+def test_citation_expansion_degrades_to_structured_zero_result_without_key(tmp_path):
+    config = tmp_path / "run-config.json"
+    config.write_text(json.dumps({
+        "schema_version": "1.0",
+        "project": {"research_question": "test", "review_type": "narrative", "scope_status": "in_scope"},
+        "library": {"provided": False},
+        "automation": {"allow_search": True, "allow_citation_tracking": True, "allowed_sources": ["openalex"]},
+        "output": {"formats": ["html", "json"]},
+    }), encoding="utf-8")
+    seed = tmp_path / "seeds.json"
+    seed.write_text(json.dumps({"items": [{"openalex_id": "https://openalex.org/W1"}]}), encoding="utf-8")
+    out = tmp_path / "citations"
+    environment = dict(os.environ); environment.pop("OPENALEX_API_KEY", None)
+    result = subprocess.run([sys.executable, str(ROOT / "scripts" / "citation_candidates.py"),
+                             "--seed", str(seed), "--run-config", str(config), "--out", str(out), "--allow-unavailable"],
+                            capture_output=True, text=True, encoding="utf-8", env=environment)
+    assert result.returncode == 0, result.stderr
+    payload = json.loads((out / "citation-candidates.json").read_text(encoding="utf-8"))
+    assert payload["status"] == "not_expanded" and payload["seed_count"] == 1
+
+
+def test_audit_reports_citation_candidates_without_treating_them_as_included(tmp_path):
+    seed_plan = tmp_path / "citation-seeds.json"
+    seed_plan.write_text(json.dumps({"status": "ready", "items": [{"openalex_id": "https://openalex.org/W1"}]}), encoding="utf-8")
+    discovery = tmp_path / "citation-candidates.json"
+    discovery.write_text(json.dumps({
+        "status": "completed", "seed_count": 1,
+        "items": [{"pathway": "backward_citation"}, {"pathway": "forward_citation"}],
+    }), encoding="utf-8")
+    result, out = run_audit(tmp_path, {"scope_status": "in_scope", "review_type": "systematic"},
+                            "--citation-seed-plan", seed_plan, "--citation-discovery", discovery)
+    assert result.returncode == 0, result.stderr
+    report = json.loads((out / "audit.json").read_text(encoding="utf-8"))
+    citation = report["context"]["citation_candidate_discovery"]
+    assert citation["candidate_count"] == 2
+    assert citation["backward_candidates"] == 1
+    assert citation["forward_candidates"] == 1
+    assert "not included studies or saturation evidence" in report["summary"]

@@ -52,7 +52,7 @@ def check_json():
 
 def check_scripts():
     errors = []
-    for name in ("optimization.py", "quality_optimization.py", "experiment_attribution.py", "evalset_audit.py", "search_iterator.py", "query_compiler.py", "auto_triage.py", "autopilot.py", "run_full_audit.py", "run_audit.py", "check_consistency.py"):
+    for name in ("optimization.py", "quality_optimization.py", "experiment_attribution.py", "evalset_audit.py", "search_iterator.py", "query_compiler.py", "auto_triage.py", "autopilot.py", "citation_seed_plan.py", "run_full_audit.py", "run_audit.py", "check_consistency.py"):
         path = ROOT / "scripts" / name
         if not path.exists():
             errors.append(f"missing expected script: scripts/{name}")

@@ -24,6 +24,7 @@ STAGE_CONTRACTS = {
     "screening_template": {"inputs": ("normalization/candidates.json",), "outputs": ("screening/screening-decisions.json", "screening/screening-workbench.html"), "human_gate": True},
     "screening_summary": {"inputs": ("screening-decisions.json",), "outputs": ("screening/screening-summary.json",), "human_gate": True},
     "active_screen_queue": {"inputs": ("normalization/candidates.json",), "outputs": ("screening/active-screen-queue.json",), "human_gate": True},
+    "citation_seed_plan": {"inputs": ("library.json",), "outputs": ("citations/citation-seeds.json",), "human_gate": False},
     "citation_discovery": {"inputs": ("citation-seed", "run-config.json"), "outputs": ("citations/citation-candidates.json", "citations/manifest.json"), "human_gate": False},
     "audit": {"inputs": ("library.json", "run-config.json"), "outputs": ("audit/audit.json", "audit/audit.html"), "human_gate": False},
     "actions": {"inputs": ("audit/audit.json",), "outputs": ("next-actions.json",), "human_gate": False},

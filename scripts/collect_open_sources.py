@@ -74,7 +74,7 @@ def openalex(query, limit):
         url = "https://api.openalex.org/works?per-page=200&cursor=" + urllib.parse.quote(cursor) + "&search=" + urllib.parse.quote(query) + "&api_key=" + urllib.parse.quote(api_key)
         data = get_json(url); total = data.get("meta", {}).get("count", total)
         page = data.get("results", [])
-        items.extend({"id": w.get("doi") or w.get("id"), "title": w.get("title"), "year": w.get("publication_year"), "source": "openalex"} for w in page)
+        items.extend({"id": w.get("doi") or w.get("id"), "openalex_id": w.get("id"), "title": w.get("title"), "year": w.get("publication_year"), "source": "openalex"} for w in page)
         cursor = data.get("meta", {}).get("next_cursor") if page else None
         time.sleep(0.15)
     return {"query": query, "reported_total": total, "items": items[:limit], "retrieved": min(len(items), limit),
