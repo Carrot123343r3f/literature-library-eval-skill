@@ -15,6 +15,17 @@
     "planned_pathways": {"type": "array", "items": {"type": "string"}},
     "source_marginal_yields": {"type": "array", "items": {"type": "object"}},
     "independent_validation_passed": {"type": "boolean"},
-    "run_log_complete": {"type": "boolean"}
+    "run_log_complete": {"type": "boolean"},
+    "output_language": {"type": "string"},
+    "gold_set_metadata": {
+      "type": "object",
+      "properties": {
+        "validation_set_source": {"type": "string"},
+        "independence_rationale": {"type": "string"},
+        "dev_validation_overlap_check": {"type": "boolean"},
+        "validation_set_frozen": {"type": "boolean"},
+        "validation_set_frozen_at": {"type": "string"}
+      }
+    }
   }
 }

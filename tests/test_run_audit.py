@@ -28,7 +28,7 @@ with tempfile.TemporaryDirectory() as temp:
     out = pathlib.Path(temp) / "out"
     audit = run_audit(str(root / "tests" / "context.json"), str(out))
     assert audit["coverage"]["a1"]["recall"] == 0.5
-    assert audit["coverage"]["a2"]["status"] == "measured"
+    assert audit["coverage"]["a2"]["status"] == "manual-verification-required"
     assert audit["coverage"]["a2"]["recall"] == 0.0
     assert audit["coverage"]["a3"]["deduplicated_candidate_lower_bound"] == 3
     assert "empty_topic" in audit["topic_balance"]["flags"]

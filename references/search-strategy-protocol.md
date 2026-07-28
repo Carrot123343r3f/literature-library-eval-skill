@@ -65,6 +65,8 @@
 - `validation_set_source`: 来源描述
 - `independence_rationale`: 为什么与开发集不交叉
 - `dev_validation_overlap_check`: 是否已检查开发集与验证集无重叠
+- `validation_set_frozen`: 验证集在检索式最终评估前已冻结（`true`）
+- `validation_set_frozen_at`: 冻结日期或不可变版本标识
 
 ### 2.3 A2 的两种 Recall
 

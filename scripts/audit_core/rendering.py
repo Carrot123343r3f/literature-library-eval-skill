@@ -26,7 +26,7 @@ def _action_workbench(actions):
             "</section><script>document.querySelectorAll('[data-action]').forEach(e=>{const k='literature-audit-action-'+e.dataset.action;e.checked=localStorage.getItem(k)==='1';e.onchange=()=>localStorage.setItem(k,e.checked?'1':'0')});</script>")
 
 
-def render_markdown_html(markdown_text, title="文献库评价报告", actions=None):
+def render_markdown_html(markdown_text, title="文献库评价报告", actions=None, language="zh-CN"):
     """Render the supported Markdown subset as a standalone, escaped HTML report."""
     def inline(value):
         escaped = html.escape(value)
@@ -34,7 +34,8 @@ def render_markdown_html(markdown_text, title="文献库评价报告", actions=N
         return re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", escaped)
 
     lines = markdown_text.splitlines()
-    parts = [f"<!doctype html><html lang='zh-CN'><meta charset='utf-8'><title>{html.escape(title)}</title><style>"
+    html_language = "en" if str(language).lower().startswith("en") else "zh-CN"
+    parts = [f"<!doctype html><html lang='{html_language}'><meta charset='utf-8'><title>{html.escape(title)}</title><style>"
              "body{margin:0;background:#f6f8fb;color:#172033;font:15px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif}"
              "main{max-width:1440px;margin:32px auto;padding:32px;background:#fff;border-radius:14px;box-shadow:0 8px 28px #1f355018}"
              "h1{font-size:30px;margin:0 0 24px;color:#112a46}h2{margin-top:36px;padding-bottom:8px;border-bottom:2px solid #dce7f3;color:#133b63}h3{margin-top:28px;color:#24567f}h4{margin-top:22px}"

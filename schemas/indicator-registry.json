@@ -38,7 +38,7 @@
       "required_inputs": ["gold_set", "query_hits"],
       "default_threshold": {"narrative": 0.70, "scoping": 0.70, "systematic": 0.85, "rapid": 0.60, "umbrella": 0.80},
       "umbrella_only": false,
-      "evidence_states": ["measured", "estimated", "automated-screening", "not_assessable"],
+      "evidence_states": ["measured", "estimated", "manual-verification-required", "automated-screening", "not_assessable"],
       "limitations": [
         "Gold set 不得完全由被测检索结果反向构建（开发集 ≠ 验证集）",
         "无独立验证集时 A2 降级为 estimated",
