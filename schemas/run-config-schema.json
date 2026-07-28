@@ -90,7 +90,7 @@
       "additionalProperties": false,
       "description": "v1.0: human-readable output is HTML and machine-readable output is JSON. Markdown is not a supported persisted report format.",
       "properties": {
-        "language": {"type": "string", "default": "zh-CN"},
+        "language": {"type": "string", "default": "zh-CN", "description": "Sets the HTML language tag and localized evidence-gap messages. Full report translation is not currently supported; the report body remains Chinese."},
         "formats": {"type": "array", "items": {"enum": ["html", "json"]}, "minItems": 1, "default": ["html", "json"]},
         "include_standards_appendix": {"type": "boolean", "default": true}
       }

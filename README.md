@@ -288,6 +288,8 @@ Single-paper mode performs authorized metadata enrichment by default when `autom
 
 The search diagnostic uses every source authorized in `automation.allowed_sources`: OpenAlex, arXiv, Crossref, and Europe PMC. OpenAlex is used when an `OPENALEX_API_KEY` is configured; without it, authorized free-source adapters can still run. Citation counts are only used when the selected source provides them, and source coverage is recorded in `search_meta.json`. Paper-evaluation external discovery remains OpenAlex-specific and requires its separate permission and key. A saved candidate snapshot can be supplied with `--external-candidates` for reproducible/offline reruns.
 
+`output.language` currently controls the HTML language attribute and localized evidence-gap messages only. The full audit narrative is currently Chinese; do not treat `en` as a fully translated report option.
+
 ## Roadmap
 
 | Phase | What | Status |
