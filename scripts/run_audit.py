@@ -1811,6 +1811,8 @@ def main():
     p.add_argument("--deduplication-log"); p.add_argument("--run-log"); p.add_argument("--search-meta",
                    help="search_meta.json from search_for_eval.py — auto-detected alongside --query-hits if omitted")
     p.add_argument("--search-iterations", help="iterations.json; validates independent development/validation evidence")
+    p.add_argument("--citation-seed-plan", help="citation-seeds.json; records automatic/user seed provenance")
+    p.add_argument("--citation-discovery", help="citation-candidates.json; records unscreened citation candidates")
     p.add_argument("--out", required=True)
     a = p.parse_args()
 
@@ -1896,6 +1898,38 @@ def main():
         ctx.setdefault(k, v)
     ctx.setdefault("library_path", a.library)
     ctx = resolve_thresholds(ctx)
+    # Citation expansion is a built-in discovery process. Its machine-generated
+    # counts stay separate from screened inclusions and B saturation evidence.
+    citation_summary = {}
+    if a.citation_seed_plan:
+        try:
+            seed_plan = json.loads(pathlib.Path(a.citation_seed_plan).read_text(encoding="utf-8"))
+            seed_items = seed_plan.get("items", [])
+            if not isinstance(seed_items, list):
+                raise ValueError("citation seed plan items must be a list")
+            citation_summary = {"status": seed_plan.get("status", "not_recorded"),
+                                "seed_count": len(seed_items), "candidate_count": 0,
+                                "backward_candidates": 0, "forward_candidates": 0}
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            p.error(f"invalid citation seed plan: {exc}")
+    if a.citation_discovery:
+        try:
+            discovery = json.loads(pathlib.Path(a.citation_discovery).read_text(encoding="utf-8"))
+            candidates = discovery.get("items", [])
+            if not isinstance(candidates, list):
+                raise ValueError("citation discovery items must be a list")
+            citation_summary.update({
+                "status": discovery.get("status", "completed"),
+                "seed_count": discovery.get("seed_count", citation_summary.get("seed_count", 0)),
+                "candidate_count": len(candidates),
+                "backward_candidates": sum(item.get("pathway") == "backward_citation" for item in candidates if isinstance(item, dict)),
+                "forward_candidates": sum(item.get("pathway") == "forward_citation" for item in candidates if isinstance(item, dict)),
+                "reason": discovery.get("reason"),
+            })
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            p.error(f"invalid citation discovery: {exc}")
+    if citation_summary:
+        ctx["citation_candidate_discovery"] = citation_summary
     # ── Unified scope guard (covers both run-config and direct CLI paths) ──
     # Context is an untrusted self-report. A naked boolean cannot establish
     # independent validation in a measured report.
@@ -2126,13 +2160,24 @@ def main():
             "**强烈建议在完成文献库评估后，由领域专家对纳入综述进行独立的方法学质量审查。**"
         )
         summary += umbrella_disclaimer
+    citation = ctx.get("citation_candidate_discovery", {})
+    if citation:
+        summary += ("\n\nCitation candidate discovery: "
+                    f"status={citation.get('status', 'not_recorded')}; "
+                    f"seeds={citation.get('seed_count', 0)}; "
+                    f"candidates={citation.get('candidate_count', 0)} "
+                    f"(backward={citation.get('backward_candidates', 0)}, "
+                    f"forward={citation.get('forward_candidates', 0)}). "
+                    "These are unscreened automated candidates, not included studies or saturation evidence.")
     report = {"generated_at": gt, "standards": ctx.get("standards", {}), "context": ctx,
               "library_health": libh, "coverage": cov, "process": proc, "balance": bal,
               "topic_balance": tbal, "currency": cur, "recency": rec, "quality": qual,
               "umbrella": umb,
               "artifacts": artifacts({"query-plan": a.query_plan, "source-snapshot": a.source_snapshot,
                                       "decision-log": a.decision_log, "deduplication-log": a.deduplication_log,
-                                      "run-log": a.run_log, "search-iterations": a.search_iterations}),
+                                      "run-log": a.run_log, "search-iterations": a.search_iterations,
+                                      "citation-seed-plan": a.citation_seed_plan,
+                                      "citation-discovery": a.citation_discovery}),
               "summary": summary,
               "limitations": ["本报告中的各项阈值均为基于工程文献计量经验的参考值，旨在辅助识别可能的风险信号，不等于文献库质量的绝对标准。pass/warning/fail 是自动化诊断提示，不是质量裁决，所有结论均应结合具体研究问题和领域惯例做人工判断。",
                               "A3 下界不是 Recall；区间需另行声明模型假设。",
@@ -2164,6 +2209,8 @@ def main():
                          "deduplication-log": a.deduplication_log,
                          "run-log": a.run_log,
                          "search-iterations": a.search_iterations,
+                         "citation-seed-plan": a.citation_seed_plan,
+                         "citation-discovery": a.citation_discovery,
                          "context": a.context}.items() if v is not None})
 
 

@@ -133,6 +133,20 @@ Screening summaries record decisions and per-source yields only. They must not
 invent `search_rounds` or `planned_pathways`; B saturation metrics require the
 explicit, recorded search-round context and independent-pathway evidence.
 
+### Built-in citation discovery and optional modules
+
+Every full run creates a citation-seed plan. If online search and citation tracking
+are authorized, it also attempts backward/forward citation candidate discovery,
+even when the user supplied no seed set: the normalized library and first-round
+search candidates provide deterministic automatic seeds. These outputs are always
+labelled as unscreened candidates; they never count as included studies or prove
+search saturation.
+
+The following remain separate opt-in modules because they trade time/tokens for
+additional evidence: metadata enrichment, query iteration, two-store optimization,
+and paper evidence/value evaluation. Their commands, permissions, inputs, and
+output boundaries are documented in `docs/optional-modules.md`.
+
 优先使用 `scripts/run_full_audit.py`，而非要求用户自行串联脚本。`autopilot.py` 在范围未确认时生成 `onboarding.html`、保存检索计划并成功结束；仅在用户显式确认 `--scope-status in_scope`（或 cross_domain）后生成完整 A-F 报告。
 
 1. `init --out run-config.json`：只询问研究问题、综述类型、文献库位置和联网授权，生成可审阅配置。

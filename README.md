@@ -136,6 +136,10 @@ python scripts/autopilot.py \
 
 ## Six-Dimension Framework
 
+## Optional advanced modules
+
+Metadata enrichment, search-iteration validation, two-store optimization, and per-paper evidence evaluation are independent opt-in modules. Use them after the basic first pass when their extra cost is justified; see [optional modules](docs/optional-modules.md).
+
 21 indicators. 24 for umbrella reviews. No composite score. Every dimension stands alone — a perfect A1 cannot hide a broken F1.
 
 | Dim | Question | What we measure |

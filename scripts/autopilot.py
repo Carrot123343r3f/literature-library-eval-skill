@@ -32,7 +32,7 @@ def build_config(question, library, review_type, sources, offline, scope_status)
                         "scope_rationale": "explicit autopilot scope confirmation" if scope_status == "in_scope" else "autopilot draft; scope not confirmed"},
             "library": {"provided": True, "path": pathlib.Path(library).name if library else "starter-library.json", "format": "json"},
             "automation": {"allow_search": not offline, "allow_metadata_enrichment": False,
-                            "allow_external_discovery": not offline, "allow_citation_tracking": False,
+                            "allow_external_discovery": not offline, "allow_citation_tracking": not offline,
                             "local_only_confirmed": offline, "allowed_sources": [] if offline else sources},
             "output": {"language": "zh-CN", "formats": ["html", "json"]}}
     if not offline:

@@ -62,6 +62,7 @@ STEP_STAGES = {
     "optimization_contract": "config_validated", "import": "library_ready",
     "metadata_enrichment": "library_ready", "collection": "collection_ready",
     "normalization": "collection_ready", "screening_template": "screening_ready",
+    "citation_seed_plan": "library_ready",
     "active_screen_queue": "screening_ready", "screening_summary": "screening_ready",
     "citation_discovery": "collection_ready", "audit": "audit_ready", "actions": "completed",
 }
@@ -208,10 +209,21 @@ def main():
         candidates = out / "normalization" / "candidates.json"
         if not candidates.is_file(): raise SystemExit("ERROR: screening decisions require normalized candidates from --collect.")
         summary = out / "screening"; run([sys.executable, script("summarize_screening.py"), "--candidates", str(candidates), "--decisions", args.screening_decisions, "--out", str(summary)], steps, "screening_summary", out, run_signature, [summary / "screening-summary.json"], args.resume); args.screening_summary = args.screening_summary or str(summary / "screening-summary.json")
-    if args.citation_seed:
-        if automation.get("allow_search") is not True or automation.get("allow_citation_tracking") is not True: raise SystemExit("ERROR: --citation-seed requires automation.allow_search=true and automation.allow_citation_tracking=true.")
-        citations = out / "citations"; run([sys.executable, script("citation_candidates.py"), "--seed", args.citation_seed, "--run-config", args.run_config, "--out", str(citations)], steps, "citation_discovery", out, run_signature, [citations / "citation-candidates.json", citations / "manifest.json"], args.resume)
-    audit = out / "audit"; command = [sys.executable, script("run_audit.py"), "--library", str(canonical), "--out", str(audit), "--run-config", args.run_config]
+    # Citation expansion is a built-in candidate-discovery path.  A user seed
+    # is preferred, but a deterministic plan is created from the library and
+    # first-round candidates when no seed was supplied.
+    citations = out / "citations"; citation_candidates = out / "normalization" / "candidates.json"
+    seed_command = [sys.executable, script("citation_seed_plan.py"), "--library", str(canonical), "--out", str(citations / "citation-seeds.json")]
+    if citation_candidates.is_file(): seed_command.extend(["--candidates", str(citation_candidates)])
+    if args.citation_seed: seed_command.extend(["--user-seed", args.citation_seed])
+    run(seed_command, steps, "citation_seed_plan", out, run_signature, [citations / "citation-seeds.json"], args.resume)
+    if automation.get("allow_search") is True and automation.get("allow_citation_tracking") is True:
+        run([sys.executable, script("citation_candidates.py"), "--seed", str(citations / "citation-seeds.json"), "--run-config", args.run_config, "--out", str(citations), "--allow-unavailable"], steps, "citation_discovery", out, run_signature, [citations / "citation-candidates.json", citations / "manifest.json"], args.resume)
+    audit = out / "audit"; command = [sys.executable, script("run_audit.py"), "--library", str(canonical), "--out", str(audit), "--run-config", args.run_config,
+                                        "--citation-seed-plan", str(citations / "citation-seeds.json")]
+    discovered_citations = citations / "citation-candidates.json"
+    if discovered_citations.is_file():
+        command.extend(["--citation-discovery", str(discovered_citations)])
     for flag, value in (("--context", args.context), ("--benchmark", args.benchmark), ("--gold", args.gold), ("--query-hits", args.query_hits), ("--candidate-snapshots", args.source_snapshot), ("--decision-log", args.screening_decisions), ("--deduplication-log", args.deduplication_log), ("--search-meta", args.screening_summary), ("--search-iterations", args.search_iterations)):
         if value: command.extend([flag, value])
     run(command, steps, "audit", out, run_signature, [audit / "audit.json", audit / "audit.html"], args.resume)
