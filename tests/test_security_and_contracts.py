@@ -30,7 +30,7 @@ def test_shared_contracts_redact_and_renderer_escapes_html():
 
 def test_indicator_verdict_and_evidence_status_contracts_are_semantic():
     assert reconcile_indicator_evidence("not_assessable", "measured") == "not_assessable"
-    assert reconcile_indicator_evidence("screening", "measured") == "automated-screening"
+    assert reconcile_indicator_evidence("screening", "measured") == "measured"
     assert not validate_indicator_evidence([
         {"subproject": "F1", "meets_standard": "pass", "evidence_status": "measured"},
         {"subproject": "F6", "meets_standard": "not_assessable", "evidence_status": "not_assessable"},

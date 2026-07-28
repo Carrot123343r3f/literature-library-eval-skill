@@ -3,7 +3,7 @@
 import argparse, datetime as dt, hashlib, html, json, pathlib, re, shutil, sys, tempfile
 from collections import Counter
 from math import log
-from audit_core.contracts import compact as _shared_compact, public_value as _shared_public_value, reconcile_indicator_evidence, validate_context as _validate_context, validate_indicator_evidence, validate_run_config as _shared_validate_run_config
+from audit_core.contracts import compact as _shared_compact, indicator_evidence_qualifier, public_value as _shared_public_value, reconcile_indicator_evidence, validate_context as _validate_context, validate_indicator_evidence, validate_run_config as _shared_validate_run_config
 from audit_core.coverage import evaluate_gold_recall, evaluate_multisource_lower_bound
 from audit_core.rendering import render_markdown_html
 
@@ -332,6 +332,29 @@ def artifacts(paths):
                      "source_filename": pathlib.Path(value).name if value else None}
               for name, value in paths.items()}
     return result
+
+
+def gold_independence(benchmark_path, gold_path):
+    """Compare A1 and A2 inputs before paths are redacted from the report.
+
+    Only a coarse status is persisted: absolute paths and content hashes remain
+    local. A reused or byte-identical Gold set cannot independently strengthen
+    A1 evidence, even though A2 can still measure its retrieval.
+    """
+    if not benchmark_path or not gold_path:
+        return "not_provided"
+    try:
+        benchmark = pathlib.Path(benchmark_path).resolve()
+        gold = pathlib.Path(gold_path).resolve()
+    except OSError:
+        return "unverifiable"
+    if benchmark == gold:
+        return "same_file"
+    benchmark_hash = hash_file(benchmark)
+    gold_hash = hash_file(gold)
+    if not benchmark_hash or not gold_hash:
+        return "unverifiable"
+    return "identical_content" if benchmark_hash == gold_hash else "distinct_content"
 
 def balance(library, standards=None):
     standards = standards or {}
@@ -735,12 +758,20 @@ def _input_evidence_table(report):
     # share a name, and report output must never disclose their absolute paths.
     gold_independence = "已单独提供（独立性需由 metadata 核验）" if gold_provided else "—"
 
+    gold_identity = ctx.get("gold_independence_status", "not_provided")
+    if gold_identity in {"same_file", "identical_content"}:
+        gold_independence = f"非独立：{gold_identity}"
+    elif gold_identity == "distinct_content":
+        gold_independence = "文件内容不同（仍需方法学独立性说明）"
+    elif gold_identity == "unverifiable":
+        gold_independence = "无法核验独立性"
+
     lines = ["## 本次评估输入与证据状态\n"]
     lines.append("| 输入工件 | 是否提供 | 是否有效 | 支撑的指标 | 缺失影响 |")
     lines.append("| --- | --- | --- | --- | --- |")
     lines.append(f"| 规范化文献库 | {yn(lib_provided)} | 有效（{libh.get('records','—')} 篇） | C–F、部分 A/B | 无库不能做正式评估 |")
     lines.append(f"| A1 基准集 | {yn(benchmark_provided)} | 有稳定 ID | A1 | A1 不可评估 |")
-    lines.append(f"| A2 Gold 集 | {yn(gold_provided)} | {gold_independence} | A2 | {'A2 降低证据强度' if gold_independence == '与 A1 复用' else 'A2 不可评估' if not gold_provided else '—'} |")
+    lines.append(f"| A2 Gold 集 | {yn(gold_provided)} | {gold_independence} | A2 | {'A2 降低证据强度' if gold_identity in {'same_file', 'identical_content'} else 'A2 不可评估' if not gold_provided else '—'} |")
     lines.append(f"| 查询日志 (run-log) | {yn(run_log_provided)} | {run_log_valid} | F1、A2 | 检索不可复跑 |")
     lines.append(f"| 筛选决定 | {yn(bool(screening_decisions))} | {screening_status} | B | B 不可判饱和 |")
     lines.append(f"| 去重日志 (dedup-log) | {yn(dedup_provided)} | {dedup_valid} | F4 | 版本处理待核验 |")
@@ -1188,8 +1219,7 @@ def indicator_rows(report):
         "hcr": h.get("correction_flag_records", 0),
         "ha_r": h.get("attachment_rate"), "ho_r": h.get("open_link_rate"),
         "mids": c["a1"].get("missing_ids", []),
-        "a1_path": artifacts.get("benchmark", {}).get("path", ""),
-        "a2_path": artifacts.get("gold", {}).get("path", ""),
+        "gold_independence_status": ctx.get("gold_independence_status", "not_provided"),
         "author_conc": b.get("author_concentration", {}),
         "umbrella": umb,
     }
@@ -1205,12 +1235,19 @@ def indicator_rows(report):
 
     def _a2(d):
         a2m = d["a2m"]; a2r = d["a2r"]
+        independence = d["gold_independence_status"]
+        verdict = tv(a2r, a2m)
+        evidence = c["a2"].get("status")
+        if independence in {"same_file", "identical_content"}:
+            evidence = "manual-verification-required"
+            if verdict != "screening":
+                verdict = "warning"
         a2_dep = ("⚠ A2 非独立——Gold 与 A1 基准集复用；A1 和 A2 不能相互增强证据强度。"
-                  if (d["a2_path"] and d["a2_path"] == d["a1_path"]) else "")
+                  if independence in {"same_file", "identical_content"} else "")
         zero_hit_note = "零命中=实测 0。" if a2r == 0 and c["a2"].get("status") == "measured" else ""
-        return (tv(a2r, a2m),
+        return (verdict,
                 f"{_fmt_pct(a2r)}（{_fmt_num(c['a2'].get('matched'))}/{_fmt_num(c['a2'].get('total'))}）",
-                c["a2"].get("status"),
+                evidence,
                 f"A2 高只说明检索式能找回 Gold，不等于 Gold 足够代表问题。{a2_dep}实测 {_fmt_pct(a2r)}。{zero_hit_note}")
 
     def _a3(d):
@@ -1276,6 +1313,9 @@ def indicator_rows(report):
 
     def _c1(d):
         tc = d["tc"]; tf = d["tf"]
+        if not tc:
+            return ("not_assessable", "No topic taxonomy supplied", "not_assessable",
+                    "No topic taxonomy was provided; cannot determine whether any topic is empty.")
         desc = (f"{'、'.join(f'{k}={v}篇' for k,v in (sorted(tc.items(), key=lambda x:-x[1]) if tc else []))}。"
                 f"{'需补：' + ', '.join(k for k,v in tc.items() if v==0) if 'empty_topic' in tf else '各主题均有文献。'}")
         opp = t.get("opposing_viewpoint_warning")
@@ -1306,6 +1346,9 @@ def indicator_rows(report):
         dsrc = d["dsrc"]
         fdays = report.get('currency', {}).get('freshness_threshold_days', '—')
         verdict = chk(recency_checks, "D1_search_freshness")
+        if verdict == "not_assessable":
+            return (verdict, "No recorded search dates", "not_assessable",
+                    "No search dates were recorded; source freshness cannot be assessed.")
         return (verdict,
                 "; ".join(f"{k}:{v['days_since']}天" for k,v in dsrc.items()) if dsrc else "有日期来源 0（未记录检索日期）",
                 report.get("currency", {}).get("status", "not_assessable"),
@@ -1497,7 +1540,7 @@ def indicator_rows(report):
         if not compute:
             rows.append((dim_names.get(ind["dimension"], ind["dimension"]),
                          iid, ind["display_name"]["zh"],
-                         "—", "not_assessable", "—", "not_assessable",
+                         "—", "not_assessable", "—", "not_assessable", None,
                          f"计算函数缺失——请在 COMPUTE 注册表中添加 '{iid}'"))
             continue
 
@@ -1508,10 +1551,11 @@ def indicator_rows(report):
         else:
             std = std_entry
 
-        v, cur, ev, note = compute(data)
-        ev = reconcile_indicator_evidence(v, ev)
+        v, cur, raw_ev, note = compute(data)
+        ev = reconcile_indicator_evidence(v, raw_ev)
+        qualifier = indicator_evidence_qualifier(raw_ev)
         dim_label = dim_names.get(ind["dimension"], ind["dimension"])
-        rows.append((dim_label, iid, ind["display_name"]["zh"], std, v, compact(cur), ev, note))
+        rows.append((dim_label, iid, ind["display_name"]["zh"], std, v, compact(cur), ev, qualifier, note))
 
     return rows
 
@@ -1618,8 +1662,10 @@ def write(report, out, artifact_paths=None):
     report["indicator_register"] = [
         {"parent_dimension": d, "subproject": c, "project_name": n,
          "standard": s, "meets_standard": v, "current_status": cur,
-         "evidence_status": e, "description_and_action": note}
-        for d, c, n, s, v, cur, e, note in rows]
+         "evidence_status": e, "evidence_qualifier": qualifier,
+         "decision_status": "standards_unconfirmed" if v == "screening" else "standard_assessed",
+         "description_and_action": note}
+        for d, c, n, s, v, cur, e, qualifier, note in rows]
     semantic_errors = validate_indicator_evidence(report["indicator_register"])
     if semantic_errors:
         raise ValueError("invalid indicator evidence contract: " + "; ".join(semantic_errors))
@@ -1652,11 +1698,13 @@ def write(report, out, artifact_paths=None):
     search_iteration_section = _search_iteration_section(report)
     result_overview = _result_overview(report)
     focused_findings = _focused_findings(report)
-    table_rows = [row[:-1] + (_short_report_note(row[-1]),) for row in rows]
+    # The qualifier is retained in audit.json, while the compact HTML table
+    # deliberately presents only the canonical evidence status.
+    table_rows = [row[:7] + (_short_report_note(row[-1]),) for row in rows]
     action_items = [
         {"code": code, "title": name, "verdict": verdict, "why": note,
          "next_step": "Open the evidence appendix and add the smallest missing input described above."}
-        for _dimension, code, name, _standard, verdict, _current, _evidence, note in rows
+        for _dimension, code, name, _standard, verdict, _current, _evidence, _qualifier, note in rows
         if verdict in {"fail", "warning", "not_assessable"}
     ]
 
@@ -1869,6 +1917,7 @@ def main():
     for k, v in rc_ctx_overrides.items():
         ctx.setdefault(k, v)
     ctx.setdefault("library_path", a.library)
+    ctx["gold_independence_status"] = gold_independence(a.benchmark, a.gold)
     ctx = resolve_thresholds(ctx)
     # Citation expansion is a built-in discovery process. Its machine-generated
     # counts stay separate from screened inclusions and B saturation evidence.
@@ -2146,6 +2195,7 @@ def main():
               "topic_balance": tbal, "currency": cur, "recency": rec, "quality": qual,
               "umbrella": umb,
               "artifacts": artifacts({"query-plan": a.query_plan, "source-snapshot": a.source_snapshot,
+                                      "benchmark": a.benchmark, "gold": a.gold,
                                       "decision-log": a.decision_log, "deduplication-log": a.deduplication_log,
                                       "run-log": a.run_log, "search-iterations": a.search_iterations,
                                       "citation-seed-plan": a.citation_seed_plan,

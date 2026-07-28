@@ -14,17 +14,31 @@ INDICATOR_EVIDENCE_STATUSES = {
     "measured", "estimated", "automated-screening",
     "manual-verification-required", "not_assessable",
 }
+EVIDENCE_STATUS_ALIASES = {
+    "screening": "automated-screening",
+    "discovery_only": "automated-screening",
+    "candidate_discovery": "automated-screening",
+    "partial_snapshot": "estimated",
+    "estimated_lower_bound": "estimated",
+    "warning (year_completeness < 50%)": "measured",
+    "automated-screening (DOI-only)": "automated-screening",
+    "estimated (open links only)": "estimated",
+    "structured_no_decisions": "manual-verification-required",
+    "provenance_only (no decision log)": "manual-verification-required",
+}
 
 
 def reconcile_indicator_evidence(verdict, evidence_status):
     """Apply the non-negotiable verdict/evidence semantics for one row."""
     if verdict == "not_assessable":
         return "not_assessable"
-    if verdict == "screening" or evidence_status in {"screening", "discovery_only"}:
-        # An unconfirmed standard may show computed values, but the resulting
-        # verdict is still an automated preliminary screen, not a measurement.
-        return "automated-screening"
-    return evidence_status
+    return EVIDENCE_STATUS_ALIASES.get(evidence_status, evidence_status)
+
+
+def indicator_evidence_qualifier(evidence_status):
+    """Preserve a source-specific data state without polluting the core enum."""
+    normalized = EVIDENCE_STATUS_ALIASES.get(evidence_status, evidence_status)
+    return evidence_status if evidence_status != normalized else None
 
 
 def validate_indicator_evidence(rows):
@@ -44,8 +58,6 @@ def validate_indicator_evidence(rows):
             errors.append(f"{identifier}: not_assessable verdict requires not_assessable evidence")
         elif verdict in {"pass", "warning", "fail"} and evidence == "not_assessable":
             errors.append(f"{identifier}: {verdict} verdict cannot use not_assessable evidence")
-        elif verdict == "screening" and evidence not in {"estimated", "automated-screening"}:
-            errors.append(f"{identifier}: screening verdict requires estimated or automated-screening evidence")
     return errors
 
 

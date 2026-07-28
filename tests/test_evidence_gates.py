@@ -161,3 +161,45 @@ def test_indicator_rows_never_mix_a_verdict_with_incompatible_evidence(tmp_path)
     assert rows["F1"]["evidence_status"] == "measured"
     assert rows["E2"]["meets_standard"] == rows["E2"]["evidence_status"] == "not_assessable"
     assert rows["F6"]["meets_standard"] == rows["F6"]["evidence_status"] == "not_assessable"
+
+
+def test_a2_reused_a1_file_is_marked_non_independent_and_downgraded(tmp_path):
+    shared = ROOT / "tests" / "benchmark.json"
+    result, out = run_audit(
+        tmp_path,
+        {"scope_status": "in_scope", "review_type": "systematic"},
+        "--benchmark", shared, "--gold", shared,
+    )
+    assert result.returncode == 0, result.stderr
+    report = json.loads((out / "audit.json").read_text(encoding="utf-8"))
+    rows = {row["subproject"]: row for row in report["indicator_register"]}
+    assert report["context"]["gold_independence_status"] == "same_file"
+    assert report["artifacts"]["benchmark"]["provided"] is True
+    assert report["artifacts"]["gold"]["provided"] is True
+    assert rows["A2"]["evidence_status"] == "manual-verification-required"
+    assert rows["A2"]["meets_standard"] == "screening"
+
+
+def test_unconfirmed_standard_does_not_rewrite_measured_evidence(tmp_path):
+    result, out = run_audit(
+        tmp_path,
+        {"scope_status": "in_scope", "review_type": "systematic"},
+        "--benchmark", ROOT / "tests" / "benchmark.json",
+    )
+    assert result.returncode == 0, result.stderr
+    report = json.loads((out / "audit.json").read_text(encoding="utf-8"))
+    row = next(item for item in report["indicator_register"] if item["subproject"] == "A1")
+    assert row["meets_standard"] == "screening"
+    assert row["evidence_status"] == "measured"
+    assert row["decision_status"] == "standards_unconfirmed"
+
+
+def test_missing_taxonomy_and_search_dates_do_not_make_affirmative_claims(tmp_path):
+    result, out = run_audit(tmp_path, {"scope_status": "in_scope", "review_type": "systematic"})
+    assert result.returncode == 0, result.stderr
+    report = json.loads((out / "audit.json").read_text(encoding="utf-8"))
+    rows = {row["subproject"]: row for row in report["indicator_register"]}
+    assert rows["C1"]["meets_standard"] == "not_assessable"
+    assert "cannot determine" in rows["C1"]["description_and_action"]
+    assert rows["D1"]["meets_standard"] == "not_assessable"
+    assert "cannot be assessed" in rows["D1"]["description_and_action"]
