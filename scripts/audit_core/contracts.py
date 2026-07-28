@@ -238,4 +238,16 @@ def validate_context(context):
             errors.append(f"context.{field} must be boolean when supplied")
     if "standards" in context and not isinstance(context["standards"], dict):
         errors.append("context.standards must be an object")
+    if "output_language" in context and not isinstance(context["output_language"], str):
+        errors.append("context.output_language must be a string")
+    metadata = context.get("gold_set_metadata")
+    if metadata is not None and not isinstance(metadata, dict):
+        errors.append("context.gold_set_metadata must be an object")
+    elif isinstance(metadata, dict):
+        for field in ("validation_set_source", "independence_rationale", "validation_set_frozen_at"):
+            if field in metadata and not isinstance(metadata[field], str):
+                errors.append(f"context.gold_set_metadata.{field} must be a string")
+        for field in ("dev_validation_overlap_check", "validation_set_frozen"):
+            if field in metadata and not isinstance(metadata[field], bool):
+                errors.append(f"context.gold_set_metadata.{field} must be boolean")
     return errors

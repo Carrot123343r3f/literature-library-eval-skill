@@ -173,7 +173,7 @@ def test_a2_reused_a1_file_is_marked_non_independent_and_downgraded(tmp_path):
     assert result.returncode == 0, result.stderr
     report = json.loads((out / "audit.json").read_text(encoding="utf-8"))
     rows = {row["subproject"]: row for row in report["indicator_register"]}
-    assert report["context"]["gold_independence_status"] == "same_file"
+    assert report["context"]["gold_independence_status"] == "same_records"
     assert report["artifacts"]["benchmark"]["provided"] is True
     assert report["artifacts"]["gold"]["provided"] is True
     assert rows["A2"]["evidence_status"] == "manual-verification-required"
@@ -200,6 +200,55 @@ def test_missing_taxonomy_and_search_dates_do_not_make_affirmative_claims(tmp_pa
     report = json.loads((out / "audit.json").read_text(encoding="utf-8"))
     rows = {row["subproject"]: row for row in report["indicator_register"]}
     assert rows["C1"]["meets_standard"] == "not_assessable"
-    assert "cannot determine" in rows["C1"]["description_and_action"]
+    assert "无法判断" in rows["C1"]["description_and_action"]
     assert rows["D1"]["meets_standard"] == "not_assessable"
-    assert "cannot be assessed" in rows["D1"]["description_and_action"]
+    assert "无法判断" in rows["D1"]["description_and_action"]
+
+
+def test_a2_requires_record_and_metadata_independence_for_measured_evidence(tmp_path):
+    benchmark = tmp_path / "benchmark.json"
+    gold = tmp_path / "gold.json"
+    hits = tmp_path / "hits.json"
+    benchmark.write_text(json.dumps([{"doi": "10.1000/dev"}]), encoding="utf-8")
+    gold.write_text(json.dumps([{"doi": "10.1000/validation"}]), encoding="utf-8")
+    hits.write_text(json.dumps([{"doi": "10.1000/validation"}]), encoding="utf-8")
+    result, out = run_audit(
+        tmp_path, {"scope_status": "in_scope", "review_type": "systematic"},
+        "--benchmark", benchmark, "--gold", gold, "--query-hits", hits,
+    )
+    assert result.returncode == 0, result.stderr
+    report = json.loads((out / "audit.json").read_text(encoding="utf-8"))
+    row = next(item for item in report["indicator_register"] if item["subproject"] == "A2")
+    assert report["context"]["gold_independence_status"] == "distinct_records_unverified"
+    assert row["evidence_status"] == "estimated"
+
+    context = {
+        "scope_status": "in_scope", "review_type": "systematic",
+        "gold_set_metadata": {
+            "validation_set_source": "independent review released after query development",
+            "independence_rationale": "validation records were held out from all refinement rounds",
+            "dev_validation_overlap_check": True,
+            "validation_set_frozen": True,
+            "validation_set_frozen_at": "2026-07-28",
+        },
+    }
+    result, out = run_audit(
+        tmp_path, context,
+        "--benchmark", benchmark, "--gold", gold, "--query-hits", hits,
+    )
+    assert result.returncode == 0, result.stderr
+    report = json.loads((out / "audit.json").read_text(encoding="utf-8"))
+    row = next(item for item in report["indicator_register"] if item["subproject"] == "A2")
+    assert report["context"]["gold_independence_status"] == "independence_confirmed"
+    assert row["evidence_status"] == "measured"
+    assert row["decision_status"] == "standards_unconfirmed"
+
+
+def test_decision_status_and_html_language_are_explicit(tmp_path):
+    result, out = run_audit(tmp_path, {"scope_status": "in_scope", "review_type": "systematic"})
+    assert result.returncode == 0, result.stderr
+    report = json.loads((out / "audit.json").read_text(encoding="utf-8"))
+    rows = {row["subproject"]: row for row in report["indicator_register"]}
+    assert rows["C1"]["decision_status"] == "evidence_missing"
+    assert rows["A3"]["decision_status"] == "descriptive_only"
+    assert "<html lang='zh-CN'>" in (out / "audit.html").read_text(encoding="utf-8")

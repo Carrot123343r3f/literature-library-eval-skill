@@ -334,27 +334,50 @@ def artifacts(paths):
     return result
 
 
-def gold_independence(benchmark_path, gold_path):
-    """Compare A1 and A2 inputs before paths are redacted from the report.
+def gold_independence(benchmark_path, gold_path, context):
+    """Assess A2 independence using stable-record sets and freeze metadata.
 
-    Only a coarse status is persisted: absolute paths and content hashes remain
-    local. A reused or byte-identical Gold set cannot independently strengthen
-    A1 evidence, even though A2 can still measure its retrieval.
+    File identity is intentionally not a proxy for validation independence:
+    reordered JSON or extra metadata must not bypass the gate.  No paths, IDs,
+    or hashes are persisted—only counts and a coarse status.
     """
-    if not benchmark_path or not gold_path:
-        return "not_provided"
+    assessment = {"status": "not_provided", "comparison_records": 0,
+                  "gold_records": 0, "overlap_records": 0,
+                  "metadata_verified": False}
+    if not gold_path:
+        return assessment
     try:
-        benchmark = pathlib.Path(benchmark_path).resolve()
-        gold = pathlib.Path(gold_path).resolve()
-    except OSError:
-        return "unverifiable"
-    if benchmark == gold:
-        return "same_file"
-    benchmark_hash = hash_file(benchmark)
-    gold_hash = hash_file(gold)
-    if not benchmark_hash or not gold_hash:
-        return "unverifiable"
-    return "identical_content" if benchmark_hash == gold_hash else "distinct_content"
+        gold_records = load_items(gold_path)
+        comparison_records = (load_items(benchmark_path) if benchmark_path else [])
+    except (OSError, ValueError, json.JSONDecodeError):
+        assessment["status"] = "unverifiable"
+        return assessment
+    dev_records = context.get("dev_set", [])
+    if isinstance(dev_records, list):
+        comparison_records = comparison_records + dev_records
+    gold_ids = set().union(*(ids(item) for item in gold_records if isinstance(item, dict))) if gold_records else set()
+    comparison_ids = (set().union(*(ids(item) for item in comparison_records if isinstance(item, dict)))
+                      if comparison_records else set())
+    assessment.update({"gold_records": len(gold_ids), "comparison_records": len(comparison_ids),
+                       "overlap_records": len(gold_ids & comparison_ids)})
+    if not gold_ids or not comparison_ids:
+        assessment["status"] = "unverifiable"
+        return assessment
+    if gold_ids == comparison_ids:
+        assessment["status"] = "same_records"
+        return assessment
+    if gold_ids & comparison_ids:
+        assessment["status"] = "overlapping_records"
+        return assessment
+    meta = context.get("gold_set_metadata", {})
+    required = ("validation_set_source", "independence_rationale", "validation_set_frozen_at")
+    metadata_verified = (isinstance(meta, dict)
+                         and all(isinstance(meta.get(field), str) and meta[field].strip() for field in required)
+                         and meta.get("dev_validation_overlap_check") is True
+                         and meta.get("validation_set_frozen") is True)
+    assessment["metadata_verified"] = metadata_verified
+    assessment["status"] = "independence_confirmed" if metadata_verified else "distinct_records_unverified"
+    return assessment
 
 def balance(library, standards=None):
     standards = standards or {}
@@ -759,10 +782,12 @@ def _input_evidence_table(report):
     gold_independence = "已单独提供（独立性需由 metadata 核验）" if gold_provided else "—"
 
     gold_identity = ctx.get("gold_independence_status", "not_provided")
-    if gold_identity in {"same_file", "identical_content"}:
+    if gold_identity in {"same_records", "overlapping_records"}:
         gold_independence = f"非独立：{gold_identity}"
-    elif gold_identity == "distinct_content":
-        gold_independence = "文件内容不同（仍需方法学独立性说明）"
+    elif gold_identity == "distinct_records_unverified":
+        gold_independence = "记录集不同，但未核验冻结与方法学独立性"
+    elif gold_identity == "independence_confirmed":
+        gold_independence = "记录集独立，且冻结元数据已核验"
     elif gold_identity == "unverifiable":
         gold_independence = "无法核验独立性"
 
@@ -771,7 +796,7 @@ def _input_evidence_table(report):
     lines.append("| --- | --- | --- | --- | --- |")
     lines.append(f"| 规范化文献库 | {yn(lib_provided)} | 有效（{libh.get('records','—')} 篇） | C–F、部分 A/B | 无库不能做正式评估 |")
     lines.append(f"| A1 基准集 | {yn(benchmark_provided)} | 有稳定 ID | A1 | A1 不可评估 |")
-    lines.append(f"| A2 Gold 集 | {yn(gold_provided)} | {gold_independence} | A2 | {'A2 降低证据强度' if gold_identity in {'same_file', 'identical_content'} else 'A2 不可评估' if not gold_provided else '—'} |")
+    lines.append(f"| A2 Gold 集 | {yn(gold_provided)} | {gold_independence} | A2 | {'A2 降低证据强度' if gold_identity != 'independence_confirmed' and gold_provided else 'A2 不可评估' if not gold_provided else '—'} |")
     lines.append(f"| 查询日志 (run-log) | {yn(run_log_provided)} | {run_log_valid} | F1、A2 | 检索不可复跑 |")
     lines.append(f"| 筛选决定 | {yn(bool(screening_decisions))} | {screening_status} | B | B 不可判饱和 |")
     lines.append(f"| 去重日志 (dedup-log) | {yn(dedup_provided)} | {dedup_valid} | F4 | 版本处理待核验 |")
@@ -1190,6 +1215,7 @@ def indicator_rows(report):
     # screening results, but must never become threshold pass/fail verdicts.
     user_confirmed = s.get("confirmed_by_user", False)
     is_umbrella = ctx.get("review_type") == "伞式综述"
+    is_english = str(ctx.get("output_language", "zh-CN")).lower().startswith("en")
 
     def tv(value, threshold):
         if not user_confirmed: return "screening"
@@ -1238,12 +1264,16 @@ def indicator_rows(report):
         independence = d["gold_independence_status"]
         verdict = tv(a2r, a2m)
         evidence = c["a2"].get("status")
-        if independence in {"same_file", "identical_content"}:
+        if independence in {"same_records", "overlapping_records"}:
             evidence = "manual-verification-required"
             if verdict != "screening":
                 verdict = "warning"
-        a2_dep = ("⚠ A2 非独立——Gold 与 A1 基准集复用；A1 和 A2 不能相互增强证据强度。"
-                  if independence in {"same_file", "identical_content"} else "")
+        elif independence != "independence_confirmed" and evidence == "measured":
+            evidence = "estimated"
+        a2_dep = ("⚠ A2 非独立——Gold 与 A1/开发集存在稳定 ID 重叠；A1 和 A2 不能相互增强证据强度。"
+                  if independence in {"same_records", "overlapping_records"}
+                  else " ⚠ Gold 记录集虽不同，但未提供独立冻结元数据；A2 仅为估计。"
+                  if independence == "distinct_records_unverified" else "")
         zero_hit_note = "零命中=实测 0。" if a2r == 0 and c["a2"].get("status") == "measured" else ""
         return (verdict,
                 f"{_fmt_pct(a2r)}（{_fmt_num(c['a2'].get('matched'))}/{_fmt_num(c['a2'].get('total'))}）",
@@ -1314,8 +1344,11 @@ def indicator_rows(report):
     def _c1(d):
         tc = d["tc"]; tf = d["tf"]
         if not tc:
-            return ("not_assessable", "No topic taxonomy supplied", "not_assessable",
-                    "No topic taxonomy was provided; cannot determine whether any topic is empty.")
+            return (("not_assessable", "No topic taxonomy supplied", "not_assessable",
+                     "No topic taxonomy was provided; cannot determine whether any topic is empty.")
+                    if is_english else
+                    ("not_assessable", "未提供主题分类", "not_assessable",
+                     "未提供主题分类（taxonomy），无法判断是否存在空主题。"))
         desc = (f"{'、'.join(f'{k}={v}篇' for k,v in (sorted(tc.items(), key=lambda x:-x[1]) if tc else []))}。"
                 f"{'需补：' + ', '.join(k for k,v in tc.items() if v==0) if 'empty_topic' in tf else '各主题均有文献。'}")
         opp = t.get("opposing_viewpoint_warning")
@@ -1347,8 +1380,11 @@ def indicator_rows(report):
         fdays = report.get('currency', {}).get('freshness_threshold_days', '—')
         verdict = chk(recency_checks, "D1_search_freshness")
         if verdict == "not_assessable":
-            return (verdict, "No recorded search dates", "not_assessable",
-                    "No search dates were recorded; source freshness cannot be assessed.")
+            return ((verdict, "No recorded search dates", "not_assessable",
+                     "No search dates were recorded; source freshness cannot be assessed.")
+                    if is_english else
+                    (verdict, "未记录检索日期", "not_assessable",
+                     "未记录检索日期，无法判断来源新鲜度。"))
         return (verdict,
                 "; ".join(f"{k}:{v['days_since']}天" for k,v in dsrc.items()) if dsrc else "有日期来源 0（未记录检索日期）",
                 report.get("currency", {}).get("status", "not_assessable"),
@@ -1659,11 +1695,21 @@ def write(report, out, artifact_paths=None):
     out.mkdir(parents=True, exist_ok=True)
     ctx = report.get("context", {}); h = report["library_health"]
     rows = indicator_rows(report)
+
+    def decision_status(identifier, verdict):
+        if identifier in {"A3", "E1"}:
+            return "descriptive_only"
+        if verdict == "not_assessable":
+            return "evidence_missing"
+        if verdict == "screening":
+            return "standards_unconfirmed"
+        return "standard_assessed"
+
     report["indicator_register"] = [
         {"parent_dimension": d, "subproject": c, "project_name": n,
          "standard": s, "meets_standard": v, "current_status": cur,
          "evidence_status": e, "evidence_qualifier": qualifier,
-         "decision_status": "standards_unconfirmed" if v == "screening" else "standard_assessed",
+         "decision_status": decision_status(c, v),
          "description_and_action": note}
         for d, c, n, s, v, cur, e, qualifier, note in rows]
     semantic_errors = validate_indicator_evidence(report["indicator_register"])
@@ -1739,7 +1785,9 @@ def write(report, out, artifact_paths=None):
         md.append("")
     md.append("### 局限与声明\n"); md.append("\n".join("- " + x for x in report["limitations"])); md.append("")
     markdown = "\n".join(md) + "\n"
-    (out / "audit.html").write_text(render_markdown_html(markdown, actions=action_items), encoding="utf-8")
+    (out / "audit.html").write_text(
+        render_markdown_html(markdown, actions=action_items, language=ctx.get("output_language", "zh-CN")),
+        encoding="utf-8")
     print("HTML report created: audit.html")
 
 def _validate_run_config(rc):
@@ -1857,6 +1905,8 @@ def main():
             # thresholds, or output semantics.
             p.error("run-config has validation errors (see above).")
 
+        rc_ctx_overrides["output_language"] = rc.get("output", {}).get("language", "zh-CN")
+
         scope_status = rc.get("project", {}).get("scope_status", "scope_uncertain")
         allowed_level = rc.get("project", {}).get("allowed_assessment_level", "full")
         if scope_status in ("out_of_scope", "scope_uncertain") or allowed_level == "stop":
@@ -1893,6 +1943,7 @@ def main():
                 "year_start": (rc.get("project", {}).get("time_range") or {}).get("start"),
                 "year_end": (rc.get("project", {}).get("time_range") or {}).get("end"),
                 "languages": rc.get("project", {}).get("languages", []),
+                "output_language": rc.get("output", {}).get("language", "zh-CN"),
                 "scope_status": scope_status,
             }
             user_stds = rc.get("standards", {}).get("user_overrides", {})
@@ -1916,8 +1967,13 @@ def main():
     # Carry forward scope override flag from run-config parsing
     for k, v in rc_ctx_overrides.items():
         ctx.setdefault(k, v)
+    if "output_language" in rc_ctx_overrides:
+        ctx["output_language"] = rc_ctx_overrides["output_language"]
     ctx.setdefault("library_path", a.library)
-    ctx["gold_independence_status"] = gold_independence(a.benchmark, a.gold)
+    ctx.setdefault("output_language", "zh-CN")
+    gold_assessment = gold_independence(a.benchmark, a.gold, ctx)
+    ctx["gold_independence_status"] = gold_assessment["status"]
+    ctx["gold_independence_record_check"] = gold_assessment
     ctx = resolve_thresholds(ctx)
     # Citation expansion is a built-in discovery process. Its machine-generated
     # counts stay separate from screened inclusions and B saturation evidence.
@@ -2061,6 +2117,17 @@ def main():
     elif search_meta_a2_ev == "estimated" and cov["a2"].get("status") == "measured":
         cov["a2"]["status"] = "estimated"
         cov["a2"]["note"] = (cov["a2"].get("note", "") + " No independent validation set — A2 may be overestimated (dev=val reuse).").strip()
+    # A query-hit snapshot is reproducible, but it is not proof that the Gold
+    # set was held out during search development. Only verified frozen
+    # validation metadata can retain A2's measured evidence status.
+    a2_independence = ctx.get("gold_independence_status", "not_provided")
+    if cov["a2"].get("status") == "measured" and a2_independence != "independence_confirmed":
+        cov["a2"]["status"] = ("manual-verification-required"
+                               if a2_independence in {"same_records", "overlapping_records"}
+                               else "estimated")
+        cov["a2"]["note"] = (cov["a2"].get("note", "")
+                                + f" A2 independence status: {a2_independence}; measured validation evidence is not available.").strip()
+
     # F1: parse run-log BEFORE stability() so F1_query_traceability can use the result
     if a.run_log:
         rp = pathlib.Path(a.run_log)
