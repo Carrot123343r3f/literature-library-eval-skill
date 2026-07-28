@@ -16,7 +16,7 @@ Export to RIS, BibTeX or CSV → normalize with `scripts/import_library.py` befo
 
 | Source | Status | Notes |
 |---|---|---|
-| OpenAlex | ✅ v1.0 | Open scholarly metadata and default discovery source. Automated requests require an already configured `OPENALEX_API_KEY`; the key is never requested in chat or written to outputs. |
+| OpenAlex | ✅ v1.0 | Open scholarly metadata and optional default discovery source. A missing `OPENALEX_API_KEY` does not block arXiv/Crossref/Europe PMC adapters; the key is never requested in chat or written to outputs. |
 | Crossref | 📋 v1.x | Better DOI metadata quality |
 | Semantic Scholar | 📋 v1.x | Strong AI/CS coverage, citation graph |
 | IEEE Xplore / Scopus / WoS | 📋 v2.0 | Institutional access required |

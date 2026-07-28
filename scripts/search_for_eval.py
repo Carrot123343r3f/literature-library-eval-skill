@@ -21,7 +21,7 @@ dedup_rule（去重规则），供第三方从 query-hits.json 独立复算 yiel
   用于指导多源异构语法映射——每个来源选择其支持的字段语法，不把同一字符串原样投到不同数据库。
 """
 import argparse, json, urllib.request, urllib.parse, re, time, sys, pathlib
-from collect_open_sources import load_search_authorization
+from collect_open_sources import COLLECTORS, load_search_authorization
 from credentials import CredentialError, require_openalex_api_key
 sys.stdout.reconfigure(encoding='utf-8')
 
@@ -146,12 +146,23 @@ def main():
         allowed_sources = load_search_authorization(a.run_config)
     except (ValueError, PermissionError) as exc:
         p.error(str(exc))
-    if allowed_sources is not None and "openalex" not in allowed_sources:
-        p.error("OpenAlex is not authorized by automation.allowed_sources")
-    try:
-        openalex_api_key = require_openalex_api_key()
-    except CredentialError as exc:
-        p.error(str(exc))
+    configured_sources = (list(allowed_sources) if allowed_sources is not None
+                          else ["openalex", "arxiv", "crossref", "europepmc"])
+    source_order = ["openalex", "arxiv", "crossref", "europepmc"]
+    configured_sources = [s for s in source_order if s in configured_sources]
+    selected_sources, source_notes = [], {}
+    for source in configured_sources:
+        if source == "openalex":
+            try:
+                require_openalex_api_key()
+            except CredentialError:
+                source_notes[source] = "skipped: OPENALEX_API_KEY is not configured"
+                continue
+        selected_sources.append(source)
+    if not selected_sources:
+        p.error("no usable online source: authorize arxiv/crossref/europepmc, or configure OPENALEX_API_KEY for OpenAlex")
+    if "openalex" not in selected_sources:
+        print("INFO: OpenAlex unavailable; using: " + ", ".join(selected_sources), file=sys.stderr)
 
     library = json.load(open(a.library, encoding='utf-8'))
     ctx = json.load(open(a.context, encoding='utf-8'))
@@ -220,7 +231,59 @@ def main():
     print(f'构造 {len(queries)} 条检索式，核心词: {core_terms[:3]}')
 
     all_hits, seen, queries_record, potential_add = [], set(), [], []
+    # Source adapters return the common collector shape: {items: [...]}
+    # OpenAlex contributes citation counts; other free sources contribute IDs
+    # and metadata without pretending that citation metrics are comparable.
     for label, q in queries:
+        for source in selected_sources:
+            status, note = "complete", "source-adapter"
+            try:
+                response = COLLECTORS[source](q, a.max_per_query)
+                hits = response.get("items", []) if isinstance(response, dict) else []
+                if not isinstance(hits, list):
+                    raise ValueError("source returned invalid items")
+            except Exception as exc:
+                status, hits, note = "failed", [], str(exc)[:240]
+            q_count = 0
+            for w in hits:
+                if not isinstance(w, dict):
+                    continue
+                raw_id = str(w.get("id") or "")
+                doi = str(w.get("doi") or w.get("DOI") or "").replace("https://doi.org/", "").lower()
+                if raw_id.lower().startswith("doi:") and not doi:
+                    doi = raw_id[4:].lower()
+                ax = arxiv_from_doi(doi) or w.get("arxiv") or w.get("arXiv")
+                if source == "arxiv" and raw_id and not ax:
+                    ax = raw_id.rsplit("/", 1)[-1]
+                if raw_id.lower().startswith("arxiv:") and not ax:
+                    ax = raw_id.split(":", 1)[1]
+                title = w.get("title", "") or ""
+                cited = w.get("cited_by_count")
+                stable_key = doi or ("arxiv:" + str(ax).casefold() if ax else "") or norm(title)
+                if not stable_key or stable_key in seen:
+                    continue
+                seen.add(stable_key)
+                item = {"DOI": doi, "arxiv": str(ax or ""), "title": title,
+                        "openalex_id": w.get("openalex_id", "") if source == "openalex" else "",
+                        "pmid": w.get("pmid", "") if source == "europepmc" else "",
+                        "cited_by_count": cited if isinstance(cited, (int, float)) else None,
+                        "year": w.get("year") or w.get("publication_year"),
+                        "source": source, "query_label": label}
+                all_hits.append(item); q_count += 1
+                in_lib = ((doi and doi in lib_dois) or (ax and ax in lib_arxivs)
+                          or (norm(title) in lib_titles))
+                if not in_lib and any(term in title.lower() for term in core_terms):
+                    if cited is None or cited >= a.min_cited:
+                        potential_add.append(item)
+            queries_record.append({"source": source, "query": q, "label": label,
+                                   "date": time.strftime("%Y-%m-%d"), "hits": q_count,
+                                   "status": status, "note": note})
+            print(f"  [{source}:{label}] {q[:38]:38s} -> {q_count} hits")
+            time.sleep(0.3)
+    # Keep the legacy loop unreachable while downstream consumers migrate to
+    # the adapter-shaped query records above.
+    queries = []
+    for label, q in []:
         url = (f'https://api.openalex.org/works?search={urllib.parse.quote(q)}'
                f'&per-page={a.max_per_query}&sort=cited_by_count:desc&api_key={urllib.parse.quote(openalex_api_key)}')
         r = get(url)
@@ -285,7 +348,7 @@ def main():
     # ── B saturation ──
     lib_size = len(library)
     discovery_candidate_count = len(potential_add)
-    search_rounds = [{'pathway': 'openalex-first-round', 'completed': True,
+    search_rounds = [{'pathway': 'multi-source-first-round', 'completed': True,
                       'core_before': lib_size, 'included_high': 0,
                       'discovery_candidates': discovery_candidate_count,
                       'screening_status': 'discovery_only',
@@ -312,7 +375,7 @@ def main():
 
     out = pathlib.Path(a.out); out.mkdir(parents=True, exist_ok=True)
     json.dump(all_hits, open(out / 'query-hits.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
-    potential_add.sort(key=lambda x: -x.get('cited_by_count', 0))
+    potential_add.sort(key=lambda x: -(x.get('cited_by_count') or 0))
     json.dump({'first_round_discovery_rate': discovery_ggr,
                'discovery_candidate_count': len(potential_add),
                'included_high': 0,
@@ -333,7 +396,9 @@ def main():
             a2_note += f' 无独立验证集——A2 使用 {dev_source}，可能被高估（dev=val 复用）。建议补充独立验证集。'
 
     json.dump({'queries': queries_record, 'search_rounds': search_rounds,
-               'planned_pathways': ['openalex-first-round'],
+               'planned_pathways': [f'{source}-first-round' for source in selected_sources],
+               'sources_used': selected_sources,
+               'source_notes': source_notes,
                'source_marginal_yields': marginal,
                'a2': {'matched_items': a2_matched_items,
                       'title_candidates': a2_title_candidates,

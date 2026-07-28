@@ -45,7 +45,7 @@ S3 确认完成 → SRCH-1 工程 PICO 分解 → SRCH-2 构建开发集+验证�
 
 ### 首次评估简化流程
 
-> ⚠️ `search_for_eval.py` 是**单轮诊断性检索器**，仅通过 OpenAlex API 做首轮 top-50 cited 候选发现，不是完整的多源系统综述检索器。它提供 dev_recall/validation_recall 的诊断估计和 discovery candidates，但**不具备以下能力**：不覆盖 OpenAlex 以外的数据库、不做引文追踪、不做独立路径发现、不做筛选确认。discovery candidates 不等于纳入项——只有经过标题/摘要/全文筛选确认后的新增文献才能填入 B1 GGR 分子和 B2 DRR 分子。第2-5轮及以上的迭代检索、多源异构语法映射、独立路径执行（引文追踪等）由 AI agent 在对话中手动执行，而非由此脚本自动完成。
+> ⚠️ `search_for_eval.py` 是**单轮诊断性检索器**，按 `allowed_sources` 调用 OpenAlex、arXiv、Crossref 或 Europe PMC；OpenAlex 无 Key 时会自动跳过并使用已授权的其他来源，不是完整的多源系统综述检索器。它提供 dev_recall/validation_recall 的诊断估计和 discovery candidates，但**不具备以下能力**：不做引文追踪、不做独立路径发现、不做筛选确认。不同来源的引用计数不可直接比较；没有引用计数的来源只提供 ID/题录发现。discovery candidates 不等于纳入项——只有经过标题/摘要/全文筛选确认后的新增文献才能填入 B1 GGR 分子和 B2 DRR 分子。第2-5轮及以上的迭代检索、多源异构语法映射、独立路径执行（引文追踪等）由 AI agent 在对话中手动执行，而非由此脚本自动完成。
 
 1. 通过 `scripts/search_for_eval.py` 执行首轮检索（带 `--dev-set` 和 `--pico` 参数）
 2. 读取 `search_meta.json` 获取 `dev_recall` 和 `validation_recall`
@@ -89,7 +89,7 @@ S3 确认完成 → SRCH-1 工程 PICO 分解 → SRCH-2 构建开发集+验证�
 - `scripts/run_paper_evaluation.py` — 单篇文献证据评价 V2（资格、研究类型、方法、复核性、完整性、贡献与候选）
 - `scripts/credentials.py` — 从已配置环境读取外部来源凭据；密钥永不写入报告、manifest 或对话
 - `scripts/artifact_manifest.py` — 独立模块的脱敏输入副本、哈希与步骤状态
-- `scripts/search_for_eval.py` — 单轮 OpenAlex 诊断检索（支持 `--dev-set`/`--validation-set`/`--pico`）；必须传入已确认的 `--run-config`，并受 `automation.allow_search` 与 `allowed_sources` 约束
+- `scripts/search_for_eval.py` — 单轮多源诊断检索（支持 `--dev-set`/`--validation-set`/`--pico`）；必须传入已确认的 `--run-config`，并受 `automation.allow_search` 与 `allowed_sources` 约束
 - `scripts/search_iterator.py` — 多轮原子迭代验证与同步（`validate` + `table` + `sync` 命令）
 - `scripts/collect_open_sources.py` — 多源快照收集；必须传入已确认的 `--run-config`，且仅在 `automation.allow_search = true` 时执行，并遵守 `allowed_sources`
 - `scripts/normalize_candidates.py` — 去重 + 版本族识别

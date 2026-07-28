@@ -254,7 +254,7 @@ This keeps the evidence boundaries explicit: `metadata_priority` means “read/v
 
 Single-paper mode performs authorized metadata enrichment by default when `automation.allow_search=true`. Use `--external-candidates saved.json` for an offline candidate snapshot, `--external-search` for live candidate discovery, or `--offline` only after the user explicitly chooses fully local execution.
 
-External discovery uses OpenAlex only when `automation.allow_search=true`, `openalex` is permitted by `automation.allowed_sources`, and an already configured `OPENALEX_API_KEY` is available. If the query cannot run, the command exits with an error and writes `paper-evaluation-error.json`; it does not emit a fabricated external Top 20. A saved candidate snapshot can be supplied with `--external-candidates` for reproducible/offline reruns.
+The search diagnostic uses every source authorized in `automation.allowed_sources`: OpenAlex, arXiv, Crossref, and Europe PMC. OpenAlex is used when an `OPENALEX_API_KEY` is configured; without it, authorized free-source adapters can still run. Citation counts are only used when the selected source provides them, and source coverage is recorded in `search_meta.json`. Paper-evaluation external discovery remains OpenAlex-specific and requires its separate permission and key. A saved candidate snapshot can be supplied with `--external-candidates` for reproducible/offline reruns.
 
 ## Roadmap
 

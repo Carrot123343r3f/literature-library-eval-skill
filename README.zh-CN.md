@@ -240,7 +240,7 @@ git clone https://github.com/Carrot123343r3f/literature-library-eval-skill.git `
 python scripts/run_paper_evaluation.py --library library.json --context context.json --run-config run-config.json --out paper-evaluation
 ```
 
-外部候选默认使用 OpenAlex 自动检索，要求 `automation.allow_search=true`、`automation.allowed_sources` 包含 `openalex`，并在已配置环境中提供 `OPENALEX_API_KEY`。检索失败会退出并生成 `paper-evaluation-error.json`，不会虚构“全网 Top 20”。使用 `--external-candidates` 可基于已保存的候选快照离线复跑。
+检索诊断会使用 `automation.allowed_sources` 中授权的 OpenAlex、arXiv、Crossref 和 Europe PMC。配置 `OPENALEX_API_KEY` 时使用 OpenAlex；没有 Key 时，只要授权了其他免费来源，仍可联网检索。只有来源提供引用计数时才使用该指标，实际来源和覆盖范围会写入 `search_meta.json`。单篇论文外部候选发现仍专用 OpenAlex，需要单独权限和 Key。使用 `--external-candidates` 可基于已保存的候选快照离线复跑。
 
 ## 路线图
 

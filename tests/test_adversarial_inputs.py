@@ -92,3 +92,26 @@ def test_archived_json_inputs_are_redacted(tmp_path):
     for path in (tmp_path / "audit").rglob("*"):
         if path.is_file():
             assert "DO_NOT_ARCHIVE" not in path.read_text(encoding="utf-8", errors="ignore")
+
+
+def test_search_diagnostic_falls_back_to_arxiv_without_openalex_key(tmp_path, monkeypatch):
+    import search_for_eval as module
+
+    library = tmp_path / "library.json"
+    context = tmp_path / "context.json"
+    out = tmp_path / "search"
+    library.write_text("[]", encoding="utf-8")
+    context.write_text(json.dumps({"keywords": ["robot localization"]}), encoding="utf-8")
+    monkeypatch.setattr(module, "load_search_authorization", lambda _: {"arxiv"})
+    monkeypatch.setitem(module.COLLECTORS, "arxiv", lambda query, limit: {
+        "items": [{"id": "arxiv:2401.00001", "title": "Robot localization"}]
+    })
+    monkeypatch.setattr(module.time, "sleep", lambda _: None)
+    monkeypatch.setattr(sys, "argv", ["search_for_eval.py", "--library", str(library),
+                                       "--run-config", "unused.json", "--context", str(context),
+                                       "--out", str(out), "--max-per-query", "1"])
+    module.main()
+    hits = json.loads((out / "query-hits.json").read_text(encoding="utf-8"))
+    meta = json.loads((out / "search_meta.json").read_text(encoding="utf-8"))
+    assert hits and hits[0]["source"] == "arxiv"
+    assert meta["sources_used"] == ["arxiv"]

@@ -120,9 +120,9 @@ def init_config_v2(args):
     if local_only:
         allow = False; discover = False; citations = False
     allow_search = allow or discover or citations
-    sources = [item.strip().lower() for item in input("Allowed sources (comma-separated, default openalex): ").split(",") if item.strip()] if allow_search else []
+    sources = [item.strip().lower() for item in input("Allowed sources (comma-separated, default openalex,arxiv,crossref,europepmc): ").split(",") if item.strip()] if allow_search else []
     if allow_search and not sources:
-        sources = ["openalex"]
+        sources = ["openalex", "arxiv", "crossref", "europepmc"]
     unknown_sources = sorted(set(sources) - SUPPORTED_SOURCES)
     if unknown_sources:
         raise SystemExit(f"ERROR: unsupported source(s): {', '.join(unknown_sources)}")
