@@ -50,6 +50,27 @@ def check_json():
     return errors
 
 
+def check_delivery_contract():
+    """Keep user-facing examples aligned with the HTML-only delivery policy."""
+    errors = []
+    for relative in ("example-all-modules-report/README.md", "example-all-modules-report/index.md"):
+        path = ROOT / relative
+        text = path.read_text(encoding="utf-8")
+        if "paper-evaluation.md" in text:
+            errors.append(f"{relative} exposes a removed Markdown report")
+        if text.count("audit/audit.html") != 1:
+            errors.append(f"{relative} must expose exactly one audit HTML entry")
+    outputs = (ROOT / "docs" / "outputs.md").read_text(encoding="utf-8")
+    if outputs.count("├── audit.html") != 1:
+        errors.append("docs/outputs.md must describe audit.html exactly once")
+    for path in ROOT.rglob("*.md"):
+        try:
+            path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            errors.append(f"{path.relative_to(ROOT)} is not valid UTF-8")
+    return errors
+
+
 def check_scripts():
     errors = []
     for name in ("optimization.py", "quality_optimization.py", "experiment_attribution.py", "evalset_audit.py", "search_iterator.py", "query_compiler.py", "auto_triage.py", "autopilot.py", "citation_seed_plan.py", "run_full_audit.py", "run_audit.py", "check_consistency.py"):
@@ -95,7 +116,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--strict", action="store_true", help="reserved for CI compatibility")
     parser.parse_args()
-    errors = check_references() + check_example_links() + check_json() + check_scripts()
+    errors = check_references() + check_example_links() + check_json() + check_delivery_contract() + check_scripts()
     if errors:
         print("CONSISTENCY FAILED")
         print("\n".join(f"- {error}" for error in errors))

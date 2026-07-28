@@ -17,7 +17,7 @@
 - `next-actions.json` 恢复行动清单
 - 单文章证据评价
 - 外部候选发现与人工筛选边界
-- Markdown、HTML、JSON、manifest 和输入快照
+- HTML、JSON、manifest 和输入快照
 
 建议先看：
 

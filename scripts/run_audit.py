@@ -4,6 +4,7 @@ import argparse, datetime as dt, hashlib, html, json, pathlib, re, shutil, sys, 
 from collections import Counter
 from math import log
 from audit_core.contracts import compact as _shared_compact, public_value as _shared_public_value, validate_context as _validate_context, validate_run_config as _shared_validate_run_config
+from audit_core.coverage import evaluate_gold_recall, evaluate_multisource_lower_bound
 from audit_core.rendering import render_markdown_html
 
 # Review-type → default thresholds (narrative / systematic / scoping / rapid / umbrella)
@@ -143,6 +144,7 @@ def a2(gold, hits):
     Each gold item that shares any stable ID with any hit => matched.
     This avoids double-counting when one item has multiple identifiers.
     """
+    return evaluate_gold_recall(gold, hits, ids)
     if gold is None or hits is None:
         return {"status": "not_assessable", "recall": None, "note": "Supply both gold set and executed query-hit snapshot."}
     hit_ids = set().union(*(ids(x) for x in hits if isinstance(x, dict)))
@@ -157,6 +159,7 @@ def a2(gold, hits):
             "note": "Item-level match (any shared stable ID → matched). Consistent with A1 method. An executed zero-result query is measured recall 0, not unavailable evidence."}
 
 def a3(sources):
+    return evaluate_multisource_lower_bound(sources, ids)
     if not sources or len(sources) < 2:
         return {"status": "not_assessable", "note": "Supply deduplicable snapshots from at least two sources."}
     incomplete = sorted(name for name, meta in sources.items()
