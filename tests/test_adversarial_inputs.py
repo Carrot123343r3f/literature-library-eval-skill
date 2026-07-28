@@ -102,7 +102,7 @@ def test_search_diagnostic_falls_back_to_arxiv_without_openalex_key(tmp_path, mo
     out = tmp_path / "search"
     library.write_text("[]", encoding="utf-8")
     context.write_text(json.dumps({"keywords": ["robot localization"]}), encoding="utf-8")
-    monkeypatch.setattr(module, "load_search_authorization", lambda _: {"arxiv"})
+    monkeypatch.setattr(module, "load_search_authorization", lambda _path, required_permission=None: {"arxiv"})
     monkeypatch.setitem(module.COLLECTORS, "arxiv", lambda query, limit: {
         "items": [{"id": "arxiv:2401.00001", "title": "Robot localization"}]
     })
@@ -122,7 +122,7 @@ def test_autopilot_offline_runs_one_command_and_writes_triage_manifest(tmp_path)
     library.write_text(json.dumps([{"title": "Robot localization", "DOI": "10.1000/example"}]), encoding="utf-8")
     out = tmp_path / "autopilot"
     result = invoke("autopilot.py", "--question", "robot localization", "--library", library,
-                    "--out", out, "--offline")
+                    "--out", out, "--offline", "--scope-status", "in_scope")
     assert result.returncode == 0, result.stderr
     assert (out / "audit" / "audit.html").is_file()
     assert (out / "autopilot-manifest.json").is_file()

@@ -1,0 +1,590 @@
+{
+  "generated_at": "2026-07-28T07:54:04.233974+00:00",
+  "standards": {
+    "confirmed_by_user": true,
+    "a1_min_recall": 0.9,
+    "a2_min_recall": 0.85,
+    "f_access_rate": 0.8,
+    "f_provenance_rate": 0.95,
+    "f_core_metadata_rate": 0.95,
+    "f_abstract_rate": 0.85,
+    "d_freshness_days": 30,
+    "b_ggr_threshold": 0.02,
+    "b_drr_threshold": 0.05,
+    "balance_top_share_warning": 0.8,
+    "balance_cv_warning": 1.0,
+    "balance_gini_warning": 0.6,
+    "balance_shannon_low_warning": 0.45,
+    "balance_shannon_high_warning": 0.95,
+    "topic_top_share_warning": 0.7,
+    "topic_cv_warning": 0.8,
+    "topic_gini_warning": 0.5,
+    "topic_shannon_low_warning": 0.55,
+    "topic_target_tvd_warning": 0.25,
+    "topic_min_sources": 2,
+    "topic_source_top_share_warning": 0.8
+  },
+  "context": {
+    "review_type": "系统综述",
+    "profile": "computer_ai",
+    "year_start": 2020,
+    "year_end": 2026,
+    "languages": [
+      "en"
+    ],
+    "scope_status": "in_scope",
+    "standards": {
+      "confirmed_by_user": true,
+      "a1_min_recall": 0.9,
+      "a2_min_recall": 0.85,
+      "f_access_rate": 0.8,
+      "f_provenance_rate": 0.95,
+      "f_core_metadata_rate": 0.95,
+      "f_abstract_rate": 0.85,
+      "d_freshness_days": 30,
+      "b_ggr_threshold": 0.02,
+      "b_drr_threshold": 0.05,
+      "balance_top_share_warning": 0.8,
+      "balance_cv_warning": 1.0,
+      "balance_gini_warning": 0.6,
+      "balance_shannon_low_warning": 0.45,
+      "balance_shannon_high_warning": 0.95,
+      "topic_top_share_warning": 0.7,
+      "topic_cv_warning": 0.8,
+      "topic_gini_warning": 0.5,
+      "topic_shannon_low_warning": 0.55,
+      "topic_target_tvd_warning": 0.25,
+      "topic_min_sources": 2,
+      "topic_source_top_share_warning": 0.8
+    },
+    "library_path": "library.json",
+    "evidence_validation": {
+      "context_claims": "self_reported",
+      "independent_validation": "not_provided"
+    },
+    "independent_validation_passed": null,
+    "run_log_query_count": 2,
+    "run_log_valid_count": 2,
+    "run_log_completeness": 1.0,
+    "run_log_complete": true,
+    "run_log_depth": "valid_full"
+  },
+  "library_health": {
+    "status": "measured",
+    "records": 4,
+    "field_completeness": {
+      "title": 1.0,
+      "creators": 1.0,
+      "date": 1.0,
+      "publicationTitle": 1.0,
+      "abstractNote": 1.0,
+      "DOI": 0.75,
+      "url": 0.5
+    },
+    "checks": {
+      "F_metadata_composite": "fail",
+      "F4_exact_duplicates": "pass",
+      "F4_version_decisions": "pass",
+      "F3_access": "warning",
+      "F5_provenance": "pass",
+      "F6_corrections": "not_assessable"
+    },
+    "duplicate_doi_groups": 0,
+    "duplicate_title_year_groups": 0,
+    "attachment_rate": 0.0,
+    "open_link_rate": 0.25,
+    "access_union_rate": 0.25,
+    "provenance_rate": 1.0,
+    "correction_flag_records": 0,
+    "decision_link_rate": 0.0,
+    "decision_log_provided": true,
+    "dedup_log_depth": "structured_decisions",
+    "f5_note": "来源谱系 + 纳入/排除决定均可追溯。未提供主题分类（taxonomy）——库的纳入决定未按主题分组，后续综述存在\"逐篇流水账\"风险（descriptive listing），建议引入主题框架以支撑批判性综合",
+    "note": "F3=v 附件或开放链接任一可用的记录比例；两率分列展示以避免重复计数。版本族等价性、访问权限和更正状态需专项来源核验。F5 需 decision-log 以追溯纳入/排除理由。"
+  },
+  "coverage": {
+    "a1": {
+      "status": "measured",
+      "total": 3,
+      "matched": 2,
+      "recall": 0.667,
+      "missing_ids": [
+        "doi:10.1000/missing-anchor"
+      ],
+      "manual_title_candidates": [],
+      "note": "Only stable identifiers contribute to measured recall."
+    },
+    "a2": {
+      "status": "measured",
+      "total": 3,
+      "matched": 3,
+      "recall": 1.0,
+      "missing_ids": [],
+      "note": "Item-level match (any shared stable ID → matched). Consistent with A1 method. An executed zero-result query is measured recall 0, not unavailable evidence."
+    },
+    "a3": {
+      "status": "estimated_lower_bound",
+      "deduplicated_candidate_lower_bound": 4,
+      "source_unique_identifier_counts": {
+        "openalex": 3,
+        "crossref": 3
+      },
+      "pairwise_overlaps": {
+        "crossref|openalex": 2
+      },
+      "incomplete_sources": [],
+      "boundaries_valid": true,
+      "dedup_rule_valid": true,
+      "note": "Multi-source deduplicated lower bound; not Recall or capture-recapture."
+    }
+  },
+  "process": {
+    "status": "not_assessable",
+    "high_confidence_new_rates": [],
+    "discovery_candidates_total": 0,
+    "candidate_discovery": {
+      "status": "not_assessable",
+      "ggr_rates": [],
+      "pathway_yields": [],
+      "completed_pathways": 0,
+      "planned_pathways": 0,
+      "pathway_completion": null,
+      "candidates_total": 0
+    },
+    "pathway_completion": null,
+    "source_marginal_yields": [],
+    "required_independent_pathways": 4,
+    "valid_independent_pathways": 0,
+    "thresholds": {
+      "new_rate": 0.02,
+      "marginal_yield": 0.05
+    },
+    "checks": {
+      "B1_ggr": "not_assessable",
+      "B3_pathway_completion": "not_assessable",
+      "B2_drr": "not_assessable",
+      "F1_query_traceability": "pass",
+      "B3_independent_validation": "not_assessable"
+    },
+    "independent_validation_passed": null,
+    "verdict": "不可证明"
+  },
+  "balance": {
+    "status": "measured",
+    "counts": {
+      "IEEE": 1,
+      "OpenAlex": 1,
+      "RSS": 1,
+      "arXiv": 1
+    },
+    "top_source_share": 0.25,
+    "cv": 0.0,
+    "gini": 0.0,
+    "shannon": 1.386,
+    "normalized_shannon": 1.0,
+    "limits": {
+      "top_share": 0.8,
+      "cv": 1.0,
+      "gini": 0.6,
+      "shannon_low": 0.45,
+      "shannon_high": 0.95
+    },
+    "flags": [],
+    "high_shannon_note": "Hn=1.000>0.95，来源高度碎片化——建议检查是否混入异质数据库或非相关来源，不代表平衡性不合格",
+    "author_concentration": null,
+    "checks": {
+      "C2_source_balance": "pass"
+    }
+  },
+  "topic_balance": {
+    "status": "not_assessable",
+    "checks": {
+      "C1_topic_balance": "not_assessable",
+      "C3_topic_source_balance": "not_assessable"
+    }
+  },
+  "currency": {
+    "status": "not_assessable",
+    "freshness_threshold_days": 30,
+    "sources": {},
+    "missing_planned_sources": [],
+    "checks": {
+      "D1_freshness": "not_assessable"
+    },
+    "note": "Report every successful source date."
+  },
+  "recency": {
+    "status": "measured",
+    "window_years": 3,
+    "minimum_share": 0.4,
+    "dated_records": 4,
+    "recent_records": 3,
+    "recent_share": 0.75,
+    "year_completeness": 1.0,
+    "preprint_records": 0,
+    "checks": {
+      "D1_search_freshness": "not_assessable",
+      "D2_recent_share": "pass",
+      "D3_frontier": "not_assessable",
+      "D4_versions_preprints": "not_assessable"
+    }
+  },
+  "quality": {
+    "status": "measured",
+    "citation_records": 4,
+    "h_core": 4,
+    "tier1_venues_configured": 0,
+    "tier1_records": null,
+    "tier1_rate": null,
+    "checks": {
+      "E1_h_core": "screening",
+      "E2_tier1": "not_assessable"
+    }
+  },
+  "umbrella": {
+    "a4": null,
+    "c4": null,
+    "f7": null
+  },
+  "artifacts": {
+    "query-plan": {
+      "provided": false,
+      "source_filename": null
+    },
+    "source-snapshot": {
+      "provided": false,
+      "source_filename": null
+    },
+    "decision-log": {
+      "provided": true,
+      "source_filename": "decision-log.json"
+    },
+    "deduplication-log": {
+      "provided": true,
+      "source_filename": "deduplication-log.json"
+    },
+    "run-log": {
+      "provided": true,
+      "source_filename": "run-log.json"
+    },
+    "search-iterations": {
+      "provided": false,
+      "source_filename": null
+    }
+  },
+  "summary": "评估完成（2026-07-28 07:54:04）。库规模 4 篇，综述类型 系统综述，工程领域 computer_ai。 未检测到阻断项。\n\nA1 基准集召回 66.7%（2/3），A3 多源下界 4 篇，B 饱和度 不可证明，C 主题平衡 正常，D 近年占比 75.0%，E h-core=4，F 摘要覆盖 100.0%。 各维度不合成总分；\"不可评估\"不是失败。",
+  "limitations": [
+    "本报告中的各项阈值均为基于工程文献计量经验的参考值，旨在辅助识别可能的风险信号，不等于文献库质量的绝对标准。pass/warning/fail 是自动化诊断提示，不是质量裁决，所有结论均应结合具体研究问题和领域惯例做人工判断。",
+    "A3 下界不是 Recall；区间需另行声明模型假设。",
+    "主题平衡、版本等价性、研究设计和更正状态需人工或专门来源核验。",
+    "h-core 和 Tier-1 仅作诊断背景，不等于综述质量。",
+    "未提供的运行产物会明确标为缺失。"
+  ],
+  "scope_routing": {
+    "status": "standard",
+    "scope_status": "in_scope"
+  },
+  "indicator_register": [
+    {
+      "parent_dimension": "覆盖 (Coverage)",
+      "subproject": "A1",
+      "project_name": "基准集召回率",
+      "standard": "阈值 ≥ 0.9",
+      "meets_standard": "fail",
+      "current_status": "66.7%（2/3）",
+      "evidence_status": "measured",
+      "description_and_action": "A1 高只说明找回了锚点，不等于主题无遗漏。实测 2/3（66.7%）。漏项：doi:10.1000/missing-anchor"
+    },
+    {
+      "parent_dimension": "覆盖 (Coverage)",
+      "subproject": "A2",
+      "project_name": "检索式灵敏度",
+      "standard": "阈值 ≥ 0.85",
+      "meets_standard": "pass",
+      "current_status": "100.0%（3/3）",
+      "evidence_status": "measured",
+      "description_and_action": "A2 高只说明检索式能找回 Gold，不等于 Gold 足够代表问题。实测 100.0%。"
+    },
+    {
+      "parent_dimension": "覆盖 (Coverage)",
+      "subproject": "A3",
+      "project_name": "多源候选下界",
+      "standard": "至少两完整来源去重后的不重复候选数；只报告下界",
+      "meets_standard": "screening",
+      "current_status": "至少 4 篇不重复候选（openalex, crossref）",
+      "evidence_status": "estimated",
+      "description_and_action": "至少 4 篇——'至少有多少篇相关文献存在于这些来源中'。不是 Recall，也不是'漏了多少'。来源完整。"
+    },
+    {
+      "parent_dimension": "饱和度 (Saturation)",
+      "subproject": "B1",
+      "project_name": "核心库增长率 (GGR)",
+      "standard": "正式：最后两轮均 < 0.02；AI 候选层仅展示，不作趋稳判定",
+      "meets_standard": "not_assessable",
+      "current_status": "正式 GGR：已完成筛选轮次 0/2（尚无正式 GGR）；AI 候选 GGR：未执行 AI 候选检索",
+      "evidence_status": "not_assessable",
+      "description_and_action": "AI 候选 GGR=发现候选/轮次开始前核心库，只用于首轮补充和后续筛选排序，不能替代正式 GGR。B 趋稳仅在筛选决策真实、路径独立且多轮完成时才成立。GGR=需要至少两轮 search round。高置信新增/核心库。"
+    },
+    {
+      "parent_dimension": "饱和度 (Saturation)",
+      "subproject": "B2",
+      "project_name": "新增路径发现率 (DRR)",
+      "standard": "正式：各独立路径均 < 0.05；AI 候选层仅展示，不作趋稳判定",
+      "meets_standard": "not_assessable",
+      "current_status": "正式：已验证独立路径 0/4；AI 候选路径发现率：未执行 AI 候选路径",
+      "evidence_status": "not_assessable",
+      "description_and_action": "AI 候选路径发现率=该路径新候选/该路径候选，只用于首轮补充；正式 DRR 必须以筛选确认的纳入项复算。正式边际收益：[]。新路径高置信文献/候选量。"
+    },
+    {
+      "parent_dimension": "饱和度 (Saturation)",
+      "subproject": "B3",
+      "project_name": "饱和过程证据",
+      "standard": "正式：路径完成且独立验证通过；AI 候选层仅展示执行进度",
+      "meets_standard": "not_assessable",
+      "current_status": "正式路径 0/4（未提供完成路径） ／ 独立验证 未提供；AI 候选执行 未执行 AI 候选检索",
+      "evidence_status": "not_assessable",
+      "description_and_action": "AI 候选执行率仅说明自动补充检索是否完成，不是独立验证。结论：**不可证明**。仅低 GGR/DRR 不够——需路径完成+独立验证+筛选真实同时成立。"
+    },
+    {
+      "parent_dimension": "平衡 (Balance)",
+      "subproject": "C1",
+      "project_name": "主题覆盖与偏斜",
+      "standard": "无空主题；Top≤0.70；CV≤0.80；Gini≤0.50；Shannon≥0.55",
+      "meets_standard": "not_assessable",
+      "current_status": "0 主题 ／ 无空主题",
+      "evidence_status": "not_assessable",
+      "description_and_action": "。各主题均有文献。"
+    },
+    {
+      "parent_dimension": "平衡 (Balance)",
+      "subproject": "C2",
+      "project_name": "来源集中度",
+      "standard": "Top≤0.80；CV≤1.00；Gini≤0.60；Shannon≥0.45",
+      "meets_standard": "pass",
+      "current_status": "Top=25.0% ／ CV=0.0 ／ Gini=0.0 ／ Hn=1.0",
+      "evidence_status": "measured",
+      "description_and_action": "最大来源占比 25.0%。来源分布合理。 Hn=1.000>0.95，来源高度碎片化——建议检查是否混入异质数据库或非相关来源，不代表平衡性不合格"
+    },
+    {
+      "parent_dimension": "平衡 (Balance)",
+      "subproject": "C3",
+      "project_name": "主题-来源交叉",
+      "standard": "每主题 ≥2 来源；单一来源 ≤0.80",
+      "meets_standard": "not_assessable",
+      "current_status": "—",
+      "evidence_status": "not_assessable",
+      "description_and_action": "未提供 topic_source_counts。"
+    },
+    {
+      "parent_dimension": "时效 (Recency)",
+      "subproject": "D1",
+      "project_name": "来源新鲜度",
+      "standard": "各来源距检索 ≤ 30 天",
+      "meets_standard": "not_assessable",
+      "current_status": "有日期来源 0（未记录检索日期）",
+      "evidence_status": "not_assessable",
+      "description_and_action": "0 个来源有日期。来源在新鲜度窗口内。"
+    },
+    {
+      "parent_dimension": "时效 (Recency)",
+      "subproject": "D2",
+      "project_name": "近年文献比例",
+      "standard": "近 3 年占比 ≥ 40.0%",
+      "meets_standard": "pass",
+      "current_status": "75.0%（3/4 有日期）",
+      "evidence_status": "measured",
+      "description_and_action": "近 3 年占比 75.0%。阈值按 profile：AI/通信 3年40%、常规 5年35%、基础设施 7年30%。达标。年份字段完整率 100.0%；<50% 时 D2 自动降级为 warning。"
+    },
+    {
+      "parent_dimension": "时效 (Recency)",
+      "subproject": "D3",
+      "project_name": "前沿覆盖",
+      "standard": "/",
+      "meets_standard": "not_assessable",
+      "current_status": "独立前沿检索证据 0 条（未提供）",
+      "evidence_status": "not_assessable",
+      "description_and_action": "前沿覆盖需 context.frontier_coverage_verdict。近期发表不等于前沿覆盖。"
+    },
+    {
+      "parent_dimension": "时效 (Recency)",
+      "subproject": "D4",
+      "project_name": "版本区分",
+      "standard": "/",
+      "meets_standard": "not_assessable",
+      "current_status": "预印本 0 条",
+      "evidence_status": "not_assessable",
+      "description_and_action": "0 条预印本。未核验版本关系。"
+    },
+    {
+      "parent_dimension": "学术影响 (Impact Signals)",
+      "subproject": "E1",
+      "project_name": "h-core",
+      "standard": "报告 h-index；仅背景信号",
+      "meets_standard": "screening",
+      "current_status": "h=4（4 条引用）",
+      "evidence_status": "measured",
+      "description_and_action": "h-core=4。仅背景信号——高被引不等于高质量，新论文拉低 h-core。真正的研究质量评估应使用与研究设计匹配的批判性评价工具。"
+    },
+    {
+      "parent_dimension": "学术影响 (Impact Signals)",
+      "subproject": "E2",
+      "project_name": "Tier-1 覆盖",
+      "standard": "按 profile 配置 venue 映射",
+      "meets_standard": "not_assessable",
+      "current_status": "—（—/0 venue）",
+      "evidence_status": "measured",
+      "description_and_action": "已配置 0 个 venue。未配置 tier1_venues。"
+    },
+    {
+      "parent_dimension": "可用性 (Usability)",
+      "subproject": "F1",
+      "project_name": "检索可复跑",
+      "standard": "查询原文、字段、过滤器、日期、来源齐全",
+      "meets_standard": "pass",
+      "current_status": "run log 100.0% 完整（2/2 条合格）",
+      "evidence_status": "not_assessable",
+      "description_and_action": "全部 2 条查询均含必要字段。"
+    },
+    {
+      "parent_dimension": "可用性 (Usability)",
+      "subproject": "F2",
+      "project_name": "摘要覆盖率",
+      "standard": "≥ 0.85",
+      "meets_standard": "pass",
+      "current_status": "100.0%",
+      "evidence_status": "measured",
+      "description_and_action": "摘要率 100.0%。达标。"
+    },
+    {
+      "parent_dimension": "可用性 (Usability)",
+      "subproject": "F3",
+      "project_name": "全文获取率",
+      "standard": "≥ 0.8",
+      "meets_standard": "warning",
+      "current_status": "25.0%",
+      "evidence_status": "measured",
+      "description_and_action": "附件 0.0% | 开放链接 25.0% | 联合 25.0%。低于阈值。联合=v 附件或开放链接任一可用的记录比例，避免同一记录双渠道重复计数。"
+    },
+    {
+      "parent_dimension": "可用性 (Usability)",
+      "subproject": "F4",
+      "project_name": "去重与版本",
+      "standard": "DOI 精确重复=0；版本候选有决定",
+      "meets_standard": "pass",
+      "current_status": "DOI 重复 0 组 ／ 题名候选 0 组 ／ 深度 structured_decisions",
+      "evidence_status": "measured",
+      "description_and_action": "DOI 重复 0 组。无精确重复。题名相似候选 0 组（版本决定已保存（structured_decisions）。）"
+    },
+    {
+      "parent_dimension": "可用性 (Usability)",
+      "subproject": "F5",
+      "project_name": "来源可追溯",
+      "standard": "≥ 0.95",
+      "meets_standard": "pass",
+      "current_status": "100.0%",
+      "evidence_status": "measured",
+      "description_and_action": "来源谱系 + 纳入/排除决定均可追溯。未提供主题分类（taxonomy）——库的纳入决定未按主题分组，后续综述存在\"逐篇流水账\"风险（descriptive listing），建议引入主题框架以支撑批判性综合"
+    },
+    {
+      "parent_dimension": "可用性 (Usability)",
+      "subproject": "F6",
+      "project_name": "撤稿更正核查",
+      "standard": "/",
+      "meets_standard": "not_assessable",
+      "current_status": "标记 0 条",
+      "evidence_status": "measured",
+      "description_and_action": "0 条标记。未经专门来源核验。"
+    }
+  ],
+  "manifest": {
+    "schema_version": "1.0",
+    "generated_at": "2026-07-28T07:54:04.233974+00:00",
+    "run_audit_version": "model-x-2026-07-21",
+    "git_commit": "6c7d60eebe51162233ba196c73ddd3d7ba89f581",
+    "run_audit_sha256": "c6e5d385eef2010b4d8e8827a819df5c2c3167cd0e722de3d5733de160edc240",
+    "python_version": "3.13.5",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "review_type": "系统综述",
+    "standards_applied": {
+      "confirmed_by_user": true,
+      "a1_min_recall": 0.9,
+      "a2_min_recall": 0.85,
+      "f_access_rate": 0.8,
+      "f_provenance_rate": 0.95,
+      "f_core_metadata_rate": 0.95,
+      "f_abstract_rate": 0.85,
+      "d_freshness_days": 30,
+      "b_ggr_threshold": 0.02,
+      "b_drr_threshold": 0.05,
+      "balance_top_share_warning": 0.8,
+      "balance_cv_warning": 1.0,
+      "balance_gini_warning": 0.6,
+      "balance_shannon_low_warning": 0.45,
+      "balance_shannon_high_warning": 0.95,
+      "topic_top_share_warning": 0.7,
+      "topic_cv_warning": 0.8,
+      "topic_gini_warning": 0.5,
+      "topic_shannon_low_warning": 0.55,
+      "topic_target_tvd_warning": 0.25,
+      "topic_min_sources": 2,
+      "topic_source_top_share_warning": 0.8
+    },
+    "record_source_paths": false,
+    "input_files": {
+      "benchmark": {
+        "provided": true,
+        "sha256": "eab71e79f51effe9b5e182af6666b0eee3971390cade8ebeb5222229f22a67af",
+        "copied_to": "inputs\\benchmark__eab71e79f51e.json",
+        "source_filename": "benchmark.json"
+      },
+      "candidate-snapshots": {
+        "provided": true,
+        "sha256": "04dae4c4fcc0e58c927d9fc50c44c40f7407c8bd479703dae7f5eeb06d71f91f",
+        "copied_to": "inputs\\candidate-snapshots__04dae4c4fcc0.json",
+        "source_filename": "source-snapshot.json"
+      },
+      "context": {
+        "provided": true,
+        "sha256": "2547ba6e4a01366c256f86041ac201ba90960ad95398213d051c4dfa5dc43e1b",
+        "copied_to": "inputs\\context__2547ba6e4a01.json",
+        "source_filename": "resolved-config.json"
+      },
+      "decision-log": {
+        "provided": true,
+        "sha256": "6dcc12386b9fc45b3ac6384cb52aee5b80ed3103f714cc0bf8fcf348a272f875",
+        "copied_to": "inputs\\decision-log__6dcc12386b9f.json",
+        "source_filename": "decision-log.json"
+      },
+      "deduplication-log": {
+        "provided": true,
+        "sha256": "9f389066fdd0638f66bc4c99ff3c151215229e1b150c11de7ea9173e6fc3d6c0",
+        "copied_to": "inputs\\deduplication-log__9f389066fdd0.json",
+        "source_filename": "deduplication-log.json"
+      },
+      "gold": {
+        "provided": true,
+        "sha256": "785270c3256418e7d9228612f6da269b5fed265fbd060e52919ac571ea72b193",
+        "copied_to": "inputs\\gold__785270c32564.json",
+        "source_filename": "gold.json"
+      },
+      "library": {
+        "provided": true,
+        "sha256": "41ccde2aa614e8f2f516d731cd8177c23c12c2832802501e0830c0dd411fbb83",
+        "source_filename": "library.json",
+        "copied_to": "inputs\\library__41ccde2aa614.json"
+      },
+      "query-hits": {
+        "provided": true,
+        "sha256": "785270c3256418e7d9228612f6da269b5fed265fbd060e52919ac571ea72b193",
+        "copied_to": "inputs\\query-hits__785270c32564.json",
+        "source_filename": "query-hits.json"
+      },
+      "run-log": {
+        "provided": true,
+        "sha256": "b45b31e73243284edcd1ec2bfa6baa12f5e297e18b10c46cb4b823834a4e29ea",
+        "copied_to": "inputs\\run-log__b45b31e73243.json",
+        "source_filename": "run-log.json"
+      }
+    }
+  }
+}

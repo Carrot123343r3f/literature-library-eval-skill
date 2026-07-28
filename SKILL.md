@@ -96,9 +96,7 @@ S3 确认完成 → SRCH-1 工程 PICO 分解 → SRCH-2 构建开发集+验证�
 - `scripts/validate_registry.py` — registry 一致性校验
 - `compute.py` — 兼容性包装器（仅 A1 + 库健康，**勿用作主入口**）
 
-## 向导式工作流与人工确认
-
-## Tool-call contract and online authorization
+## 向导式工作流与人工确认、工具调用与联网授权
 
 ## HTML-only delivery
 
@@ -135,7 +133,7 @@ Screening summaries record decisions and per-source yields only. They must not
 invent `search_rounds` or `planned_pathways`; B saturation metrics require the
 explicit, recorded search-round context and independent-pathway evidence.
 
-优先使用 `scripts/run_full_audit.py`，而非要求用户自行串联脚本：
+优先使用 `scripts/run_full_audit.py`，而非要求用户自行串联脚本。`autopilot.py` 仅可在用户显式确认 `--scope-status in_scope`（或 cross_domain）后生成完整 A-F 报告；否则只能停在安全草稿状态：
 
 1. `init --out run-config.json`：只询问研究问题、综述类型、文献库位置和联网授权，生成可审阅配置。
 2. `run --run-config ... --library ... --out ...`：持久化 `workflow-state.json`；失败时根据状态文件续跑，而不是重新猜测用户意图。

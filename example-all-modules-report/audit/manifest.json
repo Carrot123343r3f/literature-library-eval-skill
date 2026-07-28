@@ -1,9 +1,9 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-07-26T08:53:30.661997+00:00",
+  "generated_at": "2026-07-28T07:54:04.233974+00:00",
   "run_audit_version": "model-x-2026-07-21",
-  "git_commit": "1093df08d6b73881d5edf5d7c821d4efa87f7782",
-  "run_audit_sha256": "899d2c98a228776b78dc259cef03238890e9cdc16b14cf11e27574f4ef248c01",
+  "git_commit": "6c7d60eebe51162233ba196c73ddd3d7ba89f581",
+  "run_audit_sha256": "c6e5d385eef2010b4d8e8827a819df5c2c3167cd0e722de3d5733de160edc240",
   "python_version": "3.13.5",
   "platform": "Windows-11-10.0.26200-SP0",
   "review_type": "系统综述",
@@ -35,14 +35,14 @@
   "input_files": {
     "benchmark": {
       "provided": true,
-      "sha256": "a1736240894778015e05791b2aa44c373d43692ab140f2348fe0c8e75f1ac6fd",
-      "copied_to": "inputs\\benchmark__a17362408947.json",
+      "sha256": "eab71e79f51effe9b5e182af6666b0eee3971390cade8ebeb5222229f22a67af",
+      "copied_to": "inputs\\benchmark__eab71e79f51e.json",
       "source_filename": "benchmark.json"
     },
     "candidate-snapshots": {
       "provided": true,
-      "sha256": "e451ef88d7cefacb35bb2a6e2c65413cf516e864999dba1cba3864ba430fc2b2",
-      "copied_to": "inputs\\candidate-snapshots__e451ef88d7ce.json",
+      "sha256": "04dae4c4fcc0e58c927d9fc50c44c40f7407c8bd479703dae7f5eeb06d71f91f",
+      "copied_to": "inputs\\candidate-snapshots__04dae4c4fcc0.json",
       "source_filename": "source-snapshot.json"
     },
     "context": {
@@ -53,51 +53,39 @@
     },
     "decision-log": {
       "provided": true,
-      "sha256": "cfe00fbbe0e498cd79483e276b390c2cb7b84a8fd078af04091d84e0f39d02aa",
-      "copied_to": "inputs\\decision-log__cfe00fbbe0e4.json",
+      "sha256": "6dcc12386b9fc45b3ac6384cb52aee5b80ed3103f714cc0bf8fcf348a272f875",
+      "copied_to": "inputs\\decision-log__6dcc12386b9f.json",
       "source_filename": "decision-log.json"
     },
     "deduplication-log": {
       "provided": true,
-      "sha256": "14de0be565daf7e76135e08794006ad058d465fddc6623cf51c5a8b0e335a9a2",
-      "copied_to": "inputs\\deduplication-log__14de0be565da.json",
+      "sha256": "9f389066fdd0638f66bc4c99ff3c151215229e1b150c11de7ea9173e6fc3d6c0",
+      "copied_to": "inputs\\deduplication-log__9f389066fdd0.json",
       "source_filename": "deduplication-log.json"
     },
     "gold": {
       "provided": true,
-      "sha256": "172c7b4e6fbf39c9cb192f7d9b0e63e76c7e5a49214850c734939e7978cc4668",
-      "copied_to": "inputs\\gold__172c7b4e6fbf.json",
+      "sha256": "785270c3256418e7d9228612f6da269b5fed265fbd060e52919ac571ea72b193",
+      "copied_to": "inputs\\gold__785270c32564.json",
       "source_filename": "gold.json"
     },
     "library": {
       "provided": true,
-      "sha256": "454a6103082c95bd0c4f3c58b4c4f2cb8e2b9d0cbd54fe1c8442a97050c39f41",
+      "sha256": "41ccde2aa614e8f2f516d731cd8177c23c12c2832802501e0830c0dd411fbb83",
       "source_filename": "library.json",
-      "copied_to": "inputs\\library__454a6103082c.json"
+      "copied_to": "inputs\\library__41ccde2aa614.json"
     },
     "query-hits": {
       "provided": true,
-      "sha256": "172c7b4e6fbf39c9cb192f7d9b0e63e76c7e5a49214850c734939e7978cc4668",
-      "copied_to": "inputs\\query-hits__172c7b4e6fbf.json",
+      "sha256": "785270c3256418e7d9228612f6da269b5fed265fbd060e52919ac571ea72b193",
+      "copied_to": "inputs\\query-hits__785270c32564.json",
       "source_filename": "query-hits.json"
-    },
-    "query-plan": {
-      "provided": true,
-      "sha256": "4674d05822988532bc673eaa39ffe2418c5946df171ab1e4b22e6fcb388f52b8",
-      "copied_to": "inputs\\query-plan__4674d0582298.json",
-      "source_filename": "query-plan.json"
     },
     "run-log": {
       "provided": true,
-      "sha256": "bb3bf5ca199e4f0bec7719c1f93fbfe4c6fcd901df56aff2f673dcdcf3f58856",
-      "copied_to": "inputs\\run-log__bb3bf5ca199e.json",
+      "sha256": "b45b31e73243284edcd1ec2bfa6baa12f5e297e18b10c46cb4b823834a4e29ea",
+      "copied_to": "inputs\\run-log__b45b31e73243.json",
       "source_filename": "run-log.json"
-    },
-    "source-snapshot": {
-      "provided": true,
-      "sha256": "e451ef88d7cefacb35bb2a6e2c65413cf516e864999dba1cba3864ba430fc2b2",
-      "copied_to": "inputs\\source-snapshot__e451ef88d7ce.json",
-      "source_filename": "source-snapshot.json"
     }
   }
 }

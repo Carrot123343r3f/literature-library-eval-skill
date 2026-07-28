@@ -11,6 +11,7 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 PATH_RE = re.compile(r"(?<![\w/])((?:scripts|references|schemas|docs)/[A-Za-z0-9_.\-/]+)")
+LINK_RE = re.compile(r"\[[^\]]+\]\(([^)#]+)\)")
 
 
 def check_references():
@@ -21,6 +22,21 @@ def check_references():
             target = match.rstrip("`.,:;)]}")
             if not (ROOT / target).exists():
                 errors.append(f"{path.relative_to(ROOT)} references missing {target}")
+    return errors
+
+
+def check_example_links():
+    """Demo links are a user-facing contract, not merely documentation text."""
+    errors = []
+    for path in ROOT.rglob("*.md"):
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for raw_target in LINK_RE.findall(text):
+            target = raw_target.replace("%20", " ")
+            if "://" in target or target.startswith("#") or target.startswith("/"):
+                continue
+            resolved = (path.parent / target).resolve()
+            if not resolved.exists():
+                errors.append(f"{path.relative_to(ROOT)} links to missing {target}")
     return errors
 
 
@@ -36,13 +52,16 @@ def check_json():
 
 def check_scripts():
     errors = []
-    for name in ("optimization.py", "quality_optimization.py", "experiment_attribution.py", "evalset_audit.py", "search_iterator.py", "query_compiler.py", "auto_triage.py", "autopilot.py", "run_full_audit.py", "check_consistency.py"):
+    for name in ("optimization.py", "quality_optimization.py", "experiment_attribution.py", "evalset_audit.py", "search_iterator.py", "query_compiler.py", "auto_triage.py", "autopilot.py", "run_full_audit.py", "run_audit.py", "check_consistency.py"):
         path = ROOT / "scripts" / name
         if not path.exists():
             errors.append(f"missing expected script: scripts/{name}")
     for name in ("__init__.py", "models.py", "state_machine.py", "contracts.py", "artifacts.py", "runtime.py"):
         if not (ROOT / "scripts" / "lle_core" / name).exists():
             errors.append(f"missing architecture kernel file: scripts/lle_core/{name}")
+    for package in ("audit_core", "paper_evaluation"):
+        if not (ROOT / "scripts" / package / "__init__.py").exists():
+            errors.append(f"missing public package marker: scripts/{package}/__init__.py")
     result = subprocess.run([sys.executable, str(ROOT / "scripts" / "optimization.py"), "--help"],
                             capture_output=True, text=True)
     if result.returncode != 0:
@@ -76,7 +95,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--strict", action="store_true", help="reserved for CI compatibility")
     parser.parse_args()
-    errors = check_references() + check_json() + check_scripts()
+    errors = check_references() + check_example_links() + check_json() + check_scripts()
     if errors:
         print("CONSISTENCY FAILED")
         print("\n".join(f"- {error}" for error in errors))

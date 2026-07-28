@@ -10,7 +10,9 @@ academic-library-data/
 simulation-audit-output/
 audit.json
 audit.html
+!example-all-modules-report/audit/audit.html
 audit.md
+!example-all-modules-report/audit/audit.json
 query-plan.json
 source-snapshot.json
 screening-log.json

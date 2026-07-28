@@ -6,7 +6,7 @@ import re
 
 SENSITIVE_KEY_PARTS = (
     "token", "secret", "password", "api_key", "apikey", "authorization",
-    "credential",
+    "credential", "cookie",
 )
 
 
@@ -135,7 +135,7 @@ def validate_run_config(rc):
         else:
             allowed_evidence = {"benchmark", "gold", "query_log", "query_hits", "query_plan",
                                 "source_snapshot", "screening_decisions", "deduplication_log",
-                                "search_meta", "failed_sources"}
+                                "search_meta", "search_iterations", "failed_sources"}
             errors.extend(f"unknown evidence_inputs field: {key}" for key in sorted(set(evidence) - allowed_evidence))
             for key, value in evidence.items():
                 if key == "failed_sources":
@@ -164,4 +164,27 @@ def validate_run_config(rc):
             errors.append("output.formats must contain only html and/or json; Markdown output is not supported")
         if "language" in output and not isinstance(output["language"], str):
             errors.append("output.language must be a string")
+    return errors
+
+
+def validate_context(context):
+    """Validate typed, conclusion-bearing context claims.
+
+    Extra descriptive fields remain allowed, but claims used by the audit must
+    be well formed. Their provenance is verified by the calling workflow.
+    """
+    if not isinstance(context, dict):
+        return ["context must be a JSON object"]
+    errors = []
+    for field in ("scope_status", "review_type", "profile"):
+        if field in context and context[field] is not None and not isinstance(context[field], str):
+            errors.append(f"context.{field} must be a string")
+    for field in ("search_rounds", "independent_pathways", "source_marginal_yields", "planned_pathways"):
+        if field in context and not isinstance(context[field], list):
+            errors.append(f"context.{field} must be an array")
+    for field in ("independent_validation_passed", "run_log_complete"):
+        if field in context and not isinstance(context[field], bool):
+            errors.append(f"context.{field} must be boolean when supplied")
+    if "standards" in context and not isinstance(context["standards"], dict):
+        errors.append("context.standards must be an object")
     return errors

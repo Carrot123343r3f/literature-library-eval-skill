@@ -3,7 +3,7 @@
 import argparse, datetime as dt, hashlib, html, json, pathlib, re, shutil, sys, tempfile
 from collections import Counter
 from math import log
-from audit_core.contracts import compact as _shared_compact, public_value as _shared_public_value, validate_run_config as _shared_validate_run_config
+from audit_core.contracts import compact as _shared_compact, public_value as _shared_public_value, validate_context as _validate_context, validate_run_config as _shared_validate_run_config
 from audit_core.rendering import render_markdown_html
 
 # Review-type → default thresholds (narrative / systematic / scoping / rapid / umbrella)
@@ -1193,7 +1193,9 @@ def indicator_rows(report):
     artifacts = report.get("artifacts", {})
     chk = lambda g, k: g.get("checks", {}).get(k, "not_assessable")
     recency_checks = report["recency"]
-    user_confirmed = s.get("confirmed_by_user", True)
+    # Absence is not confirmation.  Unconfirmed defaults may still be shown as
+    # screening results, but must never become threshold pass/fail verdicts.
+    user_confirmed = s.get("confirmed_by_user", False)
     is_umbrella = ctx.get("review_type") == "伞式综述"
 
     def tv(value, threshold):
@@ -1808,6 +1810,7 @@ def main():
     p.add_argument("--query-plan"); p.add_argument("--source-snapshot"); p.add_argument("--decision-log")
     p.add_argument("--deduplication-log"); p.add_argument("--run-log"); p.add_argument("--search-meta",
                    help="search_meta.json from search_for_eval.py — auto-detected alongside --query-hits if omitted")
+    p.add_argument("--search-iterations", help="iterations.json; validates independent development/validation evidence")
     p.add_argument("--out", required=True)
     a = p.parse_args()
 
@@ -1885,12 +1888,42 @@ def main():
     if not a.library:
         p.error("--library is required (or provide --run-config with library.path)")
     ctx = json.load(open(a.context, encoding="utf-8")) if a.context else {}
+    context_errors = _validate_context(ctx)
+    if context_errors:
+        p.error("invalid context:\n- " + "\n- ".join(context_errors))
     # Carry forward scope override flag from run-config parsing
     for k, v in rc_ctx_overrides.items():
         ctx.setdefault(k, v)
     ctx.setdefault("library_path", a.library)
     ctx = resolve_thresholds(ctx)
     # ── Unified scope guard (covers both run-config and direct CLI paths) ──
+    # Context is an untrusted self-report. A naked boolean cannot establish
+    # independent validation in a measured report.
+    claimed_independent_validation = ctx.pop("independent_validation_passed", None)
+    ctx["evidence_validation"] = {"context_claims": "self_reported", "independent_validation": "not_provided"}
+    if a.search_iterations:
+        try:
+            from search_iterator import load_json as _load_iterations, validate as _validate_iterations
+            from evalset_audit import audit as _audit_evalset
+            iterations = _load_iterations(a.search_iterations)
+            iteration_errors, iteration_warnings = _validate_iterations(iterations)
+            validation = _audit_evalset(iterations.get("dev_set", []), iterations.get("validation_set", []))
+            if iteration_errors or validation.get("status") != "valid":
+                ctx["independent_validation_passed"] = False
+                ctx["evidence_validation"]["independent_validation"] = "invalid"
+                ctx["evidence_validation"]["iteration_errors"] = iteration_errors + validation.get("errors", [])
+            else:
+                ctx["independent_validation_passed"] = bool(iterations.get("validation_set"))
+                ctx["evidence_validation"]["independent_validation"] = "validated"
+                ctx["evidence_validation"]["iteration_warnings"] = iteration_warnings + validation.get("warnings", [])
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            ctx["independent_validation_passed"] = False
+            ctx["evidence_validation"]["independent_validation"] = "unparseable"
+            ctx["evidence_validation"]["error"] = str(exc)
+    else:
+        ctx["independent_validation_passed"] = None
+        if claimed_independent_validation is not None:
+            ctx["evidence_validation"]["independent_validation"] = "self_reported_ignored"
     scope_status = ctx.get("scope_status", "")
     if scope_status in {"out_of_scope", "scope_uncertain"}:
         print(f"ERROR: scope_status={scope_status} — refusing to run full A-F.")
@@ -2003,6 +2036,10 @@ def main():
             except (OSError, json.JSONDecodeError):
                 ctx["run_log_complete"] = False
                 ctx["run_log_depth"] = "unparseable"
+    if not a.run_log:
+        # A run-log assertion embedded in context is self-report only.
+        ctx["run_log_complete"] = False
+        ctx["run_log_depth"] = "missing_artifact"
     proc = stability(ctx); bal = balance(lib, ctx.get("standards", {}))
     tbal = topic_balance(ctx); cur = currency(ctx); rec = recency(lib, ctx)
     # F4: verify dedup-log exists, is parseable, and contains structured decisions.
@@ -2095,7 +2132,7 @@ def main():
               "umbrella": umb,
               "artifacts": artifacts({"query-plan": a.query_plan, "source-snapshot": a.source_snapshot,
                                       "decision-log": a.decision_log, "deduplication-log": a.deduplication_log,
-                                      "run-log": a.run_log}),
+                                      "run-log": a.run_log, "search-iterations": a.search_iterations}),
               "summary": summary,
               "limitations": ["本报告中的各项阈值均为基于工程文献计量经验的参考值，旨在辅助识别可能的风险信号，不等于文献库质量的绝对标准。pass/warning/fail 是自动化诊断提示，不是质量裁决，所有结论均应结合具体研究问题和领域惯例做人工判断。",
                               "A3 下界不是 Recall；区间需另行声明模型假设。",
@@ -2126,6 +2163,7 @@ def main():
                          "decision-log": a.decision_log,
                          "deduplication-log": a.deduplication_log,
                          "run-log": a.run_log,
+                         "search-iterations": a.search_iterations,
                          "context": a.context}.items() if v is not None})
 
 

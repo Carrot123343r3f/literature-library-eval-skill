@@ -3,3 +3,6 @@
 
 pytest>=7.0
 jsonschema>=4.0
+# The tracked paper_download_mcp tests import the server module directly.
+# Keep its runtime dependency in the CI development environment as well.
+mcp>=1.8.0

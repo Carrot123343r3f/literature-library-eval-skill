@@ -1,0 +1,14 @@
+[
+  {
+    "title": "Gaussian Splatting for Real-Time SLAM",
+    "DOI": "10.1000/gs-slam"
+  },
+  {
+    "title": "Low-Light Gaussian SLAM Benchmark",
+    "DOI": "10.1000/low-light"
+  },
+  {
+    "title": "Missing Must-Include Anchor",
+    "DOI": "10.1000/missing-anchor"
+  }
+]

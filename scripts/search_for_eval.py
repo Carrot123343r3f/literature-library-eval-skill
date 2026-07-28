@@ -143,7 +143,7 @@ def main():
     if a.min_cited < 0:
         p.error('--min-cited must be non-negative')
     try:
-        allowed_sources = load_search_authorization(a.run_config)
+        allowed_sources = load_search_authorization(a.run_config, "allow_external_discovery")
     except (ValueError, PermissionError) as exc:
         p.error(str(exc))
     configured_sources = (list(allowed_sources) if allowed_sources is not None

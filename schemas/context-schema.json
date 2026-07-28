@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Carrot123343r3f/literature-library-eval-skill/blob/main/schemas/context-schema.json",
+  "title": "Audit Context",
+  "description": "Typed conclusion-bearing context fields. Additional descriptive fields are allowed; self-reported claims are not evidence by themselves.",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "scope_status": {"type": "string", "enum": ["in_scope", "cross_domain", "out_of_scope", "scope_uncertain"]},
+    "review_type": {"type": "string"},
+    "profile": {"type": "string"},
+    "standards": {"type": "object"},
+    "search_rounds": {"type": "array", "items": {"type": "object"}},
+    "independent_pathways": {"type": "array", "items": {"type": "object"}},
+    "planned_pathways": {"type": "array", "items": {"type": "string"}},
+    "source_marginal_yields": {"type": "array", "items": {"type": "object"}},
+    "independent_validation_passed": {"type": "boolean"},
+    "run_log_complete": {"type": "boolean"}
+  }
+}

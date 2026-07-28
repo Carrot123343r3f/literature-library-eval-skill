@@ -112,6 +112,8 @@ def init_config_v2(args):
     """Create a user-confirmed config; every online capability is opt-in."""
     question = input("Research question/title: ").strip()
     review_type = input("Review type [narrative/systematic/scoping/rapid/umbrella] (default narrative): ").strip() or "narrative"
+    scope_answer = input("Is this an engineering review question within this skill's scope? [y/n/uncertain]: ").strip().lower()
+    scope_status = {"y": "in_scope", "yes": "in_scope", "n": "out_of_scope", "no": "out_of_scope"}.get(scope_answer, "scope_uncertain")
     library = input("Library path (optional; can be imported later): ").strip()
     allow = input("Allow online metadata enrichment? [y/N]: ").strip().lower() in {"y", "yes"}
     discover = input("Allow online discovery of new candidate papers? [y/N]: ").strip().lower() in {"y", "yes"}
@@ -127,7 +129,9 @@ def init_config_v2(args):
     if unknown_sources:
         raise SystemExit(f"ERROR: unsupported source(s): {', '.join(unknown_sources)}")
     authorized = [item.strip().lower() for item in input("Sources with a preconfigured legal login/connector (comma-separated, optional): ").split(",") if item.strip()] if allow_search else []
-    config = {"schema_version": "1.0", "project": {"research_question": question, "review_type": review_type, "scope_status": "scope_uncertain"},
+    config = {"schema_version": "1.0", "project": {"research_question": question, "review_type": review_type,
+              "scope_status": scope_status,
+              "scope_rationale": "confirmed during guided initialization" if scope_status != "scope_uncertain" else "user did not confirm engineering scope"},
               "library": {"provided": bool(library), "path": library or None, "format": "json" if library.endswith(".json") else None},
               "automation": {"allow_search": allow_search, "allow_metadata_enrichment": allow, "allow_external_discovery": discover, "allow_citation_tracking": citations,
                              "local_only_confirmed": local_only, "allowed_sources": sources, "authorized_sources": authorized},
@@ -140,7 +144,7 @@ def main():
     init = sub.add_parser("init"); init.add_argument("--out", required=True)
     status = sub.add_parser("status"); status.add_argument("--out", required=True)
     execute = sub.add_parser("run"); execute.add_argument("--run-config", required=True); execute.add_argument("--out", required=True); execute.add_argument("--library")
-    for name in ("context", "benchmark", "gold", "query-hits", "source-snapshot", "screening-decisions", "deduplication-log", "screening-summary"): execute.add_argument("--" + name)
+    for name in ("context", "benchmark", "gold", "query-hits", "source-snapshot", "screening-decisions", "deduplication-log", "screening-summary", "search-iterations"): execute.add_argument("--" + name)
     execute.add_argument("--query-plan"); execute.add_argument("--optimization-run", help="optimization.py workspace to validate before audit"); execute.add_argument("--active-screen-budget", type=int, help="generate a prioritized human-screening queue after normalization"); execute.add_argument("--collect", action="store_true"); execute.add_argument("--citation-seed"); execute.add_argument("--resume", action="store_true"); execute.add_argument("--force", action="store_true")
     args = parser.parse_args()
     if args.command == "init": return init_config_v2(args)
@@ -208,7 +212,7 @@ def main():
         if automation.get("allow_search") is not True or automation.get("allow_citation_tracking") is not True: raise SystemExit("ERROR: --citation-seed requires automation.allow_search=true and automation.allow_citation_tracking=true.")
         citations = out / "citations"; run([sys.executable, script("citation_candidates.py"), "--seed", args.citation_seed, "--run-config", args.run_config, "--out", str(citations)], steps, "citation_discovery", out, run_signature, [citations / "citation-candidates.json", citations / "manifest.json"], args.resume)
     audit = out / "audit"; command = [sys.executable, script("run_audit.py"), "--library", str(canonical), "--out", str(audit), "--run-config", args.run_config]
-    for flag, value in (("--context", args.context), ("--benchmark", args.benchmark), ("--gold", args.gold), ("--query-hits", args.query_hits), ("--candidate-snapshots", args.source_snapshot), ("--decision-log", args.screening_decisions), ("--deduplication-log", args.deduplication_log), ("--search-meta", args.screening_summary)):
+    for flag, value in (("--context", args.context), ("--benchmark", args.benchmark), ("--gold", args.gold), ("--query-hits", args.query_hits), ("--candidate-snapshots", args.source_snapshot), ("--decision-log", args.screening_decisions), ("--deduplication-log", args.deduplication_log), ("--search-meta", args.screening_summary), ("--search-iterations", args.search_iterations)):
         if value: command.extend([flag, value])
     run(command, steps, "audit", out, run_signature, [audit / "audit.json", audit / "audit.html"], args.resume)
     run([sys.executable, script("next_actions.py"), "--audit", str(audit / "audit.json"), "--out", str(out)], steps, "actions", out, run_signature, [out / "next-actions.json"], args.resume)

@@ -120,10 +120,11 @@ For a low-friction first run, use the autopilot. It creates a source-aware query
 python scripts/autopilot.py \
   --question "How do robot localization methods handle low-light sensing?" \
   --library library.json \
+  --scope-status in_scope \
   --out first-pass
 ```
 
-OpenAlex is used when its key is available; authorized arXiv, Crossref, and Europe PMC adapters remain available without it. Autopilot suggestions are never formal inclusion decisions.
+`--scope-status in_scope` is an explicit confirmation that this is an engineering question within the Skill's scope; without it, autopilot stops before a full A-F report rather than inventing a scope decision. OpenAlex is used when its key is available; authorized arXiv, Crossref, and Europe PMC adapters remain available without it. Autopilot suggestions are never formal inclusion decisions.
 
 ## Six-Dimension Framework
 
