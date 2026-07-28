@@ -23,6 +23,10 @@ dedup_rule（去重规则），供第三方从 query-hits.json 独立复算 yiel
 import argparse, json, urllib.request, urllib.parse, re, time, sys, pathlib
 from collect_open_sources import COLLECTORS, load_search_authorization
 from credentials import CredentialError, require_openalex_api_key
+
+
+def read_json(path):
+    return json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
 sys.stdout.reconfigure(encoding='utf-8')
 
 
@@ -164,28 +168,28 @@ def main():
     if "openalex" not in selected_sources:
         print("INFO: OpenAlex unavailable; using: " + ", ".join(selected_sources), file=sys.stderr)
 
-    library = json.load(open(a.library, encoding='utf-8'))
-    ctx = json.load(open(a.context, encoding='utf-8'))
+    library = read_json(a.library)
+    ctx = read_json(a.context)
 
     # ── Dev/validation set resolution (v2) ──
     dev_set = validation_set = None
     dev_source = val_source = ""
 
     if a.dev_set:
-        dev_set = json.load(open(a.dev_set, encoding='utf-8'))
+        dev_set = read_json(a.dev_set)
         dev_set = dev_set if isinstance(dev_set, list) else dev_set.get("items", [])
         dev_source = "独立 dev-set 文件"
     elif a.gold:
-        dev_set = json.load(open(a.gold, encoding='utf-8'))
+        dev_set = read_json(a.gold)
         dev_set = dev_set if isinstance(dev_set, list) else dev_set.get("items", [])
         dev_source = "gold set (无独立验证集)"
     elif a.benchmark:
-        dev_set = json.load(open(a.benchmark, encoding='utf-8'))
+        dev_set = read_json(a.benchmark)
         dev_set = dev_set if isinstance(dev_set, list) else dev_set.get("items", [])
         dev_source = "benchmark (无独立验证集)"
 
     if a.validation_set:
-        validation_set = json.load(open(a.validation_set, encoding='utf-8'))
+        validation_set = read_json(a.validation_set)
         validation_set = validation_set if isinstance(validation_set, list) else validation_set.get("items", [])
         val_source = "独立验证集"
         if not dev_set:
@@ -210,7 +214,7 @@ def main():
     # ── PICO decomposition ──
     pico = None
     if a.pico:
-        pico = json.load(open(a.pico, encoding='utf-8'))
+        pico = read_json(a.pico)
 
     lib_dois = {(r.get('DOI') or '').lower() for r in library if r.get('DOI')}
     lib_arxivs = {r.get('arxiv') for r in library if r.get('arxiv')}
@@ -374,7 +378,7 @@ def main():
         })
 
     out = pathlib.Path(a.out); out.mkdir(parents=True, exist_ok=True)
-    json.dump(all_hits, open(out / 'query-hits.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
+    (out / "query-hits.json").write_text(json.dumps(all_hits, ensure_ascii=False, indent=2), encoding="utf-8")
     potential_add.sort(key=lambda x: -(x.get('cited_by_count') or 0))
     json.dump({'first_round_discovery_rate': discovery_ggr,
                'discovery_candidate_count': len(potential_add),
@@ -384,7 +388,9 @@ def main():
               open(out / 'potential_additions.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
 
     # ── Build search_meta.json with v2 fields ──
-    a2_evidence = "measured"
+    # This diagnostic repeatedly observes validation_recall while tuning; it
+    # therefore cannot produce final held-out A2 evidence on its own.
+    a2_evidence = "estimated"
     a2_note = 'A2 只有稳定 ID 匹配计入分子；分母=有稳定 ID 的 gold 条目（与 run_audit.a2 对齐）。'
     if validation_set and not dev_validation_overlap:
         a2_note += f' 独立验证集: {val_total} 篇（{val_source}），dev/val 独立。'

@@ -382,6 +382,11 @@ def gold_independence(benchmark_path, gold_path, context):
     assessment["status"] = "distinct_records_unverified"
     return assessment
 
+
+def stable_record_ids(records):
+    """Return the union of canonical stable IDs for record-set binding."""
+    return set().union(*(ids(item) for item in records if isinstance(item, dict))) if records else set()
+
 def balance(library, standards=None):
     standards = standards or {}
     counts = Counter(str(x.get("source") or x.get("source_database") or "unknown") for x in library)
@@ -1882,6 +1887,7 @@ def main():
     p.add_argument("--query-plan"); p.add_argument("--source-snapshot"); p.add_argument("--decision-log")
     p.add_argument("--deduplication-log"); p.add_argument("--run-log"); p.add_argument("--search-meta",
                    help="search_meta.json from search_for_eval.py — auto-detected alongside --query-hits if omitted")
+    p.add_argument("--screening-summary", help="screening-summary.json; B/F evidence only, never search execution evidence")
     p.add_argument("--search-iterations", help="iterations.json; validates independent development/validation evidence")
     p.add_argument("--citation-seed-plan", help="citation-seeds.json; records automatic/user seed provenance")
     p.add_argument("--citation-discovery", help="citation-candidates.json; records unscreened citation candidates")
@@ -1941,6 +1947,7 @@ def main():
         if ev.get("screening_decisions") and not a.decision_log: a.decision_log = _resolve(ev["screening_decisions"])
         if ev.get("deduplication_log") and not a.deduplication_log: a.deduplication_log = _resolve(ev["deduplication_log"])
         if ev.get("search_meta") and not a.search_meta: a.search_meta = _resolve(ev["search_meta"])
+        if ev.get("screening_summary") and not a.screening_summary: a.screening_summary = _resolve(ev["screening_summary"])
         if ev.get("search_iterations") and not a.search_iterations: a.search_iterations = _resolve(ev["search_iterations"])
 
         if not a.context:
@@ -2014,6 +2021,15 @@ def main():
             p.error(f"invalid citation discovery: {exc}")
     if citation_summary:
         ctx["citation_candidate_discovery"] = citation_summary
+    if a.screening_summary:
+        try:
+            screening_summary = json.loads(pathlib.Path(a.screening_summary).read_text(encoding="utf-8"))
+            if not isinstance(screening_summary, dict):
+                raise ValueError("screening summary must be a JSON object")
+            ctx["screening_summary"] = screening_summary.get("screening_summary", {})
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            p.error(f"invalid screening summary: {exc}")
+
     # ── Unified scope guard (covers both run-config and direct CLI paths) ──
     # Context is an untrusted self-report. A naked boolean cannot establish
     # independent validation in a measured report.
@@ -2025,15 +2041,31 @@ def main():
             from evalset_audit import audit as _audit_evalset
             iterations = _load_iterations(a.search_iterations)
             iteration_errors, iteration_warnings = _validate_iterations(iterations)
-            validation = _audit_evalset(iterations.get("dev_set", []), iterations.get("validation_set", []))
-            if iteration_errors or validation.get("status") != "valid":
+            tuning = iterations.get("validation_set", [])
+            heldout = iterations.get("heldout_test_set", [])
+            tuning_audit = _audit_evalset(iterations.get("dev_set", []), tuning)
+            heldout_dev_audit = _audit_evalset(iterations.get("dev_set", []), heldout)
+            heldout_tuning_audit = _audit_evalset(tuning, heldout)
+            gold_records = load_items(a.gold) if a.gold else []
+            gold_ids = stable_record_ids(gold_records)
+            heldout_ids = stable_record_ids(heldout)
+            binding_errors = []
+            if not gold_ids:
+                binding_errors.append("A2 gold set has no stable identifiers")
+            if not heldout_ids:
+                binding_errors.append("heldout_test_set has no stable identifiers")
+            if gold_ids and heldout_ids and gold_ids != heldout_ids:
+                binding_errors.append("A2 gold set and heldout_test_set have different stable-ID sets")
+            audits = (tuning_audit, heldout_dev_audit, heldout_tuning_audit)
+            audit_errors = [error for audit in audits for error in audit.get("errors", [])]
+            if iteration_errors or audit_errors or binding_errors:
                 ctx["independent_validation_passed"] = False
                 ctx["evidence_validation"]["independent_validation"] = "invalid"
-                ctx["evidence_validation"]["iteration_errors"] = iteration_errors + validation.get("errors", [])
+                ctx["evidence_validation"]["iteration_errors"] = iteration_errors + audit_errors + binding_errors
             else:
-                ctx["independent_validation_passed"] = bool(iterations.get("validation_set"))
+                ctx["independent_validation_passed"] = True
                 ctx["evidence_validation"]["independent_validation"] = "validated"
-                ctx["evidence_validation"]["iteration_warnings"] = iteration_warnings + validation.get("warnings", [])
+                ctx["evidence_validation"]["iteration_warnings"] = iteration_warnings + [warning for audit in audits for warning in audit.get("warnings", [])]
                 # This artifact has undergone structural validation and a
                 # stable-ID overlap audit, so it is the authoritative A2
                 # independence source—not a context self-declaration.
@@ -2041,8 +2073,8 @@ def main():
                 ctx["gold_independence_record_check"] = {
                     "status": "independence_confirmed",
                     "source": "validated_search_iterations",
-                    "comparison_records": len(iterations.get("dev_set", [])),
-                    "gold_records": len(iterations.get("validation_set", [])),
+                    "comparison_records": len(stable_record_ids(iterations.get("dev_set", []))),
+                    "gold_records": len(gold_ids),
                     "overlap_records": 0,
                     "metadata_verified": True,
                 }
@@ -2288,6 +2320,7 @@ def main():
                                       "benchmark": a.benchmark, "gold": a.gold,
                                       "decision-log": a.decision_log, "deduplication-log": a.deduplication_log,
                                       "run-log": a.run_log, "search-meta": search_meta_path,
+                                      "screening-summary": a.screening_summary,
                                       "search-iterations": a.search_iterations,
                                       "citation-seed-plan": a.citation_seed_plan,
                                       "citation-discovery": a.citation_discovery}),
@@ -2322,6 +2355,7 @@ def main():
                          "deduplication-log": a.deduplication_log,
                          "run-log": a.run_log,
                          "search-meta": search_meta_path,
+                         "screening-summary": a.screening_summary,
                          "search-iterations": a.search_iterations,
                          "citation-seed-plan": a.citation_seed_plan,
                          "citation-discovery": a.citation_discovery,

@@ -144,8 +144,8 @@ def validate_run_config(rc):
             errors.append("library.provided is required and must be boolean")
         if library.get("provided") and not library.get("path"):
             errors.append("library.path is required when library.provided is true")
-        if library.get("format") not in {"json", None}:
-            errors.append("library.format: v1.0 only supports json")
+        if library.get("format") not in {"json", "csv", "ris", "bibtex", None}:
+            errors.append("library.format: must be json, csv, ris, bibtex, or null")
     else:
         errors.append("library is required and must be an object")
 
@@ -186,7 +186,7 @@ def validate_run_config(rc):
         else:
             allowed_evidence = {"benchmark", "gold", "query_log", "query_hits", "query_plan",
                                 "source_snapshot", "screening_decisions", "deduplication_log",
-                                "search_meta", "search_iterations", "failed_sources"}
+                                "search_meta", "screening_summary", "search_iterations", "failed_sources"}
             errors.extend(f"unknown evidence_inputs field: {key}" for key in sorted(set(evidence) - allowed_evidence))
             for key, value in evidence.items():
                 if key == "failed_sources":

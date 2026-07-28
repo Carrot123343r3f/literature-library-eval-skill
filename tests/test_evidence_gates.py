@@ -67,10 +67,9 @@ def test_validated_iterations_are_recorded_as_evidence(tmp_path):
                             "--search-iterations", iteration_path)
     assert result.returncode == 0, result.stderr
     report = json.loads((out / "audit.json").read_text(encoding="utf-8"))
-    assert report["context"]["evidence_validation"]["independent_validation"] == "validated"
-    assert report["context"]["independent_validation_passed"] is True
-    assert report["context"]["gold_independence_status"] == "independence_confirmed"
-    assert report["context"]["gold_independence_record_check"]["source"] == "validated_search_iterations"
+    assert report["context"]["evidence_validation"]["independent_validation"] == "invalid"
+    assert report["context"]["independent_validation_passed"] is False
+    assert report["context"]["gold_independence_status"] != "independence_confirmed"
     assert report["artifacts"]["search-iterations"]["provided"] is True
 
 
@@ -264,8 +263,8 @@ def test_a2_requires_record_and_metadata_independence_for_measured_evidence(tmp_
     assert result.returncode == 0, result.stderr
     report = json.loads((out / "audit.json").read_text(encoding="utf-8"))
     row = next(item for item in report["indicator_register"] if item["subproject"] == "A2")
-    assert report["context"]["gold_independence_status"] == "independence_confirmed"
-    assert row["evidence_status"] == "measured"
+    assert report["context"]["gold_independence_status"] != "independence_confirmed"
+    assert row["evidence_status"] == "estimated"
     assert row["decision_status"] == "standards_unconfirmed"
 
 
@@ -278,6 +277,55 @@ def test_decision_status_and_html_language_are_explicit(tmp_path):
     assert rows["A3"]["decision_status"] == "descriptive_only"
     assert "C 主题平衡 不可评估" in report["summary"]
     assert "<html lang='zh-CN'>" in (out / "audit.html").read_text(encoding="utf-8")
+
+
+def test_a2_measured_requires_gold_bound_heldout_test_set(tmp_path):
+    benchmark = tmp_path / "benchmark.json"
+    gold = tmp_path / "gold.json"
+    hits = tmp_path / "hits.json"
+    iterations = tmp_path / "iterations.json"
+    dev = [{"doi": f"10.1000/dev{i}"} for i in range(3)]
+    tuning = [{"doi": f"10.1000/tuning{i}"} for i in range(3)]
+    heldout = [{"doi": f"10.1000/heldout{i}"} for i in range(3)]
+    benchmark.write_text(json.dumps(dev), encoding="utf-8")
+    gold.write_text(json.dumps(heldout), encoding="utf-8")
+    hits.write_text(json.dumps(heldout), encoding="utf-8")
+    iterations.write_text(json.dumps({
+        "dev_validation_overlap_check": True,
+        "dev_set": dev, "validation_set": tuning, "heldout_test_set": heldout,
+        "iterations": [{
+            "iteration_id": "v1", "change_type": "initial", "change_description": "initial",
+            "change_source": "user_confirmed", "queries": {"db": "title:test"},
+            "execution_date": "2026-07-29", "results": {"dev_recall": 1.0}, "decision": "continue",
+        }],
+    }), encoding="utf-8")
+    result, out = run_audit(
+        tmp_path, {"scope_status": "in_scope", "review_type": "systematic"},
+        "--benchmark", benchmark, "--gold", gold, "--query-hits", hits,
+        "--search-iterations", iterations,
+    )
+    assert result.returncode == 0, result.stderr
+    report = json.loads((out / "audit.json").read_text(encoding="utf-8"))
+    row = next(item for item in report["indicator_register"] if item["subproject"] == "A2")
+    assert report["context"]["gold_independence_status"] == "independence_confirmed"
+    assert row["evidence_status"] == "measured"
+
+
+def test_screening_summary_cannot_replace_search_execution_metadata(tmp_path):
+    search_meta = tmp_path / "search-meta.json"
+    screening = tmp_path / "screening-summary.json"
+    search_meta.write_text(json.dumps({"queries": [{"status": "failed"}]}), encoding="utf-8")
+    screening.write_text(json.dumps({"screening_summary": {"included": 4}}), encoding="utf-8")
+    result, out = run_audit(
+        tmp_path, {"scope_status": "in_scope", "review_type": "systematic"},
+        "--search-meta", search_meta, "--screening-summary", screening,
+    )
+    assert result.returncode == 0, result.stderr
+    report = json.loads((out / "audit.json").read_text(encoding="utf-8"))
+    assert report["context"]["_search_meta_query_failed"] is True
+    assert report["context"]["screening_summary"]["included"] == 4
+    assert report["artifacts"]["search-meta"]["provided"] is True
+    assert report["artifacts"]["screening-summary"]["provided"] is True
 
 
 def test_run_config_alone_maps_iteration_query_plan_and_search_meta(tmp_path):
@@ -322,7 +370,7 @@ def test_run_config_alone_maps_iteration_query_plan_and_search_meta(tmp_path):
     ], capture_output=True, text=True, encoding="utf-8")
     assert result.returncode == 0, result.stderr
     report = json.loads((out / "audit.json").read_text(encoding="utf-8"))
-    assert report["context"]["gold_independence_status"] == "independence_confirmed"
+    assert report["context"]["gold_independence_status"] != "independence_confirmed"
     assert report["artifacts"]["query-plan"]["provided"] is True
     assert report["artifacts"]["search-meta"]["provided"] is True
     assert report["artifacts"]["search-iterations"]["provided"] is True

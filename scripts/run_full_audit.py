@@ -145,7 +145,7 @@ def main():
     init = sub.add_parser("init"); init.add_argument("--out", required=True)
     status = sub.add_parser("status"); status.add_argument("--out", required=True)
     execute = sub.add_parser("run"); execute.add_argument("--run-config", required=True); execute.add_argument("--out", required=True); execute.add_argument("--library")
-    for name in ("context", "benchmark", "gold", "query-hits", "source-snapshot", "screening-decisions", "deduplication-log", "screening-summary", "search-iterations"): execute.add_argument("--" + name)
+    for name in ("context", "benchmark", "gold", "query-hits", "source-snapshot", "screening-decisions", "deduplication-log", "screening-summary", "search-meta", "search-iterations"): execute.add_argument("--" + name)
     execute.add_argument("--query-plan"); execute.add_argument("--optimization-run", help="optimization.py workspace to validate before audit"); execute.add_argument("--active-screen-budget", type=int, help="generate a prioritized human-screening queue after normalization"); execute.add_argument("--collect", action="store_true"); execute.add_argument("--citation-seed"); execute.add_argument("--resume", action="store_true"); execute.add_argument("--force", action="store_true")
     args = parser.parse_args()
     if args.command == "init": return init_config_v2(args)
@@ -224,7 +224,7 @@ def main():
     discovered_citations = citations / "citation-candidates.json"
     if discovered_citations.is_file():
         command.extend(["--citation-discovery", str(discovered_citations)])
-    for flag, value in (("--context", args.context), ("--benchmark", args.benchmark), ("--gold", args.gold), ("--query-hits", args.query_hits), ("--candidate-snapshots", args.source_snapshot), ("--decision-log", args.screening_decisions), ("--deduplication-log", args.deduplication_log), ("--search-meta", args.screening_summary), ("--search-iterations", args.search_iterations)):
+    for flag, value in (("--context", args.context), ("--benchmark", args.benchmark), ("--gold", args.gold), ("--query-hits", args.query_hits), ("--candidate-snapshots", args.source_snapshot), ("--decision-log", args.screening_decisions), ("--deduplication-log", args.deduplication_log), ("--screening-summary", args.screening_summary), ("--search-meta", args.search_meta), ("--search-iterations", args.search_iterations)):
         if value: command.extend([flag, value])
     run(command, steps, "audit", out, run_signature, [audit / "audit.json", audit / "audit.html"], args.resume)
     run([sys.executable, script("next_actions.py"), "--audit", str(audit / "audit.json"), "--out", str(out)], steps, "actions", out, run_signature, [out / "next-actions.json"], args.resume)

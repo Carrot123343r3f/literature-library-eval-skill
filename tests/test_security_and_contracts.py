@@ -11,6 +11,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from collect_open_sources import load_authorized_plan
 from run_audit import _validate_run_config, stability
 from search_for_eval import compute_recall, entry_ids
+from evalset_audit import audit as audit_evalset
 from audit_core.contracts import public_value, reconcile_indicator_evidence, validate_indicator_evidence
 from audit_core.rendering import render_markdown_html
 
@@ -67,6 +68,15 @@ def test_a2_recall_counts_items_not_identifiers():
     hit_ids = entry_ids({"doi": "10.1000/example", "PMID": "12345"})
     recall, total = compute_recall(gold, hit_ids)
     assert (recall, total) == (1.0, 1)
+
+
+def test_evalset_without_stable_identifiers_is_not_valid_independence_evidence():
+    result = audit_evalset(
+        [{"title": f"dev {index}"} for index in range(3)],
+        [{"title": f"heldout {index}"} for index in range(3)],
+    )
+    assert result["status"] == "invalid"
+    assert "stable identifiers" in " ".join(result["errors"])
 
 
 def test_b_requires_explicit_screening_and_independent_pathways():
@@ -140,6 +150,19 @@ def test_config_requires_nested_review_fields_and_boolean_consent():
     assert any("scope_status is required" in error for error in errors)
     assert any("library.provided" in error for error in errors)
     assert any("allow_search must be boolean" in error for error in errors)
+
+
+def test_run_config_accepts_importable_library_formats():
+    config = {
+        "schema_version": "1.0",
+        "project": {"research_question": "q", "review_type": "systematic", "scope_status": "in_scope"},
+        "library": {"provided": True, "path": "library.ris", "format": "ris"},
+        "automation": {"allow_search": False, "allow_metadata_enrichment": False,
+                       "allow_external_discovery": False, "allow_citation_tracking": False,
+                       "local_only_confirmed": True, "allowed_sources": []},
+        "output": {"formats": ["html", "json"]},
+    }
+    assert not [error for error in _validate_run_config(config) if "library.format" in error]
 
 
 def test_collector_requires_persisted_consent_and_source_allowlist():
