@@ -47,6 +47,18 @@ def check_json():
             json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
             errors.append(f"{path.relative_to(ROOT)} invalid JSON: {exc}")
+    registry_path = ROOT / "schemas" / "indicator-registry.json"
+    try:
+        registry = json.loads(registry_path.read_text(encoding="utf-8"))
+        allowed = set(registry.get("evidence_statuses", {}))
+        for indicator in registry.get("indicators", []):
+            identifier = indicator.get("id", "<unknown>")
+            for status in indicator.get("evidence_states", []):
+                if status not in allowed:
+                    errors.append(f"indicator {identifier} uses non-canonical evidence status {status!r}")
+    except (OSError, json.JSONDecodeError):
+        # The generic parse check above already owns this failure.
+        pass
     return errors
 
 
