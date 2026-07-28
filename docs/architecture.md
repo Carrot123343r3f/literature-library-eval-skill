@@ -67,6 +67,7 @@ User Intake (run-config.json)
 | `run_audit.py` | A–F orchestration, computation and audit-package assembly | ✅ |
 | `run_paper_evaluation.py` | V2 orchestration for design-aware per-paper evidence evaluation, core support and external candidates | ✅ |
 | `audit_core/contracts.py` | Shared v1.0 configuration validation, report-cell normalization and recursive redaction | ✅ |
+| `audit_core/coverage.py` | Pure A2/A3 coverage evaluators; no report rendering or CLI dependency | ✅ |
 | `audit_core/rendering.py` | Shared dependency-free Markdown-to-HTML renderer used by both report workflows | ✅ |
 | `paper_evaluation/contracts.py` | V2 paper-record contract and canonical identifiers | ✅ |
 | `paper_evaluation/evaluation.py` | V2 study-design routing, evidence appraisal and ranking signals | ✅ |
@@ -90,6 +91,7 @@ User Intake (run-config.json)
 - **single-paper mode**: `--paper one-paper.json` evaluates one JSON object without requiring a library wrapper; output remains schema-compatible with `papers[0]` and declares `input_mode: "single-paper"`.
 - **network authorization**: The first intake step records online enrichment, external discovery, local-only choice, allowed sources, and authorization state; see [network authorization confirmation](../references/network-authorization-confirmation.md).
 - **audit_core public API**: shared components own cross-workflow concerns; workflow entry points must not import another workflow's private helpers
+- **threshold calibration**: defaults are documented engineering heuristics, not cross-domain validated constants. A changed default requires a versioned benchmark set, per-profile validation results, and a recorded rationale.
 
 ## Workflow Boundary
 

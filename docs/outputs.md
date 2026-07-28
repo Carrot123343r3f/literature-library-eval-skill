@@ -9,8 +9,7 @@ Every run produces:
 
 ```text
 out/
-├── audit.html            ← Human-readable report
-├── audit.html            ← Rendered HTML
+├── audit.html            ← Human-readable HTML report
 ├── audit.json            ← Machine-readable (full indicator register)
 ├── manifest.json         ← sha256, git commit, Python version
 ├── inputs/               ← All inputs copied with hash-prefixed names

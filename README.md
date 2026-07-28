@@ -162,8 +162,7 @@ Every run produces a self-contained, reproducible audit package:
 
 ```text
 out/
-├── audit.html        ← Human-readable report with prioritized actions
-├── audit.html        ← Rendered HTML
+├── audit.html        ← Human-readable HTML report with prioritized actions
 ├── audit.json        ← Machine-readable with full indicator register
 ├── manifest.json     ← sha256, git commit, Python version
 ├── inputs/           ← All inputs copied with hash-prefixed names
@@ -184,11 +183,18 @@ out/
 | Auto-dedup, field completion, search expansion, basic statistics | Auto-decide "should this paper be included?" |
 | Offer downgraded service for out-of-scope questions | Evaluate internal validity of individual studies |
 
+This is a **literature-library and search-evidence auditor**, not a complete
+systematic-review engine. The built-in online collector is a diagnostic first
+pass; multi-round search, subscription databases, cross-database query
+translation, citation chasing, and final screening require explicitly enabled
+modules plus recorded agent or human work. Planned adapters are not current
+capabilities.
+
 ## Design Principles
 
 - **No composite score.** Six peer dimensions — a perfect A1 doesn't hide a broken F1. (Contrast: ScholarEval's weighted average suits finished-paper evaluation but would obscure library-readiness diagnostics.)
 - **Evidence-graded.** Every conclusion: `measured · estimated · automated-screening · manual-verification-required · not_assessable`.
-- **Thresholds are signals, not verdicts.** All defaults documented with rationale; all user-overridable.
+- **Thresholds are signals, not verdicts.** All defaults are documented with rationale and are user-overridable; cross-domain calibration requires an external benchmark set and is not implied by a default value.
 - **Privacy-first.** No absolute paths, no API keys in prompts, hash-prefixed input file names.
 - **Reproducible.** Every run records git commit, script sha256, Python version, all input hashes.
 
