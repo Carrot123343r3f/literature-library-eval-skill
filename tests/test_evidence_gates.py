@@ -145,3 +145,19 @@ def test_audit_reports_citation_candidates_without_treating_them_as_included(tmp
     assert citation["backward_candidates"] == 1
     assert citation["forward_candidates"] == 1
     assert "not included studies or saturation evidence" in report["summary"]
+
+
+def test_indicator_rows_never_mix_a_verdict_with_incompatible_evidence(tmp_path):
+    run_log = tmp_path / "run-log.json"
+    run_log.write_text(json.dumps({"queries": [{
+        "source": "arxiv", "query": "robot localization", "fields": "title,abstract", "date": "2026-07-28",
+    }]}), encoding="utf-8")
+    result, out = run_audit(tmp_path, {"scope_status": "in_scope", "review_type": "systematic"},
+                            "--run-log", run_log)
+    assert result.returncode == 0, result.stderr
+    report = json.loads((out / "audit.json").read_text(encoding="utf-8"))
+    rows = {row["subproject"]: row for row in report["indicator_register"]}
+    assert rows["F1"]["meets_standard"] == "pass"
+    assert rows["F1"]["evidence_status"] == "measured"
+    assert rows["E2"]["meets_standard"] == rows["E2"]["evidence_status"] == "not_assessable"
+    assert rows["F6"]["meets_standard"] == rows["F6"]["evidence_status"] == "not_assessable"

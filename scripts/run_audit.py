@@ -3,7 +3,7 @@
 import argparse, datetime as dt, hashlib, html, json, pathlib, re, shutil, sys, tempfile
 from collections import Counter
 from math import log
-from audit_core.contracts import compact as _shared_compact, public_value as _shared_public_value, validate_context as _validate_context, validate_run_config as _shared_validate_run_config
+from audit_core.contracts import compact as _shared_compact, public_value as _shared_public_value, reconcile_indicator_evidence, validate_context as _validate_context, validate_indicator_evidence, validate_run_config as _shared_validate_run_config
 from audit_core.coverage import evaluate_gold_recall, evaluate_multisource_lower_bound
 from audit_core.rendering import render_markdown_html
 
@@ -139,52 +139,11 @@ def benchmark(library, base):
             "note": "Only stable identifiers contribute to measured recall."}
 
 def a2(gold, hits):
-    """A2 recall at the item level — same logic as A1 benchmark().
-
-    Each gold item that shares any stable ID with any hit => matched.
-    This avoids double-counting when one item has multiple identifiers.
-    """
+    """A2 item-level recall, evaluated independently of report rendering."""
     return evaluate_gold_recall(gold, hits, ids)
-    if gold is None or hits is None:
-        return {"status": "not_assessable", "recall": None, "note": "Supply both gold set and executed query-hit snapshot."}
-    hit_ids = set().union(*(ids(x) for x in hits if isinstance(x, dict)))
-    gold_items_with_ids = [g for g in gold if isinstance(g, dict) and ids(g)]
-    total = len(gold_items_with_ids)
-    if total == 0:
-        return {"status": "not_assessable", "recall": None, "note": "Gold set lacks stable identifiers."}
-    matched = sum(1 for g in gold_items_with_ids if ids(g) & hit_ids)
-    return {"status": "measured", "total": total, "matched": matched,
-            "recall": round(matched / total, 3),
-            "missing_ids": sorted(set().union(*(ids(g) for g in gold_items_with_ids if not (ids(g) & hit_ids)))),
-            "note": "Item-level match (any shared stable ID → matched). Consistent with A1 method. An executed zero-result query is measured recall 0, not unavailable evidence."}
 
 def a3(sources):
     return evaluate_multisource_lower_bound(sources, ids)
-    if not sources or len(sources) < 2:
-        return {"status": "not_assessable", "note": "Supply deduplicable snapshots from at least two sources."}
-    incomplete = sorted(name for name, meta in sources.items()
-                        if any(status != "complete" for status in meta.get("statuses", []))
-                        or not all(meta.get("completion_flags", [])))
-    filters = {json.dumps(meta.get("scope_filters"), ensure_ascii=False, sort_keys=True)
-               for meta in sources.values()}
-    dedup_rules = {str(meta.get("dedup_rule") or "") for meta in sources.values()}
-    boundaries_valid = len(filters) == 1 and next(iter(filters), "null") not in ("null", "{}")
-    dedup_valid = len(dedup_rules) == 1 and bool(next(iter(dedup_rules), ""))
-    source_ids = {name: set().union(*(ids(x) for x in meta.get("items", []) if isinstance(x, dict)))
-                  for name, meta in sources.items()}
-    union = set().union(*source_ids.values())
-    if not union: return {"status": "not_assessable", "note": "Candidate snapshots contain no stable identifiers."}
-    overlaps = {"|".join(pair): len(source_ids[pair[0]] & source_ids[pair[1]])
-                for pair in __import__('itertools').combinations(sorted(source_ids), 2)}
-    result = {"status": "estimated_lower_bound" if not incomplete and boundaries_valid and dedup_valid else "partial_snapshot",
-              "deduplicated_candidate_lower_bound": len(union),
-              "source_unique_identifier_counts": {k: len(v) for k, v in source_ids.items()},
-              "pairwise_overlaps": overlaps, "incomplete_sources": incomplete,
-              "boundaries_valid": boundaries_valid, "dedup_rule_valid": dedup_valid,
-              "note": "Multi-source deduplicated lower bound; not Recall or capture-recapture."}
-    if incomplete or not boundaries_valid or not dedup_valid:
-        result["note"] = "Source snapshots are incomplete or lack consistent scope filters/dedup rule; provisional count must not support A3 conclusions."
-    return result
 
 def health(library, standards=None, dedup_log_provided=False, dedup_log_depth="missing", decision_log_provided=False, taxonomy=None):
     standards = standards or {}
@@ -1401,20 +1360,26 @@ def indicator_rows(report):
             info = f"run log {_fmt_pct(ctx.get('run_log_completeness'))} 完整（{ctx.get('run_log_valid_count','—')}/{ctx.get('run_log_query_count','—')} 条合格）"
         else:
             info = f"run log {'完整' if ctx.get('run_log_complete') else '缺失'}"
-        return (chk(p, "F1_query_traceability"), info, p.get("status"),
+        evidence = ("measured" if ctx.get("run_log_depth") in {"valid", "valid_full", "partial", "shallow", "invalid"}
+                    else "not_assessable")
+        verdict = chk(p, "F1_query_traceability") if evidence != "not_assessable" else "not_assessable"
+        return (verdict, info, evidence,
                 f"{'建库时查询未保留——唯一过程阻断项。' if not ctx.get('run_log_complete') else '全部 ' + str(ctx.get('run_log_query_count','')) + ' 条查询均含必要字段。' if ctx.get('run_log_depth') in ('valid','valid_full') else ctx.get('run_log_valid_count','') + '/' + str(ctx.get('run_log_query_count','')) + ' 条查询完整，其余缺必要字段（需 source/query/fields/date）。'}")
 
     def _f2(d):
         fc_abs = d["fc"].get("abstractNote")
         abs_threshold = report['standards'].get('f_abstract_rate', .80)
-        return ("pass" if fc_abs is not None and fc_abs >= abs_threshold else "fail",
+        verdict = ("not_assessable" if fc_abs is None else
+                   "pass" if fc_abs >= abs_threshold else "fail")
+        return (verdict,
                 _fmt_pct(fc_abs), h.get("status"),
                 f"摘要率 {_fmt_pct(fc_abs)}。"
                 f"{'达标。' if (fc_abs or 0) >= abs_threshold else '低于阈值。'}")
 
     def _f3(d):
         hacc = d["hacc"]; access_threshold = report['standards'].get('f_access_rate', .80)
-        return (chk(h, "F3_access"), _fmt_pct(hacc), h.get("status"),
+        verdict = chk(h, "F3_access") if hacc is not None else "not_assessable"
+        return (verdict, _fmt_pct(hacc), h.get("status"),
                 f"附件 {_fmt_pct(d['ha_r'])} | 开放链接 {_fmt_pct(d['ho_r'])} | 联合 {_fmt_pct(hacc)}。"
                 f"{'达标。' if hacc and hacc >= access_threshold else '低于阈值。'}"
                 f"联合=v 附件或开放链接任一可用的记录比例，避免同一记录双渠道重复计数。")
@@ -1544,6 +1509,7 @@ def indicator_rows(report):
             std = std_entry
 
         v, cur, ev, note = compute(data)
+        ev = reconcile_indicator_evidence(v, ev)
         dim_label = dim_names.get(ind["dimension"], ind["dimension"])
         rows.append((dim_label, iid, ind["display_name"]["zh"], std, v, compact(cur), ev, note))
 
@@ -1654,6 +1620,9 @@ def write(report, out, artifact_paths=None):
          "standard": s, "meets_standard": v, "current_status": cur,
          "evidence_status": e, "description_and_action": note}
         for d, c, n, s, v, cur, e, note in rows]
+    semantic_errors = validate_indicator_evidence(report["indicator_register"])
+    if semantic_errors:
+        raise ValueError("invalid indicator evidence contract: " + "; ".join(semantic_errors))
 
     # Copy inputs and generate manifest
     if artifact_paths:

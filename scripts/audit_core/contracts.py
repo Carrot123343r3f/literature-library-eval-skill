@@ -9,6 +9,45 @@ SENSITIVE_KEY_PARTS = (
     "credential", "cookie",
 )
 
+INDICATOR_VERDICTS = {"pass", "warning", "fail", "screening", "not_assessable"}
+INDICATOR_EVIDENCE_STATUSES = {
+    "measured", "estimated", "automated-screening",
+    "manual-verification-required", "not_assessable",
+}
+
+
+def reconcile_indicator_evidence(verdict, evidence_status):
+    """Apply the non-negotiable verdict/evidence semantics for one row."""
+    if verdict == "not_assessable":
+        return "not_assessable"
+    if verdict == "screening" or evidence_status in {"screening", "discovery_only"}:
+        # An unconfirmed standard may show computed values, but the resulting
+        # verdict is still an automated preliminary screen, not a measurement.
+        return "automated-screening"
+    return evidence_status
+
+
+def validate_indicator_evidence(rows):
+    """Return semantic-contract errors for indicator-register rows."""
+    errors = []
+    for row in rows:
+        identifier = row.get("subproject", "<unknown>")
+        verdict = row.get("meets_standard")
+        evidence = row.get("evidence_status")
+        if verdict not in INDICATOR_VERDICTS:
+            errors.append(f"{identifier}: unsupported verdict {verdict!r}")
+            continue
+        if evidence not in INDICATOR_EVIDENCE_STATUSES:
+            errors.append(f"{identifier}: unsupported evidence status {evidence!r}")
+            continue
+        if verdict == "not_assessable" and evidence != "not_assessable":
+            errors.append(f"{identifier}: not_assessable verdict requires not_assessable evidence")
+        elif verdict in {"pass", "warning", "fail"} and evidence == "not_assessable":
+            errors.append(f"{identifier}: {verdict} verdict cannot use not_assessable evidence")
+        elif verdict == "screening" and evidence not in {"estimated", "automated-screening"}:
+            errors.append(f"{identifier}: screening verdict requires estimated or automated-screening evidence")
+    return errors
+
 
 def compact(value):
     """Convert a report cell to a safe, single-line Markdown-table value."""

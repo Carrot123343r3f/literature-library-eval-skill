@@ -11,7 +11,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from collect_open_sources import load_authorized_plan
 from run_audit import _validate_run_config, stability
 from search_for_eval import compute_recall, entry_ids
-from audit_core.contracts import public_value
+from audit_core.contracts import public_value, reconcile_indicator_evidence, validate_indicator_evidence
 from audit_core.rendering import render_markdown_html
 
 
@@ -26,6 +26,20 @@ def test_shared_contracts_redact_and_renderer_escapes_html():
     rendered = render_markdown_html("# <unsafe>\n\n| A | B |\n| --- | --- |\n| 1 | 2 |")
     assert "&lt;unsafe&gt;" in rendered
     assert "<table>" in rendered
+
+
+def test_indicator_verdict_and_evidence_status_contracts_are_semantic():
+    assert reconcile_indicator_evidence("not_assessable", "measured") == "not_assessable"
+    assert reconcile_indicator_evidence("screening", "measured") == "automated-screening"
+    assert not validate_indicator_evidence([
+        {"subproject": "F1", "meets_standard": "pass", "evidence_status": "measured"},
+        {"subproject": "F6", "meets_standard": "not_assessable", "evidence_status": "not_assessable"},
+    ])
+    errors = validate_indicator_evidence([
+        {"subproject": "F1", "meets_standard": "pass", "evidence_status": "not_assessable"},
+        {"subproject": "E2", "meets_standard": "not_assessable", "evidence_status": "measured"},
+    ])
+    assert len(errors) == 2
 
 
 def test_threshold_boundary_is_inclusive():
