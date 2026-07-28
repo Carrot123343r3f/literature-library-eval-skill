@@ -45,12 +45,11 @@
 - 每个输入都以 sha256 哈希记录——审计可复现
 - 缺失的输入标为 `not_assessable` 而非隐藏——*"这是最便宜的修复方式"*
 
-## 三分钟体验 Demo：无需配置
+## 参考运行样本（非新手入口）
 
-仓库自带一个完整的本地示例：
+仓库自带一个完整的本地参考运行样本：
 [`example-all-modules-report/`](example-all-modules-report/)。里面已经准备好
-了一份小型示例文献库、研究问题、检索证据和审计结果。你可以先看懂输出，
-再换成自己的数据，也可以先查看[仓库内置的 HTML 报告](example-all-modules-report/audit/audit.html)。
+了一份小型示例文献库、研究问题、检索证据和审计结果。它主要供维护、评审和回归检查使用；新用户不必先读它。
 
 在仓库根目录运行：
 
@@ -112,7 +111,7 @@ AI 会自动：
    ✅          ✅          🔧         🔧       ✅       🔧         🔧           ✅         ✅
 ```
 
-→ [查看完整示例报告](example-all-modules-report/audit/audit.html)
+完整示例报告是参考运行样本，不是开始自己审计的前置条件。
 
 ### 一条命令完成首轮流程
 
@@ -121,11 +120,20 @@ AI 会自动：
 ```powershell
 python scripts/autopilot.py `
   --question "低照度传感条件下机器人定位方法如何工作？" `
+  --out first-pass
+```
+
+这会生成 `first-pass/onboarding.html`：保存问题、初始检索计划和下一步命令。确认这是范围内工程问题后，再运行：
+
+```powershell
+python scripts/autopilot.py `
+  --question "低照度传感条件下机器人定位方法如何工作？" `
+  --scope-status in_scope `
   --library library.json `
   --out first-pass
 ```
 
-有 OpenAlex Key 时使用 OpenAlex；没有 Key 时，仍可使用已授权的 arXiv、Crossref 和 Europe PMC。Autopilot 建议不会自动成为正式纳入决定。
+未确认范围时，autopilot 会生成引导页而非报错或臆断范围；`--library` 也可暂不提供，确认后会建立空白起步库并如实标出不可评估项。有 OpenAlex Key 时使用 OpenAlex；没有 Key 时，仍可使用已授权的 arXiv、Crossref 和 Europe PMC。Autopilot 建议不会自动成为正式纳入决定。
 
 ## 六维框架
 
@@ -237,7 +245,7 @@ git clone https://github.com/Carrot123343r3f/literature-library-eval-skill.git `
 
 | 读者 | 资源 |
 |---|---|
-| **新用户** | [英文 README](README.md) · [快速开始](#三分钟开始自己的审计) · [示例报告](example-all-modules-report/audit/audit.html) |
+| **新用户** | [英文 README](README.md) · [快速开始](#三分钟开始自己的审计) |
 | **深度了解** | [方法学](docs/methodology.md) · [架构](docs/architecture.md) · [输出说明](docs/outputs.md) |
 | **集成** | [集成指南](docs/integrations.md) · Zotero / 数据库 / 配套 skill |
 | **标准参考** | [用户标准说明书](references/user-standards-guide.md) · [指标注册表](schemas/indicator-registry.json) |

@@ -1,6 +1,8 @@
-# 全模块示例报告
+# 参考运行样本
 
 主题：Gaussian Splatting 支持实时 SLAM，重点关注低光照和噪声传感条件。
+
+本目录是供维护者、评审者和回归检查使用的完整可复现参考运行样本，不是新手入口。新用户应先运行 `python scripts/autopilot.py --question "..." --out first-pass`，获得简洁的 `onboarding.html`，再决定是否确认范围并进行完整审计。
 
 本示例使用本地快照，不需要联网或 API key。它展示：
 

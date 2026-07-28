@@ -48,11 +48,11 @@ Run the audit **before** writing. In one command (or one conversation with an AI
 
 ## Try the Demo — No Configuration Required
 
-The repository includes a complete local example in
+The repository includes a complete local reference fixture in
 [`example-all-modules-report/`](example-all-modules-report/). It contains a small
 sample library, a research question, search evidence, and the expected audit
 artifacts. You can inspect the [bundled HTML report](example-all-modules-report/audit/audit.html)
-before preparing your own data.
+after you have completed a first run. It is for maintainers, reviewers, and regression checks; it is not the recommended new-user entry point.
 
 From the repository root, run:
 
@@ -110,7 +110,7 @@ The AI will:
 2. Accept JSON, CSV, RIS, or BibTeX through `import_library.py`; review the generated import preview before auditing.
 3. Execute single-round diagnostic search, help you iterate the query, compute all A–F indicators, and produce the audit package
 
-→ [View the complete example report](example-all-modules-report/audit/audit.html)
+The full example report is a reference fixture, not a prerequisite for getting started.
 
 ### One-command first pass
 
@@ -119,12 +119,20 @@ For a low-friction first run, use the autopilot. It creates a source-aware query
 ```bash
 python scripts/autopilot.py \
   --question "How do robot localization methods handle low-light sensing?" \
-  --library library.json \
-  --scope-status in_scope \
   --out first-pass
 ```
 
-`--scope-status in_scope` is an explicit confirmation that this is an engineering question within the Skill's scope; without it, autopilot stops before a full A-F report rather than inventing a scope decision. OpenAlex is used when its key is available; authorized arXiv, Crossref, and Europe PMC adapters remain available without it. Autopilot suggestions are never formal inclusion decisions.
+This creates `first-pass/onboarding.html`: a small handoff with the saved question and next command. When you confirm the question is in scope, run:
+
+```bash
+python scripts/autopilot.py \
+  --question "How do robot localization methods handle low-light sensing?" \
+  --scope-status in_scope \
+  --library library.json \
+  --out first-pass
+```
+
+`--scope-status in_scope` is an explicit confirmation that this is an engineering question within the Skill's scope; without it, autopilot produces an onboarding plan rather than inventing a full A-F verdict. `--library` is optional: a confirmed run without one creates an empty starter library and reports only what is assessable. OpenAlex is used when its key is available; authorized arXiv, Crossref, and Europe PMC adapters remain available without it. Autopilot suggestions are never formal inclusion decisions.
 
 ## Six-Dimension Framework
 
@@ -242,7 +250,7 @@ choose an online search or metadata-enrichment workflow.
 
 | Audience | Resources |
 |---|---|
-| **New users** | [README.zh-CN.md](README.zh-CN.md) · [Quickstart](#quickstart) · [Example report](example-all-modules-report/audit/audit.html) |
+| **New users** | [README.zh-CN.md](README.zh-CN.md) · [Quickstart](#quickstart) |
 | **Deep dive** | [Methodology](docs/methodology.md) · [Architecture](docs/architecture.md) · [Outputs](docs/outputs.md) |
 | **Integration** | [Integrations](docs/integrations.md) · [Zotero / databases / companion skills](docs/integrations.md) |
 | **Standards** | [User standards guide](references/user-standards-guide.md) · [Indicator registry](schemas/indicator-registry.json) |

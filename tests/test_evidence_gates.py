@@ -74,3 +74,26 @@ def test_validated_iterations_are_recorded_as_evidence(tmp_path):
 def test_dev_requirements_include_tracked_mcp_runtime_dependency():
     requirements = (ROOT / "requirements-dev.txt").read_text(encoding="utf-8")
     assert "mcp>=" in requirements
+
+
+def test_autopilot_unconfirmed_scope_writes_onboarding_without_audit(tmp_path):
+    out = tmp_path / "first-pass"
+    command = [sys.executable, str(ROOT / "scripts" / "autopilot.py"),
+               "--question", "robot localization", "--out", str(out), "--offline"]
+    result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8")
+    assert result.returncode == 0, result.stderr
+    assert (out / "onboarding.html").is_file()
+    manifest = json.loads((out / "autopilot-manifest.json").read_text(encoding="utf-8"))
+    assert manifest["mode"] == "needs_scope_confirmation"
+    assert not (out / "audit" / "audit.html").exists()
+
+
+def test_autopilot_confirmed_scope_can_start_without_library(tmp_path):
+    out = tmp_path / "first-pass"
+    command = [sys.executable, str(ROOT / "scripts" / "autopilot.py"),
+               "--question", "robot localization", "--out", str(out), "--offline",
+               "--scope-status", "in_scope"]
+    result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8")
+    assert result.returncode == 0, result.stderr
+    assert (out / ".autopilot" / "starter-library.json").is_file()
+    assert (out / "audit" / "audit.html").is_file()
