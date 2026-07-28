@@ -186,7 +186,9 @@ def main():
     if args.collect:
         if automation.get("allow_search") is not True or automation.get("allow_external_discovery") is not True: raise SystemExit("ERROR: --collect requires automation.allow_search=true and automation.allow_external_discovery=true.")
         if not args.query_plan: raise SystemExit("ERROR: --collect requires --query-plan.")
-        collection = out / "collection"; run([sys.executable, script("collect_open_sources.py"), "--run-config", args.run_config, "--plan", args.query_plan, "--out", str(collection)], steps, "collection", out, run_signature, [collection / "source-snapshot.json"], args.resume)
+        collection = out / "collection"; collect_command = [sys.executable, script("collect_open_sources.py"), "--run-config", args.run_config, "--plan", args.query_plan, "--out", str(collection / "source-snapshot.json")]
+        if args.resume: collect_command.append("--resume")
+        run(collect_command, steps, "collection", out, run_signature, [collection / "source-snapshot.json"], args.resume)
         normalized = out / "normalization"; run([sys.executable, script("normalize_candidates.py"), "--snapshot", str(collection / "source-snapshot.json"), "--out", str(normalized)], steps, "normalization", out, run_signature, [normalized / "candidates.json", normalized / "deduplication-log.json"], args.resume)
         args.source_snapshot = args.source_snapshot or str(collection / "source-snapshot.json"); args.deduplication_log = args.deduplication_log or str(normalized / "deduplication-log.json")
         screen = out / "screening"; run([sys.executable, script("screen_candidates.py"), "--candidates", str(normalized / "candidates.json"), "--out", str(screen)], steps, "screening_template", out, run_signature, [screen / "screening-decisions.json", screen / "screening-template.csv", screen / "screening-workbench.html"], args.resume)

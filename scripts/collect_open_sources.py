@@ -3,6 +3,7 @@
 import argparse
 import datetime as dt
 import json
+import os
 import time
 import urllib.parse
 import urllib.request
@@ -50,12 +51,20 @@ def load_authorized_plan(run_config_path, plan_path, required_permission=None):
 
 
 def get_json(url):
-    request = urllib.request.Request(url, headers={"User-Agent": "literature-library-eval/3.0"})
-    with urllib.request.urlopen(request, timeout=45) as response:
-        payload = response.read(20 * 1024 * 1024 + 1)
-        if len(payload) > 20 * 1024 * 1024:
-            raise ValueError("remote JSON response exceeds 20 MiB safety limit")
-        return json.loads(payload.decode("utf-8"))
+    last_error = None
+    for attempt in range(3):
+        try:
+            request = urllib.request.Request(url, headers={"User-Agent": "literature-library-eval/3.0"})
+            with urllib.request.urlopen(request, timeout=45) as response:
+                payload = response.read(20 * 1024 * 1024 + 1)
+                if len(payload) > 20 * 1024 * 1024:
+                    raise ValueError("remote JSON response exceeds 20 MiB safety limit")
+                return json.loads(payload.decode("utf-8"))
+        except Exception as exc:
+            last_error = exc
+            if attempt < 2:
+                time.sleep(1.5 * (attempt + 1))
+    raise ValueError(f"remote JSON request failed after 3 attempts: {last_error}")
 
 
 def openalex(query, limit):
@@ -125,6 +134,7 @@ def main():
     parser.add_argument("--plan", required=True, help="query-plan JSON with queries[{id,query,sources}]")
     parser.add_argument("--out", required=True, help="source snapshot JSON")
     parser.add_argument("--max-records", type=int, default=1000, help="maximum records per source/query; a limit means an incomplete snapshot")
+    parser.add_argument("--resume", action="store_true", help="reuse completed query entries from an existing output snapshot")
     args = parser.parse_args()
     if not 1 <= args.max_records <= MAX_RECORDS_PER_SOURCE_QUERY:
         parser.error(f"--max-records must be between 1 and {MAX_RECORDS_PER_SOURCE_QUERY}")
@@ -135,7 +145,18 @@ def main():
     result = {"schema_version": "1.1", "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
               "max_records_per_source_query": args.max_records,
               "scope_filters": plan.get("scope_filters"), "dedup_rule": plan.get("dedup_rule"), "queries": []}
+    completed_ids = set()
+    if args.resume and pathlib.Path(args.out).is_file():
+        try:
+            previous = json.loads(pathlib.Path(args.out).read_text(encoding="utf-8"))
+            if isinstance(previous, dict) and isinstance(previous.get("queries"), list):
+                result.update({key: previous.get(key) for key in ("generated_at", "queries")})
+                completed_ids = {row.get("id") for row in result["queries"] if isinstance(row, dict) and row.get("status") in {"complete", "partial"}}
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            completed_ids = set()
     for row in plan.get("queries", []):
+        if isinstance(row, dict) and row.get("id") in completed_ids:
+            continue
         if not isinstance(row, dict) or not isinstance(row.get("query"), str) or not row["query"].strip():
             result["queries"].append({"id": row.get("id") if isinstance(row, dict) else None,
                                       "sources": {}, "status": "failed",
@@ -160,6 +181,9 @@ def main():
             except Exception as exc:
                 entry["sources"][source] = {"status": "failed", "error": f"source_request_failed:{type(exc).__name__}"}
         result["queries"].append(entry)
+        temporary = pathlib.Path(args.out).with_name(pathlib.Path(args.out).name + ".tmp")
+        temporary.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(temporary, args.out)
     with open(args.out, "w", encoding="utf-8") as fh: json.dump(result, fh, ensure_ascii=False, indent=2)
 
 
