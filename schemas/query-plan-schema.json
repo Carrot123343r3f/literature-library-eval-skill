@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Source-aware query plan",
+  "type": "object",
+  "required": ["schema_version", "question", "queries"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "question": {"type": "string", "minLength": 1},
+    "compiler": {"type": "string"},
+    "dedup_rule": {"type": "string"},
+    "queries": {"type": "array", "items": {"type": "object", "required": ["id", "query", "sources"], "properties": {"id": {"type": "string"}, "query": {"type": "string", "minLength": 1}, "sources": {"type": "array", "items": {"enum": ["openalex", "arxiv", "crossref", "europepmc"]}}, "source_syntax": {"type": "string"}, "generated_from": {"type": "string"}, "terms": {"type": "array", "items": {"type": "string"}}}, "additionalProperties": false}}
+  },
+  "additionalProperties": false
+}

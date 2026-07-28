@@ -36,7 +36,7 @@ def check_json():
 
 def check_scripts():
     errors = []
-    for name in ("optimization.py", "quality_optimization.py", "experiment_attribution.py", "evalset_audit.py", "search_iterator.py", "run_full_audit.py", "check_consistency.py"):
+    for name in ("optimization.py", "quality_optimization.py", "experiment_attribution.py", "evalset_audit.py", "search_iterator.py", "query_compiler.py", "auto_triage.py", "autopilot.py", "run_full_audit.py", "check_consistency.py"):
         path = ROOT / "scripts" / name
         if not path.exists():
             errors.append(f"missing expected script: scripts/{name}")
@@ -58,6 +58,10 @@ def check_scripts():
         for command in ("counterexample", "screen-queue", "canary"):
             if command not in quality_help.stdout:
                 errors.append(f"quality optimization CLI missing command: {command}")
+    for script in ("query_compiler.py", "auto_triage.py", "autopilot.py"):
+        result = subprocess.run([sys.executable, str(ROOT / "scripts" / script), "--help"], capture_output=True, text=True)
+        if result.returncode != 0:
+            errors.append(f"{script} CLI help failed: {result.stderr.strip()}")
     for script, commands in (("experiment_attribution.py", ("--baseline", "--candidates")), ("evalset_audit.py", ("--dev", "--validation"))):
         result = subprocess.run([sys.executable, str(ROOT / "scripts" / script), "--help"], capture_output=True, text=True)
         if result.returncode != 0:

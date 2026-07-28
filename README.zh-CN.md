@@ -114,6 +114,19 @@ AI 会自动：
 
 → [查看完整示例报告](example-all-modules-report/audit/audit.html)
 
+### 一条命令完成首轮流程
+
+如果不想手动串联多个脚本，可以使用 autopilot。它会生成按来源适配的检索式、运行可恢复工作流、生成主动筛选队列，并把 AI 建议与正式筛选决定分开保存：
+
+```powershell
+python scripts/autopilot.py `
+  --question "低照度传感条件下机器人定位方法如何工作？" `
+  --library library.json `
+  --out first-pass
+```
+
+有 OpenAlex Key 时使用 OpenAlex；没有 Key 时，仍可使用已授权的 arXiv、Crossref 和 Europe PMC。Autopilot 建议不会自动成为正式纳入决定。
+
 ## 六维框架
 
 21 个指标（伞式综述 24 个）。六个维度平级，不合成总分。任何一维的致命短板都不能被其他维度掩盖。

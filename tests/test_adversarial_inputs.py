@@ -115,3 +115,24 @@ def test_search_diagnostic_falls_back_to_arxiv_without_openalex_key(tmp_path, mo
     meta = json.loads((out / "search_meta.json").read_text(encoding="utf-8"))
     assert hits and hits[0]["source"] == "arxiv"
     assert meta["sources_used"] == ["arxiv"]
+
+
+def test_autopilot_offline_runs_one_command_and_writes_triage_manifest(tmp_path):
+    library = tmp_path / "library.json"
+    library.write_text(json.dumps([{"title": "Robot localization", "DOI": "10.1000/example"}]), encoding="utf-8")
+    out = tmp_path / "autopilot"
+    result = invoke("autopilot.py", "--question", "robot localization", "--library", library,
+                    "--out", out, "--offline")
+    assert result.returncode == 0, result.stderr
+    assert (out / "audit" / "audit.html").is_file()
+    assert (out / "autopilot-manifest.json").is_file()
+    assert not (out / "screening" / "auto-triage.json").exists()
+
+
+def test_query_compiler_uses_source_specific_syntax():
+    from query_compiler import compile_query_plan
+    plan = compile_query_plan("robot localization", ["arxiv", "europepmc", "crossref"])
+    queries = {row["sources"][0]: row["query"] for row in plan["queries"]}
+    assert queries["arxiv"].startswith('all:"')
+    assert "TITLE:" in queries["europepmc"]
+    assert queries["crossref"] == "robot localization"

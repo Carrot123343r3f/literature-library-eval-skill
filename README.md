@@ -112,6 +112,19 @@ The AI will:
 
 → [View the complete example report](example-all-modules-report/audit/audit.html)
 
+### One-command first pass
+
+For a low-friction first run, use the autopilot. It creates a source-aware query plan, runs the resumable workflow, generates an active screening queue, and writes AI suggestions separately from formal screening decisions:
+
+```bash
+python scripts/autopilot.py \
+  --question "How do robot localization methods handle low-light sensing?" \
+  --library library.json \
+  --out first-pass
+```
+
+OpenAlex is used when its key is available; authorized arXiv, Crossref, and Europe PMC adapters remain available without it. Autopilot suggestions are never formal inclusion decisions.
+
 ## Six-Dimension Framework
 
 21 indicators. 24 for umbrella reviews. No composite score. Every dimension stands alone — a perfect A1 cannot hide a broken F1.
