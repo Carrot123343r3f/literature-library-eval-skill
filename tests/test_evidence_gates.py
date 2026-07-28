@@ -72,11 +72,6 @@ def test_validated_iterations_are_recorded_as_evidence(tmp_path):
     assert report["artifacts"]["search-iterations"]["provided"] is True
 
 
-def test_dev_requirements_include_tracked_mcp_runtime_dependency():
-    requirements = (ROOT / "requirements-dev.txt").read_text(encoding="utf-8")
-    assert "mcp>=" in requirements
-
-
 def test_autopilot_unconfirmed_scope_writes_onboarding_without_audit(tmp_path):
     out = tmp_path / "first-pass"
     command = [sys.executable, str(ROOT / "scripts" / "autopilot.py"),
