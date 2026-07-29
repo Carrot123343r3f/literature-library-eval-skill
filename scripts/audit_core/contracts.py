@@ -13,6 +13,22 @@ SENSITIVE_VALUE_RE = re.compile(r"(?i)((?:api[_-]?key|token|secret|password|auth
 EMBEDDED_LOCAL_PATH_RE = re.compile(r"(?<![\w])(?:[A-Za-z]:[\\/]|/)[^\s\"']+")
 ISO_LANGUAGE_CODES = {"all", "ar", "bn", "cs", "da", "de", "el", "en", "es", "fi", "fr", "he", "hi", "hu", "id", "it", "ja", "ko", "nl", "no", "pl", "pt", "ro", "ru", "sv", "th", "tr", "uk", "ur", "vi", "zh"}
 
+
+def normalize_language_tag(value):
+    """Return a supported ISO base language from an ISO/BCP-47 tag, or None.
+
+    Boundaries are compared at base-language level: ``zh-CN`` and ``zh_TW``
+    therefore both satisfy a ``zh`` boundary.  A malformed tag never silently
+    becomes an unrestricted language boundary.
+    """
+    if not isinstance(value, str):
+        return None
+    tag = value.strip().replace("_", "-").casefold()
+    if not tag or not re.fullmatch(r"[a-z]{2,3}(?:-[a-z0-9]{2,8})*", tag):
+        return None
+    base = tag.split("-", 1)[0]
+    return base if base in ISO_LANGUAGE_CODES else None
+
 INDICATOR_VERDICTS = {"pass", "warning", "fail", "screening", "not_assessable"}
 INDICATOR_EVIDENCE_STATUSES = {
     "measured", "estimated", "automated-screening",
@@ -159,8 +175,8 @@ def validate_run_config(rc):
         if languages is not None:
             if not isinstance(languages, list) or not languages:
                 errors.append("project.languages must be a non-empty array")
-            elif any(not isinstance(language, str) or language.casefold() not in ISO_LANGUAGE_CODES for language in languages):
-                errors.append("project.languages must contain supported ISO language codes or 'all'")
+            elif any(normalize_language_tag(language) is None for language in languages):
+                errors.append("project.languages must contain supported ISO or BCP-47 language tags (or 'all')")
 
     library = rc.get("library", {})
     if isinstance(library, dict):

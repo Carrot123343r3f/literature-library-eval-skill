@@ -139,6 +139,8 @@ python scripts/autopilot.py \
 python scripts/autopilot.py --question "How do robot localization methods handle low-light sensing?" --scope-status in_scope --library library.json --mode sufficiency-audit --review-type systematic --time-start 2020 --time-end 2026 --languages en --output-language en --out first-pass --allow-external-discovery
 ```
 
+An explicit sufficiency-audit request first runs a relevance and evidence precheck. It needs documented independent validation (`--gold`), a reproducible `--query-log`, human `--screening-decisions`, and `--independent-pathways`; otherwise it produces `sufficiency-precheck.html`, not A–F. Time and language boundaries are applied before every A–F calculation. ISO codes and common BCP-47 tags such as `zh-CN` are accepted; records with unknown boundary metadata are excluded rather than silently included.
+
 OpenAlex is used when its key is available; authorized arXiv, Crossref, and Europe PMC adapters remain available without it. Autopilot suggestions are never formal inclusion decisions.
 
 For the guided workflow, run `python scripts/run_full_audit.py configure-permissions --run-config run-config.json` when you later need an online capability. It records each choice without requiring manual JSON edits.

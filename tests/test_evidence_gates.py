@@ -150,6 +150,64 @@ def test_autopilot_rejects_inverted_future_and_invalid_language_boundaries(tmp_p
     assert "ISO language" in invalid_language.stderr
 
 
+def test_autopilot_accepts_common_bcp47_language_tag(tmp_path):
+    command = [sys.executable, str(ROOT / "scripts" / "autopilot.py"),
+               "--question", "robot localization", "--library", str(ROOT / "tests" / "library.json"),
+               "--out", str(tmp_path / "bcp47"), "--offline", "--scope-status", "in_scope",
+               "--mode", "sufficiency-audit", "--review-type", "systematic", "--time-start", "2020",
+               "--time-end", "2026", "--languages", "zh-CN", "--output-language", "zh-CN"]
+    result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8")
+    assert result.returncode == 0, result.stderr
+    manifest = json.loads((tmp_path / "bcp47" / "autopilot-manifest.json").read_text(encoding="utf-8"))
+    assert manifest["mode"] == "sufficiency_precheck"
+
+
+def test_scoped_library_is_used_by_all_record_based_metrics_and_english_html(tmp_path):
+    library = tmp_path / "scoped.json"
+    library.write_text(json.dumps([
+        {"title": "English in scope", "year": 2024, "date": "2024", "language": "en-US", "source": "A", "abstractNote": "x", "cited_by_count": 10},
+        {"title": "Chinese in scope", "year": 2024, "date": "2024", "language": "zh-CN", "source": "B", "abstractNote": "x", "cited_by_count": 100},
+        {"title": "English out of time", "year": 1990, "date": "1990", "language": "en", "source": "C", "abstractNote": "x", "cited_by_count": 100},
+        {"title": "Unknown language", "year": 2024, "date": "2024", "source": "D", "abstractNote": "x", "cited_by_count": 100},
+    ]), encoding="utf-8")
+    context = tmp_path / "context.json"
+    context.write_text(json.dumps({"scope_status": "in_scope", "review_type": "systematic",
+                                   "year_start": 2020, "year_end": 2026, "languages": ["en"],
+                                   "output_language": "en"}), encoding="utf-8")
+    out = tmp_path / "out"
+    result = subprocess.run([sys.executable, str(ROOT / "scripts" / "run_audit.py"), "--library", str(library),
+                             "--context", str(context), "--out", str(out)], capture_output=True, text=True, encoding="utf-8")
+    assert result.returncode == 0, result.stderr
+    report = json.loads((out / "audit.json").read_text(encoding="utf-8"))
+    scope = report["context"]["scope_application"]
+    assert scope["total_records"] == 4 and scope["in_scope_records"] == 1
+    assert scope["time_excluded_records"] == 1 and scope["language_excluded_records"] == 2
+    assert report["library_health"]["records"] == 1
+    assert report["quality"]["h_core"] == 1
+    html = (out / "audit.html").read_text(encoding="utf-8")
+    assert "Literature Library Evidence Audit" in html
+    assert not any("\u4e00" <= char <= "\u9fff" for char in html)
+
+
+def test_source_labels_do_not_establish_f5_traceability(tmp_path):
+    library = tmp_path / "labels.json"
+    library.write_text(json.dumps([
+        {"title": f"Paper {index}", "year": 2024, "date": "2024", "source": "claimed-db"}
+        for index in range(3)
+    ]), encoding="utf-8")
+    context = tmp_path / "context.json"
+    context.write_text(json.dumps({"scope_status": "in_scope", "review_type": "systematic"}), encoding="utf-8")
+    out = tmp_path / "out"
+    result = subprocess.run([sys.executable, str(ROOT / "scripts" / "run_audit.py"), "--library", str(library),
+                             "--context", str(context), "--out", str(out)], capture_output=True, text=True, encoding="utf-8")
+    assert result.returncode == 0, result.stderr
+    report = json.loads((out / "audit.json").read_text(encoding="utf-8"))
+    assert report["library_health"]["source_label_rate"] == 1.0
+    assert report["library_health"]["provenance_rate"] == 0.0
+    row = next(row for row in report["indicator_register"] if row["subproject"] == "F5")
+    assert row["meets_standard"] == "not_assessable"
+
+
 def test_autopilot_relevance_mismatch_stops_at_sufficiency_precheck(tmp_path):
     library = tmp_path / "bridges.json"
     library.write_text(json.dumps([
@@ -284,7 +342,7 @@ def test_unconfirmed_standards_never_emit_pass_fail_or_warning(tmp_path):
     report = json.loads((out / "audit.json").read_text(encoding="utf-8"))
     verdicts = {row["meets_standard"] for row in report["indicator_register"]}
     assert not verdicts & {"pass", "fail", "warning"}
-    overview = __import__("run_audit")._result_overview(report)
+    overview = (out / "audit.html").read_text(encoding="utf-8")
     assert "尚不能作充分性判断" in overview
 
 

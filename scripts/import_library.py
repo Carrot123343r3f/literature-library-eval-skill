@@ -18,7 +18,8 @@ def canonical(row):
     return {"title": title, "DOI": doi, "year": int(year.group(0)) if year else None,
             "abstractNote": clean(row.get("abstract") or row.get("AB")),
             "publicationTitle": clean(row.get("journal") or row.get("JO") or row.get("venue")),
-            "authors": row.get("authors") or [], "source": clean(row.get("source"))}
+            "authors": row.get("authors") or [], "source": clean(row.get("source")),
+            "language": clean(row.get("language") or row.get("languageCode") or row.get("lang") or row.get("LA"))}
 
 
 def parse_ris(text):

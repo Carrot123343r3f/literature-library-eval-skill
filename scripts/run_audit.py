@@ -3,7 +3,7 @@
 import argparse, datetime as dt, hashlib, html, json, pathlib, re, shutil, sys, tempfile
 from collections import Counter
 from math import log
-from audit_core.contracts import compact as _shared_compact, indicator_evidence_qualifier, public_value as _shared_public_value, reconcile_indicator_evidence, validate_context as _validate_context, validate_indicator_evidence, validate_run_config as _shared_validate_run_config
+from audit_core.contracts import compact as _shared_compact, indicator_evidence_qualifier, normalize_language_tag, public_value as _shared_public_value, reconcile_indicator_evidence, validate_context as _validate_context, validate_indicator_evidence, validate_run_config as _shared_validate_run_config
 from audit_core.coverage import evaluate_gold_recall, evaluate_multisource_lower_bound
 from audit_core.rendering import render_markdown_html
 
@@ -97,6 +97,65 @@ def load_items(path):
         return data["items"]
     raise ValueError("items input must be an array or an object with items[]")
 
+
+def _record_year(record):
+    """Return a record year when it can be read safely, otherwise None."""
+    match = re.search(r"\b(19|20)\d{2}\b", str(record.get("date") or record.get("year") or ""))
+    return int(match.group(0)) if match else None
+
+
+def _record_language(record):
+    for key in ("language", "languageCode", "language_code", "lang", "LA"):
+        value = record.get(key)
+        if value:
+            return normalize_language_tag(value)
+    return None
+
+
+def scope_records(records, context):
+    """Apply one declared time/language boundary before every A-F calculation.
+
+    Unknown year or language is excluded when that respective boundary is
+    declared.  Treating unknown metadata as in-scope would make an apparently
+    bounded audit silently include records outside the user's stated scope.
+    """
+    start, end = context.get("year_start"), context.get("year_end")
+    requested = {normalize_language_tag(value) for value in context.get("languages", [])}
+    requested.discard(None)
+    language_filter = bool(requested and "all" not in requested)
+    scoped, time_excluded, language_excluded = [], 0, 0
+    unknown_year, unknown_language = 0, 0
+    for record in records:
+        year = _record_year(record)
+        if start is not None or end is not None:
+            if year is None:
+                unknown_year += 1; time_excluded += 1; continue
+            if (start is not None and year < start) or (end is not None and year > end):
+                time_excluded += 1; continue
+        if language_filter:
+            language = _record_language(record)
+            if language is None:
+                unknown_language += 1; language_excluded += 1; continue
+            if language not in requested:
+                language_excluded += 1; continue
+        scoped.append(record)
+    return scoped, {"total_records": len(records), "in_scope_records": len(scoped),
+                    "time_excluded_records": time_excluded,
+                    "language_excluded_records": language_excluded,
+                    "unknown_year_records": unknown_year,
+                    "unknown_language_records": unknown_language,
+                    "time_boundary": {"start": start, "end": end},
+                    "language_boundary": sorted(requested) or ["all"]}
+
+
+def scope_snapshot(snapshot, context):
+    """Apply the same scope to externally discovered candidate records."""
+    scoped = {}
+    for source, data in snapshot.items():
+        filtered, _stats = scope_records(data.get("items", []), context)
+        scoped[source] = {**data, "items": filtered}
+    return scoped
+
 def load_snapshot(path):
     with open(path, encoding="utf-8") as fh:
         data = json.load(fh)
@@ -156,7 +215,7 @@ def health(library, standards=None, dedup_log_provided=False, dedup_log_depth="m
     has_attachment = sum(bool(x.get("attachments")) for x in library)
     has_oa = sum(bool(x.get("open_access_url") or x.get("fulltext_url")) for x in library)
     access_union = sum(bool(x.get("attachments") or x.get("open_access_url") or x.get("fulltext_url")) for x in library)
-    provenance = sum(bool(x.get("source") or x.get("source_database") or x.get("collection")) for x in library)
+    source_labels = sum(bool(x.get("source") or x.get("source_database") or x.get("collection")) for x in library)
     decision_links = sum(bool(x.get("decision") or x.get("inclusion_reason") or x.get("screening_status")) for x in library)
     flags = sum(bool(x.get("retracted") or x.get("corrected") or x.get("expression_of_concern")) for x in library)
     core_min = float(standards.get("f_core_metadata_rate", 0.95))
@@ -165,8 +224,9 @@ def health(library, standards=None, dedup_log_provided=False, dedup_log_depth="m
     provenance_min = float(standards.get("f_provenance_rate", 0.95))
     has_fuzzy_dupes = sum(v > 1 for v in title_year.values()) > 0
     f4_version = "pass" if dedup_log_provided else "not_assessable"
-    # F5: decision-log provides screening trail; without it provenance-rate-only is a lower bound
-    provenance_rate = provenance / n if n else None
+    # A source label is self-reported metadata, not a screening provenance trail.
+    source_label_rate = source_labels / n if n else None
+    provenance_rate = decision_links / n if n else None
     if decision_log_provided:
         f5_verdict = "pass" if n and provenance_rate and provenance_rate >= provenance_min else "fail"
         f5_note = "来源谱系 + 纳入/排除决定均可追溯"
@@ -175,7 +235,7 @@ def health(library, standards=None, dedup_log_provided=False, dedup_log_depth="m
             f5_note += '。未提供主题分类（taxonomy）——库的纳入决定未按主题分组，后续综述存在"逐篇流水账"风险（descriptive listing），建议引入主题框架以支撑批判性综合'
     else:
         # provenance-only → not enough for "pass"
-        f5_verdict = "warning" if n and provenance_rate and provenance_rate >= provenance_min else "fail"
+        f5_verdict = "not_assessable"
         f5_note = f"仅来源字段可追溯（谱系率 {round(provenance_rate,3) if provenance_rate else '—'}）。未提供 decision-log——纳入/排除理由不可追溯。"
         if decision_links and n and decision_links / n >= 0.5:
             f5_note += f" 库内有 {decision_links}/{n} 条含 decision/screening_status 字段——可作为部分证据。"
@@ -187,7 +247,7 @@ def health(library, standards=None, dedup_log_provided=False, dedup_log_depth="m
               "F4_exact_duplicates": "pass" if not sum(v > 1 for v in dois.values()) else "fail",
               "F4_version_decisions": f4_version,
               "F3_access": "pass" if n and access_union / n >= access_min else "warning",
-              "F5_provenance": f5_verdict if n and provenance_rate and provenance_rate >= provenance_min else ("fail" if n else "not_assessable"),
+              "F5_provenance": f5_verdict if n else "not_assessable",
               "F6_corrections": "not_assessable"}
     return {"status": "measured" if n else "not_assessable", "records": n, "field_completeness": fields, "checks": checks,
             "duplicate_doi_groups": sum(v > 1 for v in dois.values()),
@@ -195,7 +255,9 @@ def health(library, standards=None, dedup_log_provided=False, dedup_log_depth="m
             "attachment_rate": round(has_attachment / n, 3) if n else None,
             "open_link_rate": round(has_oa / n, 3) if n else None,
             "access_union_rate": round(access_union / n, 3) if n else None,
-            "provenance_rate": round(provenance / n, 3) if n else None, "correction_flag_records": flags,
+            "provenance_rate": round(provenance_rate, 3) if provenance_rate is not None else None,
+            "source_label_rate": round(source_label_rate, 3) if source_label_rate is not None else None,
+            "correction_flag_records": flags,
             "decision_link_rate": round(decision_links / n, 3) if n else None,
             "decision_log_provided": decision_log_provided,
             "dedup_log_depth": dedup_log_depth,
@@ -1168,6 +1230,43 @@ ul{margin:8px 0 16px;padding-left:24px}.table-wrap{overflow-x:auto;margin:14px 0
     return "\n".join(parts)
 
 
+EN_INDICATOR_NAMES = {
+    "A1": "Benchmark-set recall", "A2": "Held-out validation recall", "A3": "Multi-source candidate lower bound", "A4": "Review-type purity",
+    "B1": "Incremental inclusion convergence", "B2": "Discovery yield convergence", "B3": "Pathway completion",
+    "C1": "Topic coverage balance", "C2": "Source balance", "C3": "Selection bias diagnostic", "C4": "Umbrella overlap distribution",
+    "D1": "Search freshness", "D2": "Recent-record share", "D3": "Frontier coverage", "D4": "Version and preprint handling",
+    "E1": "Citation-context diagnostic", "E2": "Venue diagnostic",
+    "F1": "Search traceability", "F2": "Abstract completeness", "F3": "Full-text access", "F4": "Deduplication decisions", "F5": "Screening-decision traceability", "F6": "Corrections monitoring", "F7": "Umbrella quality-readiness",
+}
+
+
+def _english_report_markdown(report, rows):
+    """Produce a complete English decision layer, not merely an html lang tag."""
+    register = report.get("indicator_register", [])
+    failed = [row for row in register if row.get("meets_standard") == "fail"]
+    gaps = [row for row in register if row.get("meets_standard") == "not_assessable"]
+    core = {"A1", "A2", "B1", "B2", "B3", "F1", "F5"}
+    if any(row.get("subproject") in core for row in gaps):
+        readiness = "Sufficiency cannot yet be judged: core coverage, screening, or reproducible-search evidence is missing."
+    elif failed:
+        readiness = "Do not claim review readiness until the blocking evidence issues are resolved."
+    elif gaps:
+        readiness = "This is an exploratory evidence profile, not a sufficiency conclusion."
+    else:
+        readiness = "No automated blocker was found; human methodological review remains required."
+    scope = report.get("context", {}).get("scope_application", {})
+    lines = ["# Literature Library Evidence Audit", "", "## Decision", "", f"**{readiness}**", "",
+             f"Scope applied before every A-F calculation: {scope.get('in_scope_records', 0)} of {scope.get('total_records', 0)} records included; {scope.get('time_excluded_records', 0)} excluded by time and {scope.get('language_excluded_records', 0)} by language.", "",
+             "## Scope", "", "| Boundary | Applied value |", "| --- | --- |",
+             f"| Time | {scope.get('time_boundary', {}).get('start', 'not specified')}–{scope.get('time_boundary', {}).get('end', 'not specified')} |",
+             f"| Languages | {', '.join(scope.get('language_boundary', ['all']))} |", "",
+             "## Indicator register", "", "| Dimension | ID | Indicator | Decision | Evidence status |", "| --- | --- | --- | --- | --- |"]
+    for _dimension, code, _name, _standard, verdict, _current, evidence, _qualifier, _note in rows:
+        lines.append(f"| {code[:1]} | {code} | {EN_INDICATOR_NAMES.get(code, code)} | {verdict} | {evidence} |")
+    lines.extend(["", "## Interpretation", "", "- `screening` means thresholds were not user-confirmed; it is not a pass or fail.", "- `not_assessable` is a documented evidence gap, not evidence of adequacy.", "- Candidate discovery and source labels never prove inclusion, recall, saturation, or screening traceability.", "", "## Limitations", "", "- This report audits the supplied, scope-filtered record set. It cannot establish that global literature has been found.", "- Missing year or language metadata is excluded whenever that boundary is declared, rather than silently included."])
+    return "\n".join(lines) + "\n"
+
+
 def _priority_actions(report):
     blocking, evidence_gaps, rec = [], [], []
     for row in report.get("indicator_register", []):
@@ -1788,6 +1887,20 @@ def write(report, out, artifact_paths=None):
         if verdict in {"fail", "warning", "not_assessable"}
     ]
 
+    if str(ctx.get("output_language", "zh-CN")).lower().startswith("en"):
+        english_actions = [
+            {"code": item["code"], "title": EN_INDICATOR_NAMES.get(item["code"], item["code"]),
+             "verdict": item["verdict"],
+             "why": "This indicator needs documented evidence before it can support a review conclusion.",
+             "next_step": "Open the evidence appendix and add the smallest missing documented input."}
+            for item in action_items
+        ]
+        (out / "audit.html").write_text(
+            render_markdown_html(_english_report_markdown(report, rows), title="Literature Library Evidence Audit",
+                                 actions=english_actions, language="en"), encoding="utf-8")
+        print("HTML report created: audit.html")
+        return
+
     md = ["# 文献库评估报告\n"]
     # 1. 基本信息
     md.append("## 基本信息\n"); md.append("| 项目 | 值 |"); md.append("| --- | --- |")
@@ -2098,10 +2211,23 @@ def main():
                     )
             except (json.JSONDecodeError, OSError):
                 a2_query_failed = True
-    lib = load_items(a.library)
-    cov = {"a1": benchmark(load_items(a.library), load_items(a.benchmark) if a.benchmark else []),
-           "a2": a2(load_items(a.gold) if a.gold else None, load_items(a.query_hits) if a.query_hits else None),
-           "a3": a3(load_snapshot(a.candidate_snapshots) if a.candidate_snapshots else {})}
+    raw_library = load_items(a.library)
+    lib, scope_application = scope_records(raw_library, ctx)
+    # Record scope application in the audit artifact so every metric can be
+    # traced to the same bounded record set rather than a mixed-age/language
+    # library.  Apply the boundary to comparison inputs too when metadata is
+    # available; records with unknown boundary metadata are not treated as in.
+    ctx["scope_application"] = scope_application
+    benchmark_items = load_items(a.benchmark) if a.benchmark else []
+    gold_items = load_items(a.gold) if a.gold else []
+    hit_items = load_items(a.query_hits) if a.query_hits else []
+    benchmark_items, _ = scope_records(benchmark_items, ctx)
+    gold_items, _ = scope_records(gold_items, ctx)
+    hit_items, _ = scope_records(hit_items, ctx)
+    snapshots = scope_snapshot(load_snapshot(a.candidate_snapshots), ctx) if a.candidate_snapshots else {}
+    cov = {"a1": benchmark(lib, benchmark_items),
+           "a2": a2(gold_items if a.gold else None, hit_items if a.query_hits else None),
+           "a3": a3(snapshots)}
     # ── Evidence status from search_meta ──
     if a2_query_failed and cov["a2"].get("status") == "measured":
         cov["a2"]["status"] = "not_assessable"

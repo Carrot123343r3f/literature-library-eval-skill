@@ -299,8 +299,8 @@ def test_report_does_not_disclose_workspace_path_or_secret_context():
         assert str(ROOT) not in archived_context
 
 
-def test_first_run_register_reports_d2_and_missing_b_d3_evidence_explicitly():
-    """A first-run report must distinguish a computed value from missing evidence."""
+def test_first_run_register_keeps_language_boundary_from_silently_including_unknown_records():
+    """A declared language boundary excludes records with no language metadata."""
     with tempfile.TemporaryDirectory() as temp:
         out = pathlib.Path(temp) / "out"
         subprocess.run([
@@ -311,7 +311,9 @@ def test_first_run_register_reports_d2_and_missing_b_d3_evidence_explicitly():
         ], check=True)
         audit = json.loads((out / "audit.json").read_text(encoding="utf-8"))
         rows = {row["subproject"]: row for row in audit["indicator_register"]}
-        assert rows["D2"]["meets_standard"] == "pass"
+        assert rows["D2"]["meets_standard"] == "not_assessable"
+        assert audit["context"]["scope_application"]["in_scope_records"] == 0
+        assert audit["context"]["scope_application"]["unknown_language_records"] == 2
         assert "40.0%" in rows["D2"]["standard"]
         assert "0/2" in rows["B1"]["current_status"]
         assert "0/4" in rows["B2"]["current_status"]

@@ -14,13 +14,14 @@ import sys
 try:
     from query_compiler import compile_query_plan
     from import_library import load as load_library
+    from audit_core.contracts import normalize_language_tag
 except ImportError:
     from scripts.query_compiler import compile_query_plan
     from scripts.import_library import load as load_library
+    from scripts.audit_core.contracts import normalize_language_tag
 
 
 DEFAULT_SOURCES = ["openalex", "arxiv", "crossref", "europepmc"]
-ISO_LANGUAGE_CODES = {"all", "ar", "bn", "cs", "da", "de", "el", "en", "es", "fi", "fr", "he", "hi", "hu", "id", "it", "ja", "ko", "nl", "no", "pl", "pt", "ro", "ru", "sv", "th", "tr", "uk", "ur", "vi", "zh"}
 
 
 def build_context(question, terms):
@@ -33,7 +34,7 @@ def build_context(question, terms):
 def build_config(question, library, review_type, sources, offline, scope_status,
                  *, allow_metadata_enrichment=False, allow_external_discovery=False,
                  allow_citation_tracking=False, time_start=None, time_end=None,
-                 languages=None, output_language="zh-CN"):
+                 languages=None, output_language="zh-CN", evidence_inputs=None):
     """Build an explicit-permission config; scope confirmation never grants network access."""
     if offline:
         allow_metadata_enrichment = allow_external_discovery = allow_citation_tracking = False
@@ -51,6 +52,8 @@ def build_config(question, library, review_type, sources, offline, scope_status,
             "output": {"language": output_language, "formats": ["html", "json"]}}
     if allow_search:
         config["quality"] = {"active_screen_budget": 100}
+    if evidence_inputs:
+        config["evidence_inputs"] = evidence_inputs
     return config
 
 
@@ -73,10 +76,18 @@ def write_onboarding(out, question, plan, sources):
     (out / "onboarding.html").write_text(page, encoding="utf-8")
 
 
-def write_search_preparation(out, question, plan):
+def write_search_preparation(out, question, plan, output_language="zh-CN"):
     """Deliver a useful, plainly labelled output when no library exists yet."""
     queries = plan.get("queries", []) if isinstance(plan, dict) else []
     examples = "".join(f"<li>{html.escape(str(row.get('query', '')))}</li>" for row in queries[:3])
+    if str(output_language).lower().startswith("en"):
+        page = f"""<!doctype html><html lang="en"><meta charset="utf-8"><title>Search preparation plan</title>
+<body><main style="max-width:760px;margin:48px auto;font:16px/1.55 system-ui,sans-serif"><h1>Search preparation plan</h1>
+<p>No library was supplied. This is not an A-F audit and cannot judge review sufficiency.</p><h2>Research question</h2><p>{html.escape(question)}</p>
+<h2>Three next steps</h2><ol><li>Export or build a library (JSON, CSV, RIS, or BibTeX).</li><li>Set review type, time and language boundaries.</li><li>Record source, date, and query for every search; candidates are not included studies.</li></ol>
+<h2>Starter queries</h2><ul>{examples or '<li>Add core terms before generating queries.</li>'}</ul></main></body></html>"""
+        (out / "search-preparation.html").write_text(page, encoding="utf-8")
+        return
     page = f"""<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>检索准备计划</title>
 <body><main style="max-width:760px;margin:48px auto;font:16px/1.55 system-ui,sans-serif">
 <h1>检索准备计划（尚未开始文献库审计）</h1>
@@ -88,12 +99,18 @@ def write_search_preparation(out, question, plan):
     (out / "search-preparation.html").write_text(page, encoding="utf-8")
 
 
-def write_library_health(out, library):
+def write_library_health(out, library, output_language="zh-CN"):
     """Provide a lightweight health check without claiming review sufficiency."""
     records = load_library(library)
     total = len(records)
     def rate(*keys):
         return (sum(bool(str(next((row.get(key) for key in keys if row.get(key)), "")).strip()) for row in records) / total) if total else 0
+    if str(output_language).lower().startswith("en"):
+        page = f"""<!doctype html><html lang="en"><meta charset="utf-8"><title>Library health check</title>
+<body><main style="max-width:760px;margin:48px auto;font:16px/1.55 system-ui,sans-serif"><h1>Library health check (not a sufficiency conclusion)</h1>
+<p>This mode checks basic usability only; it does not establish recall, saturation, or review readiness.</p><ul><li>Readable records: {total}</li><li>Titles present: {rate('title'):.0%}</li><li>Years present: {rate('date', 'year', 'publication_year'):.0%}</li><li>Abstracts present: {rate('abstractNote', 'abstract'):.0%}</li><li>DOIs present: {rate('DOI', 'doi'):.0%}</li></ul></main></body></html>"""
+        (out / "library-health.html").write_text(page, encoding="utf-8")
+        return
     page = f"""<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>文献库健康检查</title>
 <body><main style="max-width:760px;margin:48px auto;font:16px/1.55 system-ui,sans-serif">
 <h1>文献库健康检查（不是充分性审计）</h1>
@@ -104,7 +121,20 @@ def write_library_health(out, library):
     (out / "library-health.html").write_text(page, encoding="utf-8")
 
 
-def audit_readiness(library, question):
+def _question_terms(question):
+    raw = [term.casefold() for term in re.findall(r"[\w-]+", question, flags=re.UNICODE)
+           if len(term) >= 3 and term.casefold() not in {"what", "which", "does", "how", "with", "from", "this", "that", "research", "study", "研究", "如何", "什么", "哪些"}]
+    # Common spelling variants are a recall aid only; they never prove topical
+    # relevance by themselves.
+    aliases = {"localization": {"localisation"}, "localisation": {"localization"},
+               "robot": {"robotic"}, "robotic": {"robot"}}
+    expanded = set(raw)
+    for term in raw:
+        expanded.update(aliases.get(term, set()))
+    return expanded
+
+
+def audit_readiness(library, question, evidence_inputs=None, relevance_confirmed=False):
     """Keep an explicit audit request from becoming an empty A-F report."""
     records = load_library(library)
     total = len(records)
@@ -117,12 +147,28 @@ def audit_readiness(library, question):
         reasons.append("titles for at least 80% of records")
     if total and dated / total < 0.8:
         reasons.append("years for at least 80% of records")
-    terms = [term.casefold() for term in re.findall(r"[\w-]+", question, flags=re.UNICODE)
-             if len(term) >= 3 and term.casefold() not in {"what", "which", "does", "how", "with", "from", "研究", "如何"}]
+    terms = _question_terms(question)
     matches = sum(any(term in (str(row.get("title", "")) + " " + str(row.get("abstractNote", ""))).casefold()
                       for term in terms) for row in records)
-    if terms and not matches:
-        reasons.append("at least one record that matches the research question terms")
+    minimum_match_share = 0.20
+    if terms and matches / total < minimum_match_share and not relevance_confirmed:
+        reasons.append(f"topical relevance precheck: at least {minimum_match_share:.0%} of records must match research-question terms, or confirm a documented manual relevance review")
+    evidence_inputs = evidence_inputs or {}
+    required_evidence = {"gold": "an independent gold/validation set", "query_log": "a reproducible query log",
+                         "screening_decisions": "human screening decisions", "independent_pathways": "documented independent search pathways"}
+    for key, label in required_evidence.items():
+        value = evidence_inputs.get(key)
+        if not value or not pathlib.Path(value).is_file():
+            reasons.append(label)
+    pathway_file = evidence_inputs.get("independent_pathways")
+    if pathway_file and pathlib.Path(pathway_file).is_file():
+        try:
+            payload = json.loads(pathlib.Path(pathway_file).read_text(encoding="utf-8"))
+            pathways = payload if isinstance(payload, list) else payload.get("items", [])
+            if not isinstance(pathways, list) or len(pathways) < 2:
+                reasons.append("at least two documented independent search pathways")
+        except (OSError, json.JSONDecodeError, AttributeError):
+            reasons.append("a readable independent-pathways JSON list")
     return records, reasons
 
 
@@ -134,14 +180,21 @@ def validate_audit_boundaries(args):
         return "time boundaries from 1900 through the current year"
     if args.time_start > args.time_end:
         return "a time start that is not later than the time end"
-    languages = [item.strip().casefold() for item in (args.languages or "").split(",") if item.strip()]
-    if not languages or any(item not in ISO_LANGUAGE_CODES for item in languages):
-        return "supported ISO language codes (or all) in --languages"
+    languages = [item.strip() for item in (args.languages or "").split(",") if item.strip()]
+    if not languages or any(normalize_language_tag(item) is None for item in languages):
+        return "supported ISO language or BCP-47 tags (or all) in --languages"
     return None
 
 
-def write_sufficiency_precheck(out, reasons):
+def write_sufficiency_precheck(out, reasons, output_language="zh-CN"):
     items = "".join(f"<li>{html.escape(reason)}</li>" for reason in reasons)
+    if str(output_language).lower().startswith("en"):
+        page = f"""<!doctype html><html lang="en"><meta charset="utf-8"><title>Sufficiency-audit precheck</title>
+<body><main style="max-width:760px;margin:48px auto;font:16px/1.55 system-ui,sans-serif"><h1>Sufficiency audit not started</h1>
+<p>The requested audit lacks the minimum auditable evidence. This page is a precheck, not an A-F report.</p><h2>Minimum inputs still needed</h2><ul>{items}</ul>
+<p>Recall and saturation need reproducible search logs, independent validation, screened decisions, and independent pathways.</p></main></body></html>"""
+        (out / "sufficiency-precheck.html").write_text(page, encoding="utf-8")
+        return
     page = f"""<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>充分性审计预检查</title>
 <body><main style="max-width:760px;margin:48px auto;font:16px/1.55 system-ui,sans-serif">
 <h1>充分性审计尚未开始</h1>
@@ -159,14 +212,24 @@ def run(args):
     plan = compile_query_plan(args.question, sources or ["arxiv"])
     terms = plan["queries"][0].get("terms", []) if plan["queries"] else []
     config_path = control / "run-config.json"; context_path = control / "context.json"; plan_path = control / "query-plan.json"
+    evidence_inputs = {key: value for key, value in {
+        "gold": args.gold, "query_log": args.query_log, "screening_decisions": args.screening_decisions,
+    }.items() if value}
     config_path.write_text(json.dumps(build_config(
         args.question, args.library, args.review_type, sources, args.offline, args.scope_status,
         allow_metadata_enrichment=args.allow_metadata_enrichment,
         allow_external_discovery=args.allow_external_discovery,
         allow_citation_tracking=args.allow_citation_tracking, time_start=args.time_start,
         time_end=args.time_end, languages=[item.strip() for item in (args.languages or "").split(",") if item.strip()],
-        output_language=args.output_language or "zh-CN"), ensure_ascii=False, indent=2), encoding="utf-8")
-    context_path.write_text(json.dumps(build_context(args.question, terms), ensure_ascii=False, indent=2), encoding="utf-8")
+        output_language=args.output_language or "zh-CN", evidence_inputs=evidence_inputs), ensure_ascii=False, indent=2), encoding="utf-8")
+    context = build_context(args.question, terms)
+    if args.independent_pathways:
+        try:
+            pathways = json.loads(pathlib.Path(args.independent_pathways).read_text(encoding="utf-8"))
+            context["independent_pathways"] = pathways if isinstance(pathways, list) else pathways.get("items", [])
+        except (OSError, json.JSONDecodeError, AttributeError) as exc:
+            raise ValueError(f"invalid --independent-pathways: {exc}")
+    context_path.write_text(json.dumps(context, ensure_ascii=False, indent=2), encoding="utf-8")
     plan_path.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
     if args.scope_status not in {"in_scope", "cross_domain"}:
         write_onboarding(out, args.question, plan, sources)
@@ -176,7 +239,7 @@ def run(args):
     if mode == "auto":
         mode = "library-health" if args.library else "search-preparation"
     if mode == "search-preparation":
-        write_search_preparation(out, args.question, plan)
+        write_search_preparation(out, args.question, plan, args.output_language or "zh-CN")
         (out / "autopilot-manifest.json").write_text(json.dumps({"schema_version": "1.0", "mode": "search_preparation", "audit_status": "not_started", "question": args.question}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print("[2/3] No library supplied: delivered a search-preparation plan, not an audit.", flush=True)
         return
@@ -184,7 +247,7 @@ def run(args):
         raise ValueError("library-health and sufficiency-audit require --library; use search-preparation without one.")
     library = pathlib.Path(args.library).resolve()
     if mode == "library-health":
-        write_library_health(out, library)
+        write_library_health(out, library, args.output_language or "zh-CN")
         (out / "autopilot-manifest.json").write_text(json.dumps({"schema_version": "1.0", "mode": "library_health", "audit_status": "not_started", "question": args.question}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print("[2/3] Delivered a library-health check, not a sufficiency audit.", flush=True)
         return
@@ -195,9 +258,11 @@ def run(args):
     if not args.output_language: missing.append("--output-language")
     if missing:
         raise ValueError("sufficiency-audit requires explicit confirmation of " + ", ".join(missing) + ".")
-    _, readiness_gaps = audit_readiness(library, args.question)
+    _, readiness_gaps = audit_readiness(library, args.question,
+                                        {**evidence_inputs, "independent_pathways": args.independent_pathways},
+                                        args.confirm_relevance)
     if readiness_gaps:
-        write_sufficiency_precheck(out, readiness_gaps)
+        write_sufficiency_precheck(out, readiness_gaps, args.output_language or "zh-CN")
         (out / "autopilot-manifest.json").write_text(json.dumps({"schema_version": "1.0", "mode": "sufficiency_precheck", "audit_status": "not_started", "question": args.question, "missing_minimum_inputs": readiness_gaps}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print("[2/3] Delivered a sufficiency precheck; the A-F audit was not started.", flush=True)
         return
@@ -227,6 +292,11 @@ def main():
     parser.add_argument("--time-end", type=int, help="Explicit end year required for sufficiency-audit.")
     parser.add_argument("--languages", help="Comma-separated language boundary required for sufficiency-audit.")
     parser.add_argument("--output-language", choices=("zh-CN", "en"), help="Explicit report language required for sufficiency-audit.")
+    parser.add_argument("--gold", help="Independent gold/validation set required before an A-F audit can start.")
+    parser.add_argument("--query-log", help="Reproducible query log required before an A-F audit can start.")
+    parser.add_argument("--screening-decisions", help="Human screening decisions required before an A-F audit can start.")
+    parser.add_argument("--independent-pathways", help="JSON list of documented independent search pathways required before an A-F audit can start.")
+    parser.add_argument("--confirm-relevance", action="store_true", help="Record a documented manual relevance review when lexical matching is insufficient.")
     parser.add_argument("--scope-status", default="scope_uncertain", choices=("in_scope", "cross_domain", "out_of_scope", "scope_uncertain"),
                         help="Explicit scope decision. Full A-F execution requires in_scope or cross_domain; default is a safe draft state.")
     parser.add_argument("--sources", default=",".join(DEFAULT_SOURCES)); parser.add_argument("--offline", action="store_true",

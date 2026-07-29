@@ -3,7 +3,7 @@ import html
 import re
 
 
-def _action_workbench(actions):
+def _action_workbench(actions, language="zh-CN"):
     """Render a local-only action board; completion state stays in the browser."""
     if not actions:
         return ""
@@ -19,6 +19,12 @@ def _action_workbench(actions):
             f"<strong>{code} · {title}</strong></label><span class='badge'>{verdict}</span>"
             f"<p><b>Why:</b> {why}</p><p><b>Smallest next step:</b> {next_step}</p></article>"
         )
+    if str(language).lower().startswith("en"):
+        return ("<section class='action-workbench'><h2>Priority actions</h2>"
+                "<p>These are evidence gaps, not completed audit work. Checkmarks stay only in this browser and never change the evidence record or indicator status.</p>"
+                "<div class='evidence-legend'><span>measured: reproducible evidence</span><span>estimated/screening: preliminary evidence</span>"
+                "<span>not_assessable: evidence still needed</span></div>" + "".join(cards) +
+                "</section><script>document.querySelectorAll('[data-action]').forEach(e=>{const k='literature-audit-action-'+e.dataset.action;e.checked=localStorage.getItem(k)==='1';e.onchange=()=>localStorage.setItem(k,e.checked?'1':'0')});</script>")
     return ("<section class='action-workbench'><h2>行动工作台</h2>"
             "<p>这里汇总当前最需要处理的证据缺口。勾选状态仅保存于本浏览器，不会改写审计证据或提升指标状态。</p>"
             "<div class='evidence-legend'><span>measured：可复核实测</span><span>estimated/screening：AI 或规则初评</span>"
@@ -64,5 +70,5 @@ def render_markdown_html(markdown_text, title="文献库评价报告", actions=N
             parts.append("<ul>" + "".join(items) + "</ul>"); continue
         elif line.strip(): parts.append(f"<p>{inline(line)}</p>")
         index += 1
-    extra = _action_workbench(actions or [])
+    extra = _action_workbench(actions or [], language)
     return "\n".join(parts + [extra, "</main></html>"])
