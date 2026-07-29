@@ -135,12 +135,23 @@ def test_autopilot_does_not_bundle_network_permissions_with_scope_confirmation()
     assert config["automation"] == {
         "allow_search": False, "allow_metadata_enrichment": False,
         "allow_external_discovery": False, "allow_citation_tracking": False,
-        "local_only_confirmed": True, "allowed_sources": [],
+        "local_only_confirmed": False, "allowed_sources": [],
     }
     enabled = autopilot.build_config("robot localization", None, "narrative", ["arxiv"], False, "in_scope",
                                      allow_external_discovery=True)
     assert enabled["automation"]["allow_search"] is True
     assert enabled["automation"]["allow_external_discovery"] is True
+
+
+def test_systematic_overview_with_evidence_gaps_is_exploratory_only():
+    from run_audit import _result_overview
+    overview = _result_overview({
+        "context": {"review_type": "系统综述"},
+        "indicator_register": [{"subproject": "B1", "project_name": "饱和度", "meets_standard": "not_assessable",
+                                "evidence_status": "not_assessable", "description_and_action": "需要人工筛选记录"}],
+    })
+    assert "可进行探索性主题梳理" in overview
+    assert "不可形成综述结论" in overview
 
 
 def test_query_compiler_uses_source_specific_syntax():

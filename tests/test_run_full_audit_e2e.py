@@ -18,7 +18,7 @@ def config(path, *, allow_search=False, allow_external_discovery=False):
                        "allow_external_discovery": allow_external_discovery,
                        "allow_metadata_enrichment": False,
                        "allow_citation_tracking": False,
-                       "local_only_confirmed": not allow_search,
+                       "local_only_confirmed": False,
                        "allowed_sources": ["arxiv"] if allow_search else []},
         "output": {"formats": ["html", "json"]},
     }
@@ -71,4 +71,5 @@ def test_init_uses_three_questions_and_creates_a_local_first_config(tmp_path):
     assert config_data["project"]["scope_status"] == "in_scope"
     assert config_data["project"]["review_type"] == "narrative"
     assert config_data["automation"]["allow_search"] is False
+    assert config_data["automation"]["local_only_confirmed"] is False
     assert "Allow online" not in result.stdout

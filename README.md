@@ -106,15 +106,15 @@ of what the current library supports and what should happen next.
 
 The AI will:
 
-1. Confirm your research question, review type, domain, and boundaries (max 3 questions)
+1. Confirm your research question, engineering scope, and library location (max 3 questions); the first pass defaults to narrative review and local-only execution.
 2. Accept JSON, CSV, RIS, or BibTeX through `import_library.py`; review the generated import preview before auditing.
-3. Execute single-round diagnostic search, help you iterate the query, compute all A–F indicators, and produce the audit package
+3. Compute all assessable A–F indicators and produce the audit package. Online discovery is available only after explicit authorization.
 
 The full example report is a reference fixture, not a prerequisite for getting started.
 
 ### One-command first pass
 
-For a low-friction first run, use the autopilot. It creates a source-aware query plan, runs the resumable workflow, generates an active screening queue, and writes AI suggestions separately from formal screening decisions:
+For a low-friction first run, use the autopilot. It creates a source-aware query plan, runs the resumable workflow locally by default, and keeps AI suggestions separate from formal screening decisions:
 
 ```bash
 python scripts/autopilot.py \
@@ -132,7 +132,13 @@ python scripts/autopilot.py \
   --out first-pass
 ```
 
-`--scope-status in_scope` is an explicit confirmation that this is an engineering question within the Skill's scope; without it, autopilot produces an onboarding plan rather than inventing a full A-F verdict. `--library` is optional: a confirmed run without one creates an empty starter library and reports only what is assessable. OpenAlex is used when its key is available; authorized arXiv, Crossref, and Europe PMC adapters remain available without it. Autopilot suggestions are never formal inclusion decisions.
+`--scope-status in_scope` is an explicit confirmation that this is an engineering question within the Skill's scope; it does not grant network access. `--library` is optional: a confirmed run without one creates an empty starter library and reports only what is assessable. To discover external candidates and generate an active screening queue, explicitly authorize it:
+
+```bash
+python scripts/autopilot.py --question "How do robot localization methods handle low-light sensing?" --scope-status in_scope --library library.json --out first-pass --allow-external-discovery
+```
+
+OpenAlex is used when its key is available; authorized arXiv, Crossref, and Europe PMC adapters remain available without it. Autopilot suggestions are never formal inclusion decisions.
 
 ## Six-Dimension Framework
 

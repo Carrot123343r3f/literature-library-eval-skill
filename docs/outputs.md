@@ -27,7 +27,7 @@ plus manifests. Use `--resume` only with the same inputs; use a fresh run or
 `--force` when inputs change. Older v1.1 step-only state remains readable, but
 new runs write the v2 contract.
 
-When online metadata enrichment is allowed, it also writes `enrichment/library-enriched.json` and `enrichment/metadata-enrichment.json`. The enriched library is used for downstream auditing, while user-provided fields always take precedence. Missing credentials, ambiguous matches, and source failures are recorded as gaps and do not silently become guessed values. Use `automation.local_only_confirmed=true` or the explicit local-only choice during intake to skip this step.
+When online metadata enrichment is explicitly allowed, it also writes `enrichment/library-enriched.json` and `enrichment/metadata-enrichment.json`. The enriched library is used for downstream auditing, while user-provided fields always take precedence. Missing credentials, ambiguous matches, and source failures are recorded as gaps and do not silently become guessed values. Absent metadata-enrichment permission skips this step; `automation.local_only_confirmed=true` is reserved for a user-confirmed fully local run.
 
 > **Privacy**: No absolute paths recorded. Input files are copied with sha256 prefix only.
 

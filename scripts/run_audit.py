@@ -1062,7 +1062,10 @@ def _result_overview(report):
     if failed:
         readiness = "暂不建议开始有限范围初稿；先解决阻断项"
     elif gaps:
-        readiness = "可以开始有限范围初稿，但关键证据仍需补齐"
+        review_type = report.get("context", {}).get("review_type", "")
+        readiness = ("可进行探索性主题梳理，但不可形成综述结论"
+                     if review_type in {"系统综述", "快速综述"}
+                     else "可以开始有限范围初稿，但关键证据仍需补齐")
     else:
         readiness = "可以开始初稿；仍应持续监测警示项"
 

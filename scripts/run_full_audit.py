@@ -120,7 +120,7 @@ def init_config_v2(args):
               "scope_rationale": "confirmed during guided initialization" if scope_status != "scope_uncertain" else "user did not confirm engineering scope"},
               "library": {"provided": bool(library), "path": library or None, "format": "json" if library.endswith(".json") else None},
               "automation": {"allow_search": False, "allow_metadata_enrichment": False, "allow_external_discovery": False, "allow_citation_tracking": False,
-                             "local_only_confirmed": True, "allowed_sources": [], "authorized_sources": []},
+                             "local_only_confirmed": False, "allowed_sources": [], "authorized_sources": []},
               "output": {"language": "zh-CN", "formats": ["html", "json"]}}
     pathlib.Path(args.out).write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
     print("Created a local-first config. Review type defaults to narrative; online permissions stay disabled until explicitly enabled.")

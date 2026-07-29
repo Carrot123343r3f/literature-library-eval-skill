@@ -138,7 +138,7 @@ artifact tree.
 
 ## Human-factors guardrails
 
-- Network permission is confirmed in intake before any search: metadata enrichment is allowed by default, candidate discovery is a separate permission, and full-local mode requires an explicit user choice.
+- Network permissions default to off: metadata enrichment, candidate discovery, and citation tracking each require separate explicit authorization. `local_only_confirmed=true` records only an explicit user choice of fully local execution; it is not inferred from the safe default.
 - Batch workflows run a resumable metadata-enrichment step before audit when online enrichment is allowed; unavailable credentials or source failures preserve the original library and produce a gap report instead of aborting the audit.
 - Source permissions are represented by source names and authorization state only; passwords, API keys and cookies never enter `run-config.json` or reports.
 - Treat `reading_priority`, `core_support_top`, and `external_candidate_top` as three different work queues, not one leaderboard.
