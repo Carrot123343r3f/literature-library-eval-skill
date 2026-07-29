@@ -72,7 +72,8 @@
         "screening_decisions": {"type": ["string", "null"], "description": "Screening decisions for B/F5. Produced by: manual/agent. Supports: B GGR/DRR, F5 traceability. Missing → B discovery_only, F5 provenance-only."},
         "deduplication_log": {"type": ["string", "null"], "description": "Dedup/version log. Produced by: normalize_candidates.py. Supports: F4. Missing → F4 not_assessable (version candidates)."},
         "search_meta": {"type": ["string", "null"], "description": "search_meta.json from search_for_eval.py. Produced by: search_for_eval.py. Supports: A2 sensitivity, B discovery candidates."},
-        "search_iterations": {"type": ["string", "null"], "description": "iterations.json validated by search_iterator.py and evalset_audit.py. Required to substantiate independent dev/validation evidence."},
+        "screening_summary": {"type": ["string", "null"], "description": "screening-summary.json from summarize_screening.py. Supports B/F screening evidence only; never substitutes for search_meta."},
+        "search_iterations": {"type": ["string", "null"], "description": "iterations.json with dev_set, tuning validation_set, and heldout_test_set. A2 measured requires heldout_test_set to match gold by stable IDs."},
         "failed_sources": {"type": "array", "items": {"type": "string"}, "description": "Names of sources that failed during collection. Produced by: all collectors. Supports: A2/A3 partial_snapshot downgrade."}
       }
     },

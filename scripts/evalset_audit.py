@@ -62,6 +62,8 @@ def audit(dev, validation, min_dev=3, min_validation=3):
     errors, warnings = [], []
     if len(dev) < min_dev: errors.append(f"development set too small: {len(dev)} < {min_dev}")
     if len(validation) < min_validation: errors.append(f"validation set too small: {len(validation)} < {min_validation}")
+    if dev and not dev_ids: errors.append("development set has no stable identifiers")
+    if validation and not val_ids: errors.append("validation set has no stable identifiers")
     if overlap: errors.append(f"dev/validation overlap detected: {len(overlap)} stable IDs")
     if duplicate_dev: errors.append("development set contains duplicate stable IDs")
     if duplicate_val: errors.append("validation set contains duplicate stable IDs")

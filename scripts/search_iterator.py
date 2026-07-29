@@ -16,7 +16,8 @@ The iterations.json schema:
 {
   "search_decomposition": { ... },   // Engineering PICO decomposition
   "dev_set": [{ "title": ..., "doi": ... }],  // At least 3 entries
-  "validation_set": [{ "title": ..., "doi": ... }],  // Independent of dev_set
+  "validation_set": [{ "title": ..., "doi": ... }],  // Tuning set; may guide stopping
+  "heldout_test_set": [{ "title": ..., "doi": ... }], // Final A2 only; never guides iteration
   "dev_validation_overlap_check": true/false,
   "iterations": [
     {
@@ -95,6 +96,12 @@ def validate(data, strict=False):
             errors.append(f"Dev/validation sets overlap on {len(overlap)} DOI(s): {sorted(overlap)[:5]}")
         if not data.get("dev_validation_overlap_check"):
             warnings.append("dev_validation_overlap_check not explicitly declared")
+
+    heldout = data.get("heldout_test_set", [])
+    if not isinstance(heldout, list):
+        errors.append("heldout_test_set must be an array")
+    elif not heldout:
+        warnings.append("No heldout_test_set — A2 cannot be measured")
 
     # ── Iterations ──
     iterations = data.get("iterations", [])
