@@ -23,6 +23,7 @@ dedup_rule（去重规则），供第三方从 query-hits.json 独立复算 yiel
 import argparse, json, urllib.request, urllib.parse, re, time, sys, pathlib
 from collect_open_sources import COLLECTORS, load_search_authorization
 from credentials import CredentialError, require_openalex_api_key
+from audit_core.contracts import public_value
 
 
 def read_json(path):
@@ -150,8 +151,7 @@ def main():
         allowed_sources = load_search_authorization(a.run_config, "allow_external_discovery")
     except (ValueError, PermissionError) as exc:
         p.error(str(exc))
-    configured_sources = (list(allowed_sources) if allowed_sources is not None
-                          else ["openalex", "arxiv", "crossref", "europepmc"])
+    configured_sources = list(allowed_sources)
     source_order = ["openalex", "arxiv", "crossref", "europepmc"]
     configured_sources = [s for s in source_order if s in configured_sources]
     selected_sources, source_notes = [], {}
@@ -247,7 +247,7 @@ def main():
                 if not isinstance(hits, list):
                     raise ValueError("source returned invalid items")
             except Exception as exc:
-                status, hits, note = "failed", [], str(exc)[:240]
+                status, hits, note = "failed", [], public_value(str(exc))[:240]
             q_count = 0
             for w in hits:
                 if not isinstance(w, dict):
@@ -322,6 +322,8 @@ def main():
         print(f'  [{label}] {q[:45]:45s} -> {q_count} 命中')
         time.sleep(0.3)
 
+    any_query_failed = any(row.get("status") == "failed" for row in queries_record)
+
     # ── Build hit ID set for recall computation ──
     hit_ids_set = set()
     for h in all_hits:
@@ -390,9 +392,11 @@ def main():
     # ── Build search_meta.json with v2 fields ──
     # This diagnostic repeatedly observes validation_recall while tuning; it
     # therefore cannot produce final held-out A2 evidence on its own.
-    a2_evidence = "estimated"
+    a2_evidence = "not_assessable" if any_query_failed else "estimated"
     a2_note = 'A2 只有稳定 ID 匹配计入分子；分母=有稳定 ID 的 gold 条目（与 run_audit.a2 对齐）。'
-    if validation_set and not dev_validation_overlap:
+    if any_query_failed:
+        a2_note += " At least one authorized source request failed; this run cannot establish recall."
+    elif validation_set and not dev_validation_overlap:
         a2_note += f' 独立验证集: {val_total} 篇（{val_source}），dev/val 独立。'
     else:
         a2_evidence = "estimated"

@@ -97,8 +97,8 @@ def main():
         enrichment_log = {"source": "none", "status": "not_requested"}
         automation = config.get("automation") or {}
         if a.paper and not a.offline and automation.get("allow_search") is True and automation.get("allow_metadata_enrichment", False) is True:
-            key = require_openalex_authorization(config)
-            library[0], enrichment_log = enrich_openalex_record(library[0], key)
+            key = require_openalex_authorization(config, "allow_metadata_enrichment")
+            library[0], enrichment_log = enrich_openalex_record(library[0], key, config)
         configured_scope = ((config.get("paper_evaluation") or {}).get("scope"))
         if configured_scope and not context.get("paper_evaluation_scope"):
             context["paper_evaluation_scope"] = configured_scope
@@ -112,10 +112,11 @@ def main():
         else:
             if (config.get("automation") or {}).get("allow_external_discovery", False) is not True:
                 raise ExternalSearchError("External candidate discovery requires explicit automation.allow_external_discovery=true.")
-            key = require_openalex_authorization(config)
+            key = require_openalex_authorization(config, "allow_external_discovery")
             question = clean((config.get("project") or {}).get("research_question") or context.get("research_question"))
             if not question: raise ExternalSearchError("External search requires project.research_question.")
-            works, search_log = search_openalex(question, key, max(50, a.top_n * 3)); candidates = [normalize_openalex(work) for work in works]
+            works, search_log = search_openalex(question, key, max(50, a.top_n * 3), config=config,
+                                                 required_permission="allow_external_discovery"); candidates = [normalize_openalex(work) for work in works]
         candidates = without_library_duplicates(candidates, library)
         external = recommend([evaluate_record(item, context, config, external=True) for item in candidates if isinstance(item, dict)], library_rows)
         step_status["external_discovery"] = "complete"

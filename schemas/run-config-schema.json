@@ -46,7 +46,7 @@
       "type": "object",
       "additionalProperties": false,
       "description": "Online access is opt-in during intake. Metadata enrichment, candidate discovery, and citation tracking require separate explicit permissions.",
-      "required": ["allow_search"],
+      "required": ["allow_search", "allowed_sources"],
       "properties": {
         "allow_search": {"type": "boolean", "default": false, "description": "Enable only explicitly authorized online operations."},
         "allow_metadata_enrichment": {"type": "boolean", "default": false},

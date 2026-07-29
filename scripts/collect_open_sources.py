@@ -4,6 +4,7 @@ import argparse
 import datetime as dt
 import json
 import os
+import pathlib
 import time
 import urllib.parse
 import urllib.request
@@ -31,10 +32,12 @@ def load_search_authorization(run_config_path, required_permission=None):
         raise PermissionError("automation.allow_search must be true before online collection")
     if required_permission and automation.get(required_permission) is not True:
         raise PermissionError(f"automation.{required_permission} must be true before this online operation")
-    allowed = automation.get("allowed_sources")
-    if allowed is not None and (not isinstance(allowed, list) or not all(isinstance(x, str) for x in allowed)):
+    if "allowed_sources" not in automation:
+        raise ValueError("automation.allowed_sources is required for online collection")
+    allowed = automation["allowed_sources"]
+    if not isinstance(allowed, list) or not all(isinstance(x, str) for x in allowed):
         raise ValueError("automation.allowed_sources must be an array of source names")
-    return None if allowed is None else {x.casefold() for x in allowed}
+    return {x.casefold() for x in allowed}
 
 
 def load_authorized_plan(run_config_path, plan_path, required_permission=None):
@@ -170,7 +173,7 @@ def main():
         entry = {"id": row.get("id"), "query": row["query"], "sources": {}}
         for source in sources:
             source_key = source.casefold()
-            if allowed_sources is not None and source_key not in allowed_sources:
+            if source_key not in allowed_sources:
                 entry["sources"][source] = {"status": "failed", "error": "source is not authorized by run-config"}
                 continue
             collector = COLLECTORS.get(source_key)

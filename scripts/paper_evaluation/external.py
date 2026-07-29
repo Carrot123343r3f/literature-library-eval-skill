@@ -11,11 +11,16 @@ class ExternalSearchError(RuntimeError):
     pass
 
 
-def require_openalex_authorization(config):
+def require_openalex_authorization(config, required_permission):
+    """Check the module-specific consent immediately before OpenAlex access."""
     automation = config.get("automation") or {}
     sources = {str(item).lower() for item in automation.get("allowed_sources", [])}
     if automation.get("allow_search") is not True or "openalex" not in sources:
         raise ExternalSearchError("External candidates require allow_search=true and openalex in allowed_sources.")
+    if required_permission not in {"allow_metadata_enrichment", "allow_external_discovery"}:
+        raise ExternalSearchError("OpenAlex access requires a supported module permission.")
+    if automation.get(required_permission) is not True:
+        raise ExternalSearchError(f"OpenAlex access requires explicit automation.{required_permission}=true.")
     authorized = automation.get("authorized_sources")
     if isinstance(authorized, list) and authorized and "openalex" not in {str(item).lower() for item in authorized}:
         raise ExternalSearchError("OpenAlex is not included in the user's authorized_sources.")
@@ -25,7 +30,11 @@ def require_openalex_authorization(config):
         raise ExternalSearchError(str(exc)) from exc
 
 
-def search_openalex(query, api_key, limit=100):
+def search_openalex(query, api_key, limit=100, *, config=None, required_permission=None):
+    # Enforce authorization at the HTTP boundary, not only in CLI callers.
+    if not isinstance(config, dict) or not required_permission:
+        raise ExternalSearchError("OpenAlex search requires run-config and module-specific permission.")
+    require_openalex_authorization(config, required_permission)
     params = {"search": query, "per-page": min(100, max(1, limit)), "sort": "relevance_score:desc", "api_key": api_key}
     url = "https://api.openalex.org/works?" + urllib.parse.urlencode(params)
     try:
@@ -39,7 +48,7 @@ def search_openalex(query, api_key, limit=100):
     return payload["results"], {"source": "openalex", "query": query, "result_count": len(payload["results"]), "status": "complete"}
 
 
-def enrich_openalex_record(record, api_key):
+def enrich_openalex_record(record, api_key, config):
     """Fill missing metadata from one authorized OpenAlex lookup.
 
     The returned record keeps user-supplied values and only fills blanks.
@@ -51,7 +60,8 @@ def enrich_openalex_record(record, api_key):
     query = doi or title
     if not query:
         return dict(record), {"source": "openalex", "status": "skipped", "reason": "missing_doi_and_title"}
-    works, log = search_openalex(query, api_key, limit=10)
+    works, log = search_openalex(query, api_key, limit=10, config=config,
+                                 required_permission="allow_metadata_enrichment")
     wanted_title, wanted_year = norm(title), record.get("year") or record.get("publication_year")
     wanted_year = int(wanted_year) if str(wanted_year).isdigit() else None
     match = None

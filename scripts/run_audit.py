@@ -1805,82 +1805,6 @@ def write(report, out, artifact_paths=None):
 def _validate_run_config(rc):
     """Backward-compatible facade for the shared v1.0 configuration contract."""
     return _shared_validate_run_config(rc)
-    """Lightweight schema validation without jsonschema dependency. Returns list of error strings."""
-    errors = []
-    if not isinstance(rc, dict):
-        return ["run-config must be a JSON object"]
-    if rc.get("schema_version") != "1.0":
-        errors.append(f"schema_version: expected '1.0', got {rc.get('schema_version')!r}")
-
-    # ── Required top-level fields ──
-    for field in ("project", "library", "automation", "output"):
-        if field not in rc:
-            errors.append(f"Missing required top-level field: '{field}'")
-        elif not isinstance(rc[field], dict):
-            errors.append(f"'{field}' must be an object, got {type(rc[field]).__name__}")
-
-    # project
-    proj = rc.get("project", {})
-    if isinstance(proj, dict):
-        rq = proj.get("research_question")
-        if not rq or not isinstance(rq, str) or not rq.strip():
-            errors.append("project.research_question is required (non-empty string)")
-        rt = proj.get("review_type")
-        VALID_RT = {"narrative", "systematic", "scoping", "rapid", "umbrella",
-                    "叙事综述", "系统综述", "范围综述", "快速综述", "伞式综述"}
-        if not isinstance(rt, str) or not rt:
-            errors.append("project.review_type is required (non-empty string)")
-        elif rt not in VALID_RT:
-            errors.append(f"project.review_type: must be one of {VALID_RT}, got {rt!r}")
-        ss = proj.get("scope_status")
-        VALID_SS = {"in_scope", "cross_domain", "out_of_scope", "scope_uncertain"}
-        if not isinstance(ss, str) or not ss:
-            errors.append("project.scope_status is required (non-empty string)")
-        elif ss not in VALID_SS:
-            errors.append(f"project.scope_status: must be one of {VALID_SS}, got {ss!r}")
-        al = proj.get("allowed_assessment_level")
-        VALID_AL = {"full", "limited_metadata_only", "stop"}
-        if al and al not in VALID_AL:
-            errors.append(f"project.allowed_assessment_level: must be one of {VALID_AL}, got {al!r}")
-    # library
-    lib = rc.get("library", {})
-    if isinstance(lib, dict):
-        if not isinstance(lib.get("provided"), bool):
-            errors.append("library.provided is required and must be boolean")
-        if lib.get("provided") and not lib.get("path"):
-            errors.append("library.path is required when library.provided is true")
-        fmt = lib.get("format")
-        VALID_FMT = {"json", None}
-        if fmt is not None and fmt not in VALID_FMT:
-            errors.append(f"library.format: v1.0 only supports {VALID_FMT}, got {fmt!r} (bibtex/csv/ris/zotero are roadmap items)")
-    else:
-        errors.append("library is required and must be an object")
-    # automation
-    auto = rc.get("automation", {})
-    if isinstance(auto, dict):
-        if "allow_search" not in auto:
-            errors.append("automation.allow_search is required")
-        elif not isinstance(auto["allow_search"], bool):
-            errors.append("automation.allow_search must be boolean")
-        if "allowed_sources" in auto and not isinstance(auto["allowed_sources"], list):
-            errors.append("automation.allowed_sources must be an array")
-    else:
-        errors.append("automation is required and must be an object")
-    # standards
-    stds = rc.get("standards", {})
-    if isinstance(stds, dict):
-        ov = stds.get("user_overrides")
-        if ov is not None and not isinstance(ov, dict):
-            errors.append("standards.user_overrides must be an object")
-        elif isinstance(ov, dict):
-            for key in ("b_ggr_threshold", "b_drr_threshold"):
-                if key in ov and (not isinstance(ov[key], (int, float)) or isinstance(ov[key], bool) or ov[key] < 0):
-                    errors.append(f"standards.user_overrides.{key} must be a non-negative number")
-    # output
-    out_cfg = rc.get("output", {})
-    if not isinstance(out_cfg, dict):
-        errors.append("output is required and must be an object")
-    return errors
 
 def main():
     p = argparse.ArgumentParser()
@@ -1918,8 +1842,6 @@ def main():
             # thresholds, or output semantics.
             p.error("run-config has validation errors (see above).")
 
-        rc_ctx_overrides["output_language"] = rc.get("output", {}).get("language", "zh-CN")
-
         scope_status = rc.get("project", {}).get("scope_status", "scope_uncertain")
         allowed_level = rc.get("project", {}).get("allowed_assessment_level", "full")
         if scope_status in ("out_of_scope", "scope_uncertain") or allowed_level == "stop":
@@ -1953,21 +1875,24 @@ def main():
         if ev.get("screening_summary") and not a.screening_summary: a.screening_summary = _resolve(ev["screening_summary"])
         if ev.get("search_iterations") and not a.search_iterations: a.search_iterations = _resolve(ev["search_iterations"])
 
+        ctx_from_rc = {
+            "review_type": rc.get("project", {}).get("review_type", ""),
+            "profile": (rc.get("project", {}).get("engineering_profile", [None]) or [None])[0] if rc.get("project", {}).get("engineering_profile") else "",
+            "year_start": (rc.get("project", {}).get("time_range") or {}).get("start"),
+            "year_end": (rc.get("project", {}).get("time_range") or {}).get("end"),
+            "languages": rc.get("project", {}).get("languages", []),
+            "output_language": rc.get("output", {}).get("language", "zh-CN"),
+            "scope_status": scope_status,
+        }
+        user_stds = rc.get("standards", {}).get("user_overrides", {})
+        confirmed = rc.get("standards", {}).get("confirmed_by_user", False)
+        if user_stds:
+            ctx_from_rc["standards"] = dict(user_stds)
+        ctx_from_rc.setdefault("standards", {})["confirmed_by_user"] = confirmed
+        # Run configuration is the authority for review type, scope, and their
+        # default thresholds even when an orchestration layer supplies context.
+        rc_ctx_overrides.update(ctx_from_rc)
         if not a.context:
-            ctx_from_rc = {
-                "review_type": rc.get("project", {}).get("review_type", ""),
-                "profile": (rc.get("project", {}).get("engineering_profile", [None]) or [None])[0] if rc.get("project", {}).get("engineering_profile") else "",
-                "year_start": (rc.get("project", {}).get("time_range") or {}).get("start"),
-                "year_end": (rc.get("project", {}).get("time_range") or {}).get("end"),
-                "languages": rc.get("project", {}).get("languages", []),
-                "output_language": rc.get("output", {}).get("language", "zh-CN"),
-                "scope_status": scope_status,
-            }
-            user_stds = rc.get("standards", {}).get("user_overrides", {})
-            confirmed = rc.get("standards", {}).get("confirmed_by_user", False)
-            if user_stds:
-                ctx_from_rc["standards"] = dict(user_stds)
-            ctx_from_rc.setdefault("standards", {})["confirmed_by_user"] = confirmed
             # write as resolved-config for manifest
             resolved_dir = pathlib.Path(a.out) / ".tmp"
             resolved_dir.mkdir(parents=True, exist_ok=True)
@@ -1982,10 +1907,11 @@ def main():
     if context_errors:
         p.error("invalid context:\n- " + "\n- ".join(context_errors))
     # Carry forward scope override flag from run-config parsing
-    for k, v in rc_ctx_overrides.items():
-        ctx.setdefault(k, v)
-    if "output_language" in rc_ctx_overrides:
-        ctx["output_language"] = rc_ctx_overrides["output_language"]
+    if rc_ctx_overrides:
+        configured_standards = rc_ctx_overrides.pop("standards", None)
+        ctx.update(rc_ctx_overrides)
+        if configured_standards:
+            ctx["standards"] = {**ctx.get("standards", {}), **configured_standards}
     ctx.setdefault("library_path", a.library)
     ctx.setdefault("output_language", "zh-CN")
     gold_assessment = gold_independence(a.benchmark, a.gold, ctx)
@@ -2128,7 +2054,8 @@ def main():
             ctx["_search_meta_val_matched"] = sm.get("validation_recall_matched", 0)
             ctx["_search_meta_dev_total"] = sm.get("dev_recall_total", 0)
         except (json.JSONDecodeError, OSError):
-            pass
+            # A supplied but unreadable execution log cannot establish recall.
+            ctx["_search_meta_query_failed"] = True
     # Check query_hits for failed sources — downgrade A2 status if any query failed
     a2_query_failed = False
     a2_query_failed = bool(ctx.get("_search_meta_query_failed"))
@@ -2148,15 +2075,15 @@ def main():
                         for q in queries_info
                     )
             except (json.JSONDecodeError, OSError):
-                pass
+                a2_query_failed = True
     lib = load_items(a.library)
     cov = {"a1": benchmark(load_items(a.library), load_items(a.benchmark) if a.benchmark else []),
            "a2": a2(load_items(a.gold) if a.gold else None, load_items(a.query_hits) if a.query_hits else None),
            "a3": a3(load_snapshot(a.candidate_snapshots) if a.candidate_snapshots else {})}
     # ── Evidence status from search_meta ──
     if a2_query_failed and cov["a2"].get("status") == "measured":
-        cov["a2"]["status"] = "partial_snapshot"
-        cov["a2"]["note"] = (cov["a2"].get("note", "") + " At least one source query failed — A2 recall may underestimate true sensitivity.").strip()
+        cov["a2"]["status"] = "not_assessable"
+        cov["a2"]["note"] = (cov["a2"].get("note", "") + " At least one source query failed or its execution log is unreadable; recall is not measurable.").strip()
     # An independent validation set is the A2 primary value.  Development-set
     # recall remains diagnostic only and is never substituted silently.
     search_meta_a2_ev = ctx.get("_search_meta_a2_evidence", "")

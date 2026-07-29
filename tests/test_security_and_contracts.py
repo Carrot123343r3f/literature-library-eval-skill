@@ -14,6 +14,7 @@ from search_for_eval import compute_recall, entry_ids
 from evalset_audit import audit as audit_evalset
 from audit_core.contracts import public_value, reconcile_indicator_evidence, validate_indicator_evidence
 from audit_core.rendering import render_markdown_html
+from paper_evaluation.external import ExternalSearchError, require_openalex_authorization, search_openalex
 
 
 def test_shared_contracts_redact_and_renderer_escapes_html():
@@ -21,6 +22,9 @@ def test_shared_contracts_redact_and_renderer_escapes_html():
     assert public["api_key"] == "[REDACTED]"
     assert public["source"] == "library.json"
     assert public_value({"source": "/private/library.json"})["source"] == "library.json"
+    message = public_value("request failed at C:\\private\\library.json?api_key=SECRET123")
+    assert "SECRET123" not in message
+    assert "C:\\private" not in message
     workbench = render_markdown_html("# Report", actions=[{"code": "A2", "title": "Search sensitivity", "verdict": "not_assessable", "why": "missing evidence", "next_step": "add validation set"}])
     assert "action-workbench" in workbench
     assert "localStorage" in workbench
@@ -200,6 +204,74 @@ def test_collector_requires_discovery_specific_permission():
         config.write_text(json.dumps({"automation": {"allow_search": True, "allow_external_discovery": True, "allowed_sources": ["openalex"]}}), encoding="utf-8")
         _, allowed = load_authorized_plan(config, plan, "allow_external_discovery")
         assert allowed == {"openalex"}
+
+
+def test_online_collection_rejects_missing_source_allowlist():
+    with tempfile.TemporaryDirectory() as temp:
+        root = pathlib.Path(temp)
+        plan = root / "plan.json"
+        config = root / "run-config.json"
+        plan.write_text(json.dumps({"queries": [{"id": "q1", "query": "test"}]}), encoding="utf-8")
+        config.write_text(json.dumps({"automation": {"allow_search": True, "allow_external_discovery": True}}), encoding="utf-8")
+        try:
+            load_authorized_plan(config, plan, "allow_external_discovery")
+            raise AssertionError("missing source allowlist must fail closed")
+        except ValueError as exc:
+            assert "allowed_sources" in str(exc)
+
+
+def test_openalex_http_boundary_requires_module_permission_without_network():
+    config = {"automation": {"allow_search": True, "allow_external_discovery": False,
+                              "allowed_sources": ["openalex"]}}
+    try:
+        require_openalex_authorization(config, "allow_external_discovery")
+        raise AssertionError("module permission must be required")
+    except ExternalSearchError as exc:
+        assert "allow_external_discovery" in str(exc)
+    try:
+        search_openalex("test", "not-used")
+        raise AssertionError("HTTP boundary must require persisted configuration")
+    except ExternalSearchError as exc:
+        assert "run-config" in str(exc)
+
+
+def test_run_config_overrides_context_review_type_on_recommended_path():
+    with tempfile.TemporaryDirectory() as temp:
+        root = pathlib.Path(temp)
+        config = root / "run-config.json"
+        config.write_text(json.dumps({
+            "schema_version": "1.0",
+            "project": {"research_question": "q", "review_type": "umbrella", "scope_status": "in_scope"},
+            "library": {"provided": True, "path": str(ROOT / "tests" / "library.json"), "format": "json"},
+            "automation": {"allow_search": False, "allow_metadata_enrichment": False,
+                           "allow_external_discovery": False, "allow_citation_tracking": False,
+                           "local_only_confirmed": False, "allowed_sources": []},
+            "output": {"formats": ["html", "json"]},
+        }), encoding="utf-8")
+        out = root / "audit"
+        subprocess.run([
+            sys.executable, str(ROOT / "scripts" / "run_audit.py"), "--run-config", str(config),
+            "--context", str(ROOT / "tests" / "context.json"), "--out", str(out),
+        ], check=True)
+        rows = json.loads((out / "audit.json").read_text(encoding="utf-8"))["indicator_register"]
+        assert len(rows) == 24
+        assert {"A4", "C4", "F7"} <= {row["subproject"] for row in rows}
+
+
+def test_failed_search_meta_cannot_be_used_as_measured_recall():
+    with tempfile.TemporaryDirectory() as temp:
+        root = pathlib.Path(temp)
+        hits = root / "query-hits.json"
+        meta = root / "search_meta.json"
+        hits.write_text("[]", encoding="utf-8")
+        meta.write_text(json.dumps({"queries": [{"status": "failed"}]}), encoding="utf-8")
+        out = root / "audit"
+        subprocess.run([
+            sys.executable, str(ROOT / "scripts" / "run_audit.py"),
+            "--library", str(ROOT / "tests" / "library.json"), "--gold", str(ROOT / "tests" / "gold.json"),
+            "--query-hits", str(hits), "--search-meta", str(meta), "--out", str(out),
+        ], check=True)
+        assert json.loads((out / "audit.json").read_text(encoding="utf-8"))["coverage"]["a2"]["status"] == "not_assessable"
 
 
 def test_report_does_not_disclose_workspace_path_or_secret_context():

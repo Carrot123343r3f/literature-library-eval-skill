@@ -8,6 +8,8 @@ SENSITIVE_KEY_PARTS = (
     "token", "secret", "password", "api_key", "apikey", "authorization",
     "credential", "cookie",
 )
+SENSITIVE_VALUE_RE = re.compile(r"(?i)((?:api[_-]?key|token|secret|password|authorization|credential|cookie)\s*[=:]\s*)([^&\s,;]+)")
+EMBEDDED_LOCAL_PATH_RE = re.compile(r"(?<![\w])(?:[A-Za-z]:[\\/]|/)[^\s\"']+")
 
 INDICATOR_VERDICTS = {"pass", "warning", "fail", "screening", "not_assessable"}
 INDICATOR_EVIDENCE_STATUSES = {
@@ -90,6 +92,9 @@ def public_value(value, key=""):
         # PurePath follows the host OS. Use Windows parsing explicitly so a
         # Windows path is safely redacted when the audit runs on Linux CI.
         return pathlib.PureWindowsPath(value).name or "[LOCAL_PATH]"
+    if isinstance(value, str):
+        value = SENSITIVE_VALUE_RE.sub(r"\1[REDACTED]", value)
+        return EMBEDDED_LOCAL_PATH_RE.sub("[LOCAL_PATH]", value)
     return value
 
 
@@ -172,7 +177,9 @@ def validate_run_config(rc):
             errors.append("online capability permissions require automation.allow_search=true")
         allowed_sources = automation.get("allowed_sources", [])
         supported_sources = {"openalex", "crossref", "arxiv", "europepmc"}
-        if not isinstance(allowed_sources, list):
+        if "allowed_sources" not in automation:
+            errors.append("automation.allowed_sources is required")
+        elif not isinstance(allowed_sources, list):
             errors.append("automation.allowed_sources must be an array")
         elif any(not isinstance(source, str) or source.casefold() not in supported_sources for source in allowed_sources):
             errors.append("automation.allowed_sources contains an unsupported source")

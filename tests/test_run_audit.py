@@ -310,7 +310,7 @@ with tempfile.TemporaryDirectory() as temp:
     bad_rc.write_text(json.dumps({
         "schema_version": "1.0",
         "library": {"provided": False},
-        "automation": {"allow_search": False},
+        "automation": {"allow_search": False, "allowed_sources": []},
         "output": {}
     }), encoding="utf-8")
     r = subprocess.run(
@@ -333,7 +333,7 @@ with tempfile.TemporaryDirectory() as temp:
         "schema_version": "1.0",
         "project": {"research_question": "test", "review_type": "invalid_type", "scope_status": "in_scope"},
         "library": {"provided": False},
-        "automation": {"allow_search": False},
+        "automation": {"allow_search": False, "allowed_sources": []},
         "output": {}
     }), encoding="utf-8")
     r = subprocess.run(
@@ -356,7 +356,7 @@ with tempfile.TemporaryDirectory() as temp:
         "schema_version": "1.0",
         "project": {"research_question": "test", "review_type": "systematic", "scope_status": "bogus_status"},
         "library": {"provided": False},
-        "automation": {"allow_search": False},
+        "automation": {"allow_search": False, "allowed_sources": []},
         "output": {}
     }), encoding="utf-8")
     r = subprocess.run(
@@ -379,7 +379,7 @@ with tempfile.TemporaryDirectory() as temp:
         "schema_version": "1.0",
         "project": {"research_question": "test", "review_type": "systematic", "scope_status": "out_of_scope"},
         "library": {"provided": False},
-        "automation": {"allow_search": False},
+        "automation": {"allow_search": False, "allowed_sources": []},
         "output": {}
     }), encoding="utf-8")
     r = subprocess.run(

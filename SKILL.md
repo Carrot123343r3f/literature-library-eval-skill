@@ -5,13 +5,15 @@ description: 评估工程文献库是否足以支持既定研究问题、范围�
 
 # 文献库评估 Skill
 
-以本文件为唯一流程入口。仅处理工程研究问题；纯基础学科或临床问题必须说明超出范围。标准说明书见 `references/`。无需用户理解JSON Schema或文献计量术语——首次使用只需说出题目或提供库位置，AI会用最少问题补全必要信息。
+以本文作为操作规则的权威入口。正常执行优先使用 `scripts/run_full_audit.py`；`run_audit.py` 是已有完整输入时的核心计算与报告器，`autopilot.py` 只用于低摩擦首轮。仅处理工程研究问题；纯基础学科或临床问题必须说明超出范围。无需用户理解 JSON Schema 或文献计量术语——首次使用只需说出题目或提供库位置，AI 会用最少问题补全必要信息。
+
+需要时按任务读取：首次交互见 `references/intake-protocol.md`，检索与饥和度见 `references/search-strategy-protocol.md`，阈值与综述类型见 `references/user-standards-guide.md`，连网授权与来源见 `references/network-authorization-confirmation.md`，结构与产物边界见 `docs/architecture.md` 和 `docs/outputs.md`。
 
 ## 首次调用：按 `references/intake-protocol.md` 状态机执行
 
 1. **S0 识别用户输入形态**（只给题目 / 给文献库 / 说评估我的库 / 超出范围等 8 种入口）
 2. **S2 范围路由** — 写入 `run-config.json.scope_status`（in_scope / cross_domain / out_of_scope / scope_uncertain）。`out_of_scope` → 停止 A-F，可仅输出题录健康；`cross_domain` → 适用部分完整评估，非适用部分降级
-3. **S3 最小必要确认** — 必须确认：研究问题、综述类型、库位置、时间语言边界、自动检索授权、输出格式。可选补充（已知必纳入文献、核心关键词、分类框架等）主动提示但不追问
+3. **S3 最小必要确认** — 首轮仅确认：研究问题、工程范围、库位置（一次最多三问）。综述类型暂用 narrative 默认；时间/语言边界、阈值与联网权限在需要时再单独确认。
 4. **三层标准确认** — 第一层告知默认、第二层展示核心门槛、第三层给四选一（默认/调整/自定义/仅数据）
 5. 确认后**输出 `run-config.json`**，后续流程只读此配置，不重新依赖聊天上下文
 
@@ -45,7 +47,7 @@ S3 确认完成 → SRCH-1 工程 PICO 分解 → SRCH-2 构建开发集+验证�
 
 ### 首次评估简化流程
 
-> ⚠️ `search_for_eval.py` 是**单轮诊断性检索器**，按 `allowed_sources` 调用 OpenAlex、arXiv、Crossref 或 Europe PMC；OpenAlex 无 Key 时会自动跳过并使用已授权的其他来源，不是完整的多源系统综述检索器。它提供 dev_recall/validation_recall 的诊断估计和 discovery candidates，但**不具备以下能力**：不做引文追踪、不做独立路径发现、不做筛选确认。不同来源的引用计数不可直接比较；没有引用计数的来源只提供 ID/题录发现。discovery candidates 不等于纳入项——只有经过标题/摘要/全文筛选确认后的新增文献才能填入 B1 GGR 分子和 B2 DRR 分子。第2-5轮及以上的迭代检索、多源异构语法映射、独立路径执行（引文追踪等）由 AI agent 在对话中手动执行，而非由此脚本自动完成。
+> ⚠️ `search_for_eval.py` 是**单轮诊断性检索器**，仅调用 `allowed_sources` 中的来源。若已授权的来源不可用（包括 OpenAlex 缺少 Key），会显式记录失败，本次不建立 A2 召回率；它不会扩大到未授权来源。它提供 dev_recall/validation_recall 的诊断估计和 discovery candidates，但**不具备以下能力**：不做引文追踪、不做独立路径发现、不做筛选确认。不同来源的引用计数不可直接比较；没有引用计数的来源只提供 ID/题录发现。discovery candidates 不等于纳入项——只有经过标题/摘要/全文筛选确认后的新增文献才能填入 B1 GGR 分子和 B2 DRR 分子。第2-5轮及以上的迭代检索、多源异构语法映射、独立路径执行（引文追踪等）由 AI agent 在对话中手动执行，而非由此脚本自动完成。
 
 1. 通过 `scripts/search_for_eval.py` 执行首轮检索（带 `--dev-set` 和 `--pico` 参数）
 2. 读取 `search_meta.json` 获取 `dev_recall` 和 `validation_recall`
@@ -79,7 +81,9 @@ S3 确认完成 → SRCH-1 工程 PICO 分解 → SRCH-2 构建开发集+验证�
 
 ## 与脚本的关系
 
-- `scripts/run_audit.py` — A–F 计算 + 报告生成（主入口）
+- `scripts/run_full_audit.py` — 默认执行入口（导入 → 可选联网 → 审计 → 行动清单）
+- `scripts/autopilot.py` — 可选的低摩擦首轮入口，默认离线
+- `scripts/run_audit.py` — A–F 核心计算 + 报告生成（供高级或已备好输入的执行使用）
 - `scripts/optimization.py` — 通用双库分离优化模块；凡需迭代优化的流程统一使用它记录开发库、独立验证库与持久化决策历史。
 - `scripts/check_consistency.py` — 项目文件、schema 与 CLI 一致性检查
 - `scripts/quality_optimization.py` — 反例库、主动筛选队列与环境漂移 canary
@@ -96,9 +100,9 @@ S3 确认完成 → SRCH-1 工程 PICO 分解 → SRCH-2 构建开发集+验证�
 - `scripts/validate_registry.py` — registry 一致性校验
 - `compute.py` — 兼容性包装器（仅 A1 + 库健康，**勿用作主入口**）
 
-## 向导式工作流与人工确认、工具调用与联网授权
+## 向导式工作流、安全与联网授权
 
-## HTML-only delivery
+### 交付格式与安全边界
 
 `audit.html` is the only human-readable audit report. Keep `audit.json`,
 `manifest.json`, and hashed `inputs/` as reproducibility artifacts, but do not

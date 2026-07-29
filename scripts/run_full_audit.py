@@ -259,7 +259,7 @@ def main():
     if args.citation_seed: seed_command.extend(["--user-seed", args.citation_seed])
     run(seed_command, steps, "citation_seed_plan", out, run_signature, [citations / "citation-seeds.json"], args.resume)
     if automation.get("allow_search") is True and automation.get("allow_citation_tracking") is True:
-        run([sys.executable, script("citation_candidates.py"), "--seed", str(citations / "citation-seeds.json"), "--run-config", args.run_config, "--out", str(citations), "--allow-unavailable"], steps, "citation_discovery", out, run_signature, [citations / "citation-candidates.json", citations / "manifest.json"], args.resume)
+        run([sys.executable, script("citation_candidates.py"), "--seed", str(citations / "citation-seeds.json"), "--run-config", args.run_config, "--out", str(citations)], steps, "citation_discovery", out, run_signature, [citations / "citation-candidates.json", citations / "manifest.json"], args.resume)
     audit = out / "audit"; command = [sys.executable, script("run_audit.py"), "--library", str(canonical), "--out", str(audit), "--run-config", args.run_config,
                                         "--citation-seed-plan", str(citations / "citation-seeds.json")]
     discovered_citations = citations / "citation-candidates.json"

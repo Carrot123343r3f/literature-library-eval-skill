@@ -38,7 +38,7 @@ def main():
             report.update(status="source_not_allowed", records_unchanged=len(rows))
         else:
             try:
-                key = require_openalex_authorization(config)
+                key = require_openalex_authorization(config, "allow_metadata_enrichment")
             except ExternalSearchError:
                 report.update(status="unavailable", reason="credential_or_source_unavailable", records_unchanged=len(rows))
             else:
@@ -55,7 +55,7 @@ def main():
                         updated, lookup = dict(cache[cache_key][0]), dict(cache[cache_key][1])
                     else:
                         try:
-                            updated, lookup = enrich_openalex_record(row, key)
+                            updated, lookup = enrich_openalex_record(row, key, config)
                         except Exception as exc:
                             lookup = {"status": "source_error", "error_type": type(exc).__name__}
                             updated = dict(row)
