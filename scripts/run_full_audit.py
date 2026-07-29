@@ -135,7 +135,18 @@ def configure_permissions(args):
         raise SystemExit(f"ERROR: cannot parse run-config: {exc}")
     if not isinstance(config, dict):
         raise SystemExit("ERROR: run-config must be an object")
-    automation = config.setdefault("automation", {})
+    errors = validate_run_config_contract(config)
+    if errors:
+        raise SystemExit("ERROR: invalid run-config:\n- " + "\n- ".join(errors))
+    automation = config["automation"]
+    enabled = [label for key, label in (
+        ("allow_metadata_enrichment", "metadata enrichment"),
+        ("allow_external_discovery", "external discovery"),
+        ("allow_citation_tracking", "citation tracking"),
+    ) if automation.get(key) is True]
+    source_summary = ", ".join(automation.get("allowed_sources", [])) or "none"
+    print("Current permissions: fully-local confirmed=" + ("yes" if automation.get("local_only_confirmed") else "no") +
+          "; enabled=" + (", ".join(enabled) if enabled else "none") + "; sources=" + source_summary)
     local_only = input("Confirm fully local execution (disable all online capabilities)? [y/N]: ").strip().lower() in {"y", "yes"}
     if local_only:
         metadata = discovery = citations = False

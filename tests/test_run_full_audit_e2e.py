@@ -87,3 +87,31 @@ def test_configure_permissions_records_explicit_online_authorization(tmp_path):
     assert config_data["automation"]["allow_metadata_enrichment"] is True
     assert config_data["automation"]["local_only_confirmed"] is False
     assert config_data["automation"]["allowed_sources"] == ["arxiv"]
+    assert "Current permissions:" in result.stdout
+
+
+def test_configure_permissions_records_explicit_local_choice_and_clears_sources(tmp_path):
+    run_config = tmp_path / "run-config.json"
+    config(run_config, allow_search=True, allow_external_discovery=True)
+    result = subprocess.run([
+        sys.executable, str(ROOT / "scripts" / "run_full_audit.py"), "configure-permissions", "--run-config", str(run_config),
+    ], input="y\n", capture_output=True, text=True, encoding="utf-8")
+    assert result.returncode == 0, result.stderr
+    automation = json.loads(run_config.read_text(encoding="utf-8"))["automation"]
+    assert automation["local_only_confirmed"] is True
+    assert all(automation[key] is False for key in ("allow_search", "allow_metadata_enrichment", "allow_external_discovery", "allow_citation_tracking"))
+    assert automation["allowed_sources"] == []
+
+
+def test_configure_permissions_validates_existing_config_before_prompting(tmp_path):
+    run_config = tmp_path / "run-config.json"
+    config(run_config)
+    malformed = json.loads(run_config.read_text(encoding="utf-8"))
+    malformed["automation"] = "not an object"
+    run_config.write_text(json.dumps(malformed), encoding="utf-8")
+    result = subprocess.run([
+        sys.executable, str(ROOT / "scripts" / "run_full_audit.py"), "configure-permissions", "--run-config", str(run_config),
+    ], input="y\n", capture_output=True, text=True, encoding="utf-8")
+    assert result.returncode != 0
+    assert "invalid run-config" in result.stderr
+    assert "Confirm fully local" not in result.stdout
