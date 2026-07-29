@@ -11,8 +11,10 @@ import sys
 
 try:
     from query_compiler import compile_query_plan
+    from import_library import load as load_library
 except ImportError:
     from scripts.query_compiler import compile_query_plan
+    from scripts.import_library import load as load_library
 
 
 DEFAULT_SOURCES = ["openalex", "arxiv", "crossref", "europepmc"]
@@ -27,7 +29,8 @@ def build_context(question, terms):
 
 def build_config(question, library, review_type, sources, offline, scope_status,
                  *, allow_metadata_enrichment=False, allow_external_discovery=False,
-                 allow_citation_tracking=False):
+                 allow_citation_tracking=False, time_start=None, time_end=None,
+                 languages=None, output_language="zh-CN"):
     """Build an explicit-permission config; scope confirmation never grants network access."""
     if offline:
         allow_metadata_enrichment = allow_external_discovery = allow_citation_tracking = False
@@ -35,12 +38,14 @@ def build_config(question, library, review_type, sources, offline, scope_status,
     config = {"schema_version": "1.0",
             "project": {"research_question": question, "review_type": review_type,
                         "scope_status": scope_status,
+                        "time_range": {"start": time_start, "end": time_end},
+                        "languages": languages or [],
                         "scope_rationale": "explicit autopilot scope confirmation" if scope_status == "in_scope" else "autopilot draft; scope not confirmed"},
             "library": {"provided": bool(library), "path": pathlib.Path(library).name if library else None, "format": "json" if library else None},
             "automation": {"allow_search": allow_search, "allow_metadata_enrichment": allow_metadata_enrichment,
                             "allow_external_discovery": allow_external_discovery, "allow_citation_tracking": allow_citation_tracking,
                             "local_only_confirmed": offline, "allowed_sources": sources if allow_search else []},
-            "output": {"language": "zh-CN", "formats": ["html", "json"]}}
+            "output": {"language": output_language, "formats": ["html", "json"]}}
     if allow_search:
         config["quality"] = {"active_screen_budget": 100}
     return config
@@ -82,11 +87,7 @@ def write_search_preparation(out, question, plan):
 
 def write_library_health(out, library):
     """Provide a lightweight health check without claiming review sufficiency."""
-    payload = json.loads(library.read_text(encoding="utf-8"))
-    rows = payload if isinstance(payload, list) else payload.get("items", [])
-    if not isinstance(rows, list):
-        raise ValueError("library health check requires a JSON array or an object with items[]")
-    records = [row for row in rows if isinstance(row, dict)]
+    records = load_library(library)
     total = len(records)
     def rate(*keys):
         return (sum(bool(str(next((row.get(key) for key in keys if row.get(key)), "")).strip()) for row in records) / total) if total else 0
@@ -100,6 +101,34 @@ def write_library_health(out, library):
     (out / "library-health.html").write_text(page, encoding="utf-8")
 
 
+def audit_readiness(library):
+    """Keep an explicit audit request from becoming an empty A-F report."""
+    records = load_library(library)
+    total = len(records)
+    titled = sum(bool(row.get("title")) for row in records)
+    dated = sum(bool(row.get("year")) for row in records)
+    reasons = []
+    if total < 3:
+        reasons.append("at least 3 imported records")
+    if total and titled / total < 0.8:
+        reasons.append("titles for at least 80% of records")
+    if total and dated / total < 0.8:
+        reasons.append("years for at least 80% of records")
+    return records, reasons
+
+
+def write_sufficiency_precheck(out, reasons):
+    items = "".join(f"<li>{html.escape(reason)}</li>" for reason in reasons)
+    page = f"""<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>充分性审计预检查</title>
+<body><main style="max-width:760px;margin:48px auto;font:16px/1.55 system-ui,sans-serif">
+<h1>充分性审计尚未开始</h1>
+<p>你已请求充分性审计，但文献库尚未达到最小可审计输入。为避免生成大部分不可评估的 A–F 报告，本次仅交付预检查结果。</p>
+<h2>最低需要补齐</h2><ul>{items}</ul>
+<h2>之后仍需要的审计证据</h2><p>检索日志、独立验证集、人工筛选决定和独立检索路径用于判断覆盖与饱和度；缺少它们时不会宣称“检索充分”。</p>
+</main></body></html>"""
+    (out / "sufficiency-precheck.html").write_text(page, encoding="utf-8")
+
+
 def run(args):
     out = pathlib.Path(args.out); control = out / ".autopilot"; control.mkdir(parents=True, exist_ok=True)
     print("[1/3] Preparing the first-run plan...", flush=True)
@@ -111,7 +140,9 @@ def run(args):
         args.question, args.library, args.review_type, sources, args.offline, args.scope_status,
         allow_metadata_enrichment=args.allow_metadata_enrichment,
         allow_external_discovery=args.allow_external_discovery,
-        allow_citation_tracking=args.allow_citation_tracking), ensure_ascii=False, indent=2), encoding="utf-8")
+        allow_citation_tracking=args.allow_citation_tracking, time_start=args.time_start,
+        time_end=args.time_end, languages=[item.strip() for item in (args.languages or "").split(",") if item.strip()],
+        output_language=args.output_language or "zh-CN"), ensure_ascii=False, indent=2), encoding="utf-8")
     context_path.write_text(json.dumps(build_context(args.question, terms), ensure_ascii=False, indent=2), encoding="utf-8")
     plan_path.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
     if args.scope_status not in {"in_scope", "cross_domain"}:
@@ -120,7 +151,7 @@ def run(args):
         return
     mode = args.mode
     if mode == "auto":
-        mode = "sufficiency-audit" if args.library and args.review_type else ("library-health" if args.library else "search-preparation")
+        mode = "library-health" if args.library else "search-preparation"
     if mode == "search-preparation":
         write_search_preparation(out, args.question, plan)
         (out / "autopilot-manifest.json").write_text(json.dumps({"schema_version": "1.0", "mode": "search_preparation", "audit_status": "not_started", "question": args.question}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -134,8 +165,19 @@ def run(args):
         (out / "autopilot-manifest.json").write_text(json.dumps({"schema_version": "1.0", "mode": "library_health", "audit_status": "not_started", "question": args.question}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print("[2/3] Delivered a library-health check, not a sufficiency audit.", flush=True)
         return
-    if not args.review_type:
-        raise ValueError("sufficiency-audit requires an explicit --review-type.")
+    missing = []
+    if not args.review_type: missing.append("--review-type")
+    if args.time_start is None or args.time_end is None: missing.append("--time-start and --time-end")
+    if not args.languages: missing.append("--languages")
+    if not args.output_language: missing.append("--output-language")
+    if missing:
+        raise ValueError("sufficiency-audit requires explicit confirmation of " + ", ".join(missing) + ".")
+    _, readiness_gaps = audit_readiness(library)
+    if readiness_gaps:
+        write_sufficiency_precheck(out, readiness_gaps)
+        (out / "autopilot-manifest.json").write_text(json.dumps({"schema_version": "1.0", "mode": "sufficiency_precheck", "audit_status": "not_started", "question": args.question, "missing_minimum_inputs": readiness_gaps}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print("[2/3] Delivered a sufficiency precheck; the A-F audit was not started.", flush=True)
+        return
     print("[2/3] Running the sufficiency audit; missing evidence will remain explicit.", flush=True)
     command = [sys.executable, str(pathlib.Path(__file__).with_name("run_full_audit.py")), "run",
                "--run-config", str(config_path), "--library", str(library),
@@ -158,6 +200,10 @@ def main():
     parser.add_argument("--mode", default="auto", choices=("auto", "search-preparation", "library-health", "sufficiency-audit"),
                         help="Search preparation and library health do not produce A-F sufficiency conclusions.")
     parser.add_argument("--review-type", choices=("narrative", "systematic", "scoping", "rapid", "umbrella"))
+    parser.add_argument("--time-start", type=int, help="Explicit start year required for sufficiency-audit.")
+    parser.add_argument("--time-end", type=int, help="Explicit end year required for sufficiency-audit.")
+    parser.add_argument("--languages", help="Comma-separated language boundary required for sufficiency-audit.")
+    parser.add_argument("--output-language", choices=("zh-CN", "en"), help="Explicit report language required for sufficiency-audit.")
     parser.add_argument("--scope-status", default="scope_uncertain", choices=("in_scope", "cross_domain", "out_of_scope", "scope_uncertain"),
                         help="Explicit scope decision. Full A-F execution requires in_scope or cross_domain; default is a safe draft state.")
     parser.add_argument("--sources", default=",".join(DEFAULT_SOURCES)); parser.add_argument("--offline", action="store_true",

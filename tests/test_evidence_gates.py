@@ -110,6 +110,42 @@ def test_autopilot_library_health_does_not_emit_a_sufficiency_audit(tmp_path):
     assert not (out / "audit" / "audit.html").exists()
 
 
+def test_autopilot_auto_never_upgrades_to_audit_from_review_type(tmp_path):
+    out = tmp_path / "implicit"
+    command = [sys.executable, str(ROOT / "scripts" / "autopilot.py"),
+               "--question", "robot localization", "--library", str(ROOT / "tests" / "library.json"),
+               "--review-type", "systematic", "--out", str(out), "--offline", "--scope-status", "in_scope"]
+    result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8")
+    assert result.returncode == 0, result.stderr
+    manifest = json.loads((out / "autopilot-manifest.json").read_text(encoding="utf-8"))
+    assert manifest["mode"] == "library_health"
+    assert not (out / "audit" / "audit.html").exists()
+
+
+def test_autopilot_sufficiency_audit_requires_boundaries_before_starting(tmp_path):
+    out = tmp_path / "missing-boundaries"
+    command = [sys.executable, str(ROOT / "scripts" / "autopilot.py"),
+               "--question", "robot localization", "--library", str(ROOT / "tests" / "library.json"),
+               "--out", str(out), "--offline", "--scope-status", "in_scope",
+               "--mode", "sufficiency-audit", "--review-type", "systematic"]
+    result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8")
+    assert result.returncode != 0
+    assert "--time-start" in result.stderr
+    assert not (out / "audit" / "audit.html").exists()
+
+
+def test_autopilot_library_health_imports_csv_before_checking(tmp_path):
+    source = tmp_path / "library.csv"
+    source.write_text("title,year,DOI,abstract\nOne,2024,10.1/one,short\n", encoding="utf-8")
+    out = tmp_path / "csv-health"
+    command = [sys.executable, str(ROOT / "scripts" / "autopilot.py"),
+               "--question", "robot localization", "--library", str(source), "--out", str(out),
+               "--offline", "--scope-status", "in_scope", "--mode", "library-health"]
+    result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8")
+    assert result.returncode == 0, result.stderr
+    assert "可读取记录：1" in (out / "library-health.html").read_text(encoding="utf-8")
+
+
 def test_citation_seed_plan_prefers_user_seed_then_library(tmp_path):
     from scripts.citation_seed_plan import make_plan
     library = [{"id": "https://openalex.org/W2", "title": "library", "cited_by_count": 10}]

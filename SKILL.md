@@ -151,7 +151,7 @@ additional evidence: metadata enrichment, query iteration, two-store optimizatio
 and paper evidence/value evaluation. Their commands, permissions, inputs, and
 output boundaries are documented in `docs/optional-modules.md`.
 
-优先使用 `scripts/run_full_audit.py`，而非要求用户自行串联脚本。`autopilot.py` 有三种明确模式：无库时为 `search-preparation`（只交付检索准备计划）；有库但尚未声明综述类型时为 `library-health`（只检查基础可用性）；仅在提供库、明确 `--review-type` 且选择 `sufficiency-audit` 时生成完整 A-F 报告。它默认本地运行；范围确认绝不等同于联网授权。只有显式的 `--allow-metadata-enrichment`、`--allow-external-discovery` 或 `--allow-citation-tracking` 才会启用对应能力。
+优先使用 `scripts/run_full_audit.py`，而非要求用户自行串联脚本。`autopilot.py` 有三种明确模式：无库时为 `search-preparation`（只交付检索准备计划）；`--mode auto` 下只会进入 `library-health`（只检查基础可用性）；只有显式 `--mode sufficiency-audit`，并提供库、`--review-type`、时间边界、语言边界和输出语言时，才会尝试生成完整 A-F 报告。基础库输入不足时改交付 `sufficiency-precheck.html`，不生成 A-F。它默认本地运行；范围确认绝不等同于联网授权。只有显式的 `--allow-metadata-enrichment`、`--allow-external-discovery` 或 `--allow-citation-tracking` 才会启用对应能力。
 
 1. `init --out run-config.json`：第一轮只询问研究问题、工程范围和文献库位置；综述类型先使用 narrative 默认值。它生成默认离线的可审阅配置。
 2. `configure-permissions --run-config run-config.json`：后续需要时，以受控交互逐项确认元数据补齐、外部候选发现和引文追踪；显式选择完全本地时记录 `local_only_confirmed=true`。

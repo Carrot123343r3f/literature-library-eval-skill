@@ -123,11 +123,13 @@ def test_autopilot_offline_runs_one_command_and_writes_triage_manifest(tmp_path)
     out = tmp_path / "autopilot"
     result = invoke("autopilot.py", "--question", "robot localization", "--library", library,
                     "--out", out, "--offline", "--scope-status", "in_scope",
-                    "--mode", "sufficiency-audit", "--review-type", "narrative")
+                    "--mode", "sufficiency-audit", "--review-type", "narrative",
+                    "--time-start", "2020", "--time-end", "2026", "--languages", "en",
+                    "--output-language", "zh-CN")
     assert result.returncode == 0, result.stderr
-    assert (out / "audit" / "audit.html").is_file()
+    assert (out / "sufficiency-precheck.html").is_file()
     assert (out / "autopilot-manifest.json").is_file()
-    assert not (out / "screening" / "auto-triage.json").exists()
+    assert not (out / "audit" / "audit.html").exists()
 
 
 def test_autopilot_does_not_bundle_network_permissions_with_scope_confirmation():

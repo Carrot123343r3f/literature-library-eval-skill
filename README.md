@@ -108,7 +108,7 @@ The AI will:
 
 1. Confirm your research question, engineering scope, and library location (max 3 questions); the first pass stays local by default.
 2. Accept JSON, CSV, RIS, or BibTeX through `import_library.py`; review the generated import preview before auditing.
-3. Choose a clear mode: search preparation without a library, library health with a library, or a sufficiency audit only after explicitly selecting a review type. Online discovery is available only after explicit authorization.
+3. Choose a clear mode: search preparation without a library, library health with a library, or a sufficiency audit only after explicitly selecting `--mode sufficiency-audit`, a review type, time/language boundaries, and report language. Online discovery is available only after explicit authorization.
 
 The full example report is a reference fixture, not a prerequisite for getting started.
 
@@ -133,10 +133,10 @@ python scripts/autopilot.py \
   --out first-pass
 ```
 
-`--scope-status in_scope` is an explicit confirmation that this is an engineering question within the Skill's scope; it does not grant network access. A library-health check is not a sufficiency audit. To run A–F, provide a library and explicitly choose a review type. To discover external candidates and generate an active screening queue, explicitly authorize it:
+`--scope-status in_scope` is an explicit confirmation that this is an engineering question within the Skill's scope; it does not grant network access. A library-health check is not a sufficiency audit. `--mode auto` always remains at search preparation or library health; to run A–F, explicitly choose `--mode sufficiency-audit`, provide a library, review type, time/language boundaries, and report language. To discover external candidates and generate an active screening queue, explicitly authorize it:
 
 ```bash
-python scripts/autopilot.py --question "How do robot localization methods handle low-light sensing?" --scope-status in_scope --library library.json --mode sufficiency-audit --review-type systematic --out first-pass --allow-external-discovery
+python scripts/autopilot.py --question "How do robot localization methods handle low-light sensing?" --scope-status in_scope --library library.json --mode sufficiency-audit --review-type systematic --time-start 2020 --time-end 2026 --languages en --output-language en --out first-pass --allow-external-discovery
 ```
 
 OpenAlex is used when its key is available; authorized arXiv, Crossref, and Europe PMC adapters remain available without it. Autopilot suggestions are never formal inclusion decisions.
