@@ -175,6 +175,8 @@ def configure_permissions(args):
     temporary.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
     os.replace(temporary, path)
     print("Saved explicit local/online permission choices to run-config.")
+    if discovery:
+        print("Next step: run the audit with --collect --query-plan <query-plan.json> to discover candidates.")
 
 
 def main():
