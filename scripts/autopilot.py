@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import html
 import json
 import pathlib
+import re
 import subprocess
 import sys
 
@@ -18,6 +20,7 @@ except ImportError:
 
 
 DEFAULT_SOURCES = ["openalex", "arxiv", "crossref", "europepmc"]
+ISO_LANGUAGE_CODES = {"all", "ar", "bn", "cs", "da", "de", "el", "en", "es", "fi", "fr", "he", "hi", "hu", "id", "it", "ja", "ko", "nl", "no", "pl", "pt", "ro", "ru", "sv", "th", "tr", "uk", "ur", "vi", "zh"}
 
 
 def build_context(question, terms):
@@ -64,7 +67,7 @@ def write_onboarding(out, question, plan, sources):
 <h2>Question</h2><p>{html.escape(question)}</p>
 <h2>Next step</h2><p>If this is an engineering review question within this skill's scope, run:</p>
 <pre>{html.escape(command)}</pre>
-<p>You may add <code>--library path/to/library.json</code> now or later. Without a library, the first confirmed run creates an empty starter library and reports only what is currently assessable.</p>
+<p>You may add <code>--library path/to/library.json</code> now or later. Without a library, the first confirmed run delivers a search-preparation plan and does not start an A–F audit.</p>
 <h2>Why this pause exists</h2><p>It prevents an automated draft from silently deciding that an out-of-scope question deserves a full evidence verdict.</p>
 </main></body></html>"""
     (out / "onboarding.html").write_text(page, encoding="utf-8")
@@ -101,7 +104,7 @@ def write_library_health(out, library):
     (out / "library-health.html").write_text(page, encoding="utf-8")
 
 
-def audit_readiness(library):
+def audit_readiness(library, question):
     """Keep an explicit audit request from becoming an empty A-F report."""
     records = load_library(library)
     total = len(records)
@@ -114,7 +117,27 @@ def audit_readiness(library):
         reasons.append("titles for at least 80% of records")
     if total and dated / total < 0.8:
         reasons.append("years for at least 80% of records")
+    terms = [term.casefold() for term in re.findall(r"[\w-]+", question, flags=re.UNICODE)
+             if len(term) >= 3 and term.casefold() not in {"what", "which", "does", "how", "with", "from", "研究", "如何"}]
+    matches = sum(any(term in (str(row.get("title", "")) + " " + str(row.get("abstractNote", ""))).casefold()
+                      for term in terms) for row in records)
+    if terms and not matches:
+        reasons.append("at least one record that matches the research question terms")
     return records, reasons
+
+
+def validate_audit_boundaries(args):
+    current_year = dt.date.today().year
+    if args.time_start is None or args.time_end is None:
+        return "--time-start and --time-end"
+    if not 1900 <= args.time_start <= current_year or not 1900 <= args.time_end <= current_year:
+        return "time boundaries from 1900 through the current year"
+    if args.time_start > args.time_end:
+        return "a time start that is not later than the time end"
+    languages = [item.strip().casefold() for item in (args.languages or "").split(",") if item.strip()]
+    if not languages or any(item not in ISO_LANGUAGE_CODES for item in languages):
+        return "supported ISO language codes (or all) in --languages"
+    return None
 
 
 def write_sufficiency_precheck(out, reasons):
@@ -167,12 +190,12 @@ def run(args):
         return
     missing = []
     if not args.review_type: missing.append("--review-type")
-    if args.time_start is None or args.time_end is None: missing.append("--time-start and --time-end")
-    if not args.languages: missing.append("--languages")
+    boundary_error = validate_audit_boundaries(args)
+    if boundary_error: missing.append(boundary_error)
     if not args.output_language: missing.append("--output-language")
     if missing:
         raise ValueError("sufficiency-audit requires explicit confirmation of " + ", ".join(missing) + ".")
-    _, readiness_gaps = audit_readiness(library)
+    _, readiness_gaps = audit_readiness(library, args.question)
     if readiness_gaps:
         write_sufficiency_precheck(out, readiness_gaps)
         (out / "autopilot-manifest.json").write_text(json.dumps({"schema_version": "1.0", "mode": "sufficiency_precheck", "audit_status": "not_started", "question": args.question, "missing_minimum_inputs": readiness_gaps}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

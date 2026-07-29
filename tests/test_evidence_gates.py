@@ -134,6 +134,41 @@ def test_autopilot_sufficiency_audit_requires_boundaries_before_starting(tmp_pat
     assert not (out / "audit" / "audit.html").exists()
 
 
+def test_autopilot_rejects_inverted_future_and_invalid_language_boundaries(tmp_path):
+    common = ["--question", "robot localization", "--library", str(ROOT / "tests" / "library.json"),
+              "--offline", "--scope-status", "in_scope", "--mode", "sufficiency-audit",
+              "--review-type", "systematic", "--output-language", "zh-CN"]
+    inverted = subprocess.run([sys.executable, str(ROOT / "scripts" / "autopilot.py"), *common,
+                               "--out", str(tmp_path / "inverted"), "--time-start", "2026", "--time-end", "2020", "--languages", "en"],
+                              capture_output=True, text=True, encoding="utf-8")
+    assert inverted.returncode != 0
+    assert "not later" in inverted.stderr
+    invalid_language = subprocess.run([sys.executable, str(ROOT / "scripts" / "autopilot.py"), *common,
+                                       "--out", str(tmp_path / "language"), "--time-start", "2020", "--time-end", "2026", "--languages", "xx"],
+                                      capture_output=True, text=True, encoding="utf-8")
+    assert invalid_language.returncode != 0
+    assert "ISO language" in invalid_language.stderr
+
+
+def test_autopilot_relevance_mismatch_stops_at_sufficiency_precheck(tmp_path):
+    library = tmp_path / "bridges.json"
+    library.write_text(json.dumps([
+        {"title": "Bridge corrosion monitoring", "year": 2024},
+        {"title": "Steel bridge inspection", "year": 2023},
+        {"title": "Concrete corrosion review", "year": 2022},
+    ]), encoding="utf-8")
+    out = tmp_path / "mismatch"
+    command = [sys.executable, str(ROOT / "scripts" / "autopilot.py"), "--question", "robot localization",
+               "--library", str(library), "--out", str(out), "--offline", "--scope-status", "in_scope",
+               "--mode", "sufficiency-audit", "--review-type", "systematic", "--time-start", "2020",
+               "--time-end", "2026", "--languages", "en", "--output-language", "zh-CN"]
+    result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8")
+    assert result.returncode == 0, result.stderr
+    manifest = json.loads((out / "autopilot-manifest.json").read_text(encoding="utf-8"))
+    assert manifest["mode"] == "sufficiency_precheck"
+    assert not (out / "audit" / "audit.html").exists()
+
+
 def test_autopilot_library_health_imports_csv_before_checking(tmp_path):
     source = tmp_path / "library.csv"
     source.write_text("title,year,DOI,abstract\nOne,2024,10.1/one,short\n", encoding="utf-8")
@@ -206,7 +241,7 @@ def test_indicator_rows_never_mix_a_verdict_with_incompatible_evidence(tmp_path)
     assert result.returncode == 0, result.stderr
     report = json.loads((out / "audit.json").read_text(encoding="utf-8"))
     rows = {row["subproject"]: row for row in report["indicator_register"]}
-    assert rows["F1"]["meets_standard"] == "pass"
+    assert rows["F1"]["meets_standard"] == "screening"
     assert rows["F1"]["evidence_status"] == "measured"
     assert rows["E2"]["meets_standard"] == rows["E2"]["evidence_status"] == "not_assessable"
     assert rows["F6"]["meets_standard"] == rows["F6"]["evidence_status"] == "not_assessable"
@@ -241,6 +276,16 @@ def test_unconfirmed_standard_does_not_rewrite_measured_evidence(tmp_path):
     assert row["meets_standard"] == "screening"
     assert row["evidence_status"] == "measured"
     assert row["decision_status"] == "standards_unconfirmed"
+
+
+def test_unconfirmed_standards_never_emit_pass_fail_or_warning(tmp_path):
+    result, out = run_audit(tmp_path, {"scope_status": "in_scope", "review_type": "systematic"})
+    assert result.returncode == 0, result.stderr
+    report = json.loads((out / "audit.json").read_text(encoding="utf-8"))
+    verdicts = {row["meets_standard"] for row in report["indicator_register"]}
+    assert not verdicts & {"pass", "fail", "warning"}
+    overview = __import__("run_audit")._result_overview(report)
+    assert "尚不能作充分性判断" in overview
 
 
 def test_missing_taxonomy_and_search_dates_do_not_make_affirmative_claims(tmp_path):

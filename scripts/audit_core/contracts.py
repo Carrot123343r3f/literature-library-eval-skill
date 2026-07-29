@@ -1,4 +1,5 @@
 """Public-input validation and safe rendering primitives shared by workflows."""
+import datetime as dt
 import json
 import pathlib
 import re
@@ -10,6 +11,7 @@ SENSITIVE_KEY_PARTS = (
 )
 SENSITIVE_VALUE_RE = re.compile(r"(?i)((?:api[_-]?key|token|secret|password|authorization|credential|cookie)\s*[=:]\s*)([^&\s,;]+)")
 EMBEDDED_LOCAL_PATH_RE = re.compile(r"(?<![\w])(?:[A-Za-z]:[\\/]|/)[^\s\"']+")
+ISO_LANGUAGE_CODES = {"all", "ar", "bn", "cs", "da", "de", "el", "en", "es", "fi", "fr", "he", "hi", "hu", "id", "it", "ja", "ko", "nl", "no", "pl", "pt", "ro", "ru", "sv", "th", "tr", "uk", "ur", "vi", "zh"}
 
 INDICATOR_VERDICTS = {"pass", "warning", "fail", "screening", "not_assessable"}
 INDICATOR_EVIDENCE_STATUSES = {
@@ -140,6 +142,25 @@ def validate_run_config(rc):
         level = project.get("allowed_assessment_level")
         if level and level not in {"full", "limited_metadata_only", "stop"}:
             errors.append(f"project.allowed_assessment_level is invalid: {level!r}")
+        time_range = project.get("time_range")
+        if time_range is not None:
+            if not isinstance(time_range, dict):
+                errors.append("project.time_range must be an object")
+            else:
+                start, end = time_range.get("start"), time_range.get("end")
+                current_year = dt.date.today().year
+                if start is not None and (not isinstance(start, int) or start < 1900 or start > current_year):
+                    errors.append("project.time_range.start must be a year from 1900 through the current year")
+                if end is not None and (not isinstance(end, int) or end < 1900 or end > current_year):
+                    errors.append("project.time_range.end must be a year from 1900 through the current year")
+                if isinstance(start, int) and isinstance(end, int) and start > end:
+                    errors.append("project.time_range.start cannot be later than project.time_range.end")
+        languages = project.get("languages")
+        if languages is not None:
+            if not isinstance(languages, list) or not languages:
+                errors.append("project.languages must be a non-empty array")
+            elif any(not isinstance(language, str) or language.casefold() not in ISO_LANGUAGE_CODES for language in languages):
+                errors.append("project.languages must contain supported ISO language codes or 'all'")
 
     library = rc.get("library", {})
     if isinstance(library, dict):

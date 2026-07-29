@@ -155,8 +155,7 @@ def test_systematic_overview_with_evidence_gaps_is_exploratory_only():
         "indicator_register": [{"subproject": "B1", "project_name": "饱和度", "meets_standard": "not_assessable",
                                 "evidence_status": "not_assessable", "description_and_action": "需要人工筛选记录"}],
     })
-    assert "可进行探索性主题梳理" in overview
-    assert "不可形成综述结论" in overview
+    assert "尚不能作充分性判断" in overview
 
 
 def test_query_compiler_uses_source_specific_syntax():

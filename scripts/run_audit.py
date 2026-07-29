@@ -635,8 +635,15 @@ def recency(library, context):
     years, minimum, _freshness = profile_defaults(context)
     current_year = dt.date.today().year; parsed = []
     total_records = len(library)
+    start, end = context.get("year_start"), context.get("year_end")
+    excluded_by_scope = 0
     for item in library:
-        try: parsed.append(int(str(item.get("date") or "")[:4]))
+        try:
+            year = int(str(item.get("date") or item.get("year") or "")[:4])
+            if (start is not None and year < start) or (end is not None and year > end):
+                excluded_by_scope += 1
+                continue
+            parsed.append(year)
         except ValueError: pass
     recent = sum(y >= current_year - years + 1 for y in parsed)
     share = recent / len(parsed) if parsed else None
@@ -656,6 +663,7 @@ def recency(library, context):
             "minimum_share": minimum, "dated_records": len(parsed), "recent_records": recent,
             "recent_share": round(share, 3) if share is not None else None,
             "year_completeness": round(year_completeness, 3) if year_completeness is not None else None,
+            "scope_excluded_records": excluded_by_scope,
             "preprint_records": preprints, "checks": checks}
 
 def umbrella_checks(library, context, lib_health):
@@ -1059,7 +1067,11 @@ def _result_overview(report):
     warnings = [row for row in rows if row.get("meets_standard") == "warning"]
     gaps = [row for row in rows if row.get("meets_standard") == "not_assessable"]
     candidate = [row for row in rows if row.get("evidence_status") == "candidate_discovery"]
-    if failed:
+    core_ids = {"A1", "A2", "B1", "B2", "B3", "F1", "F5"}
+    core_gaps = [row for row in rows if row.get("subproject") in core_ids and row.get("meets_standard") == "not_assessable"]
+    if core_gaps:
+        readiness = "尚不能作充分性判断：覆盖、筛选或检索可复跑的核心证据缺失"
+    elif failed:
         readiness = "暂不建议开始有限范围初稿；先解决阻断项"
     elif gaps:
         review_type = report.get("context", {}).get("review_type", "")
@@ -1074,7 +1086,7 @@ def _result_overview(report):
         f"本次共 {len(rows)} 项指标：阻断 {len(failed)} 项、需关注 {len(warnings)} 项、"
         f"待补证据 {len(gaps)} 项、AI 候选层 {len(candidate)} 项。"
     )
-    priorities = failed + gaps + warnings
+    priorities = list({row.get("subproject"): row for row in (core_gaps + failed + gaps + warnings)}.values())
     if priorities:
         lines.append("\n**优先处理：**")
         for row in priorities[:3]:
@@ -1713,6 +1725,10 @@ def write(report, out, artifact_paths=None):
     out.mkdir(parents=True, exist_ok=True)
     ctx = report.get("context", {}); h = report["library_health"]
     rows = indicator_rows(report)
+    if not (report.get("standards") or {}).get("confirmed_by_user", False):
+        # Defaults are useful diagnostics, not user-approved pass/fail standards.
+        rows = [(*row[:4], "screening" if row[4] in {"pass", "warning", "fail"} else row[4], *row[5:])
+                for row in rows]
 
     def decision_status(identifier, verdict):
         if identifier in {"A3", "E1"}:

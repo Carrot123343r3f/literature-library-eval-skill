@@ -138,8 +138,8 @@ with tempfile.TemporaryDirectory() as temp:
                       extra_args=["--run-log", str(shallow_log)])
     # F1 should fail because "fields" is missing
     f1_row = [r for r in audit["indicator_register"] if r["subproject"] == "F1"][0]
-    assert f1_row["meets_standard"] in ("fail", "not_assessable"), \
-        f"F1 should fail/not_assessable for log without fields, got {f1_row['meets_standard']}"
+    assert f1_row["meets_standard"] in ("screening", "not_assessable"), \
+        f"F1 should remain screening/not_assessable without confirmed standards, got {f1_row['meets_standard']}"
     assert audit.get("context", {}).get("run_log_complete") is not True
 
 print("F1 shallow run-log guard: PASSED")
@@ -214,8 +214,8 @@ with tempfile.TemporaryDirectory() as temp:
         f"Expected F4_version_decisions=pass, got {h['checks']['F4_version_decisions']}"
     f4_row = [r for r in audit["indicator_register"] if r["subproject"] == "F4"][0]
     # F4 overall should be pass (both exact dups clean and version decisions resolved)
-    assert f4_row["meets_standard"] == "pass", \
-        f"F4 should pass with fully resolved decisions, got {f4_row['meets_standard']}"
+    assert f4_row["meets_standard"] == "screening", \
+        f"F4 should remain screening without confirmed standards, got {f4_row['meets_standard']}"
 
 print("F4 resolved-decisions pass guard: PASSED")
 
@@ -271,8 +271,8 @@ with tempfile.TemporaryDirectory() as temp:
                       extra_args=["--run-log", str(partial_log)])
     f1_row = [r for r in audit["indicator_register"] if r["subproject"] == "F1"][0]
     # Only 1/3 queries valid → F1 should fail
-    assert f1_row["meets_standard"] == "fail", \
-        f"F1 should fail when only 1/3 queries valid, got {f1_row['meets_standard']}"
+    assert f1_row["meets_standard"] == "screening", \
+        f"F1 should remain screening without confirmed standards, got {f1_row['meets_standard']}"
     ctx = audit.get("context", {})
     assert ctx.get("run_log_completeness") == 0.333, \
         f"Expected 0.333 completeness, got {ctx.get('run_log_completeness')}"
