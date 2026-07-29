@@ -221,7 +221,8 @@ def validate_audit_evidence(evidence_inputs, context, review_type, relevance_rev
     if len(valid_paths) < minimum:
         errors.append(f"Independent pathways need {minimum} completed, screened paths with type and yield")
     review_ok = _validate_relevance_review(relevance_review, errors)
-    return errors, {"gold": gold_scope, "query_hits": hits_scope, "relevance_reviewed": review_ok}
+    return errors, {"gold": gold_scope, "query_hits": hits_scope,
+                    "heldout": _heldout_scope, "relevance_reviewed": review_ok}
 
 
 def audit_readiness(library, question, context, evidence_inputs=None, relevance_review=None):
@@ -242,12 +243,13 @@ def audit_readiness(library, question, context, evidence_inputs=None, relevance_
                       for term in terms) for row in records)
     minimum_match_share = 0.20
     evidence_errors, evidence_scope = validate_audit_evidence(evidence_inputs or {}, context, context.get("review_type", ""), relevance_review)
+    evidence_scope["library"] = scope
     if terms and total and matches / total < minimum_match_share and not evidence_scope["relevance_reviewed"]:
         reasons.append(f"topical relevance precheck: at least {minimum_match_share:.0%} of scoped records must match research-question terms, or supply a documented relevance review")
     reasons.extend(evidence_errors)
     if scope["unknown_language_records"] and context.get("languages") and "all" not in {normalize_language_tag(x) for x in context["languages"]}:
         reasons.append("language metadata is missing for scoped-library candidates; enrich it, document a manual boundary review, or use all")
-    return records, reasons
+    return records, reasons, evidence_scope
 
 
 def validate_audit_boundaries(args):
@@ -341,10 +343,10 @@ def run(args):
     if not args.output_language: missing.append("--output-language")
     if missing:
         raise ValueError("sufficiency-audit requires explicit confirmation of " + ", ".join(missing) + ".")
-    _, readiness_gaps = audit_readiness(library, args.question, context, evidence_inputs, args.relevance_review)
+    _, readiness_gaps, scope_matrix = audit_readiness(library, args.question, context, evidence_inputs, args.relevance_review)
     if readiness_gaps:
         write_sufficiency_precheck(out, readiness_gaps, args.output_language or "zh-CN")
-        (out / "autopilot-manifest.json").write_text(json.dumps({"schema_version": "1.0", "mode": "sufficiency_precheck", "audit_status": "not_started", "question": args.question, "missing_minimum_inputs": readiness_gaps}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        (out / "autopilot-manifest.json").write_text(json.dumps({"schema_version": "1.0", "mode": "sufficiency_precheck", "audit_status": "not_started", "question": args.question, "missing_minimum_inputs": readiness_gaps, "scope_matrix": scope_matrix}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print("[2/3] Delivered a sufficiency precheck; the A-F audit was not started.", flush=True)
         return
     print("[2/3] Running the sufficiency audit; missing evidence will remain explicit.", flush=True)

@@ -228,6 +228,7 @@ def test_autopilot_invalid_evidence_is_a_precheck_not_a_traceback(tmp_path):
     assert "Traceback" not in result.stderr + result.stdout
     manifest = json.loads((out / "autopilot-manifest.json").read_text(encoding="utf-8"))
     assert manifest["mode"] == "sufficiency_precheck"
+    assert {"library", "gold", "query_hits", "heldout"} <= set(manifest["scope_matrix"])
     assert any("Gold set" in item for item in manifest["missing_minimum_inputs"])
     config_text = (out / ".autopilot" / "run-config.json").read_text(encoding="utf-8")
     assert str(tmp_path) not in config_text

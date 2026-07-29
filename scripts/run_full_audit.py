@@ -229,7 +229,7 @@ def main():
         evidence = {"gold": args.gold, "query_hits": args.query_hits, "query_log": args.run_log,
                     "screening_decisions": args.screening_decisions, "search_iterations": args.search_iterations,
                     "independent_pathways": args.independent_pathways}
-        _, readiness_errors = audit_readiness(library, project.get("research_question", ""), scope_context, evidence, args.relevance_review)
+        _, readiness_errors, _scope_matrix = audit_readiness(library, project.get("research_question", ""), scope_context, evidence, args.relevance_review)
         if readiness_errors:
             raise SystemExit("ERROR: sufficiency audit preflight failed:\n- " + "\n- ".join(readiness_errors))
     except ImportError as exc:
