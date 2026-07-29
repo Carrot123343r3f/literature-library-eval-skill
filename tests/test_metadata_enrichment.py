@@ -29,7 +29,8 @@ with tempfile.TemporaryDirectory() as tmp:
     write(library, [{"title": "A paper without DOI", "abstract": "metadata only"}])
     write(config, {"project": {"research_question": "metadata"}, "automation": {"allow_search": True, "allow_metadata_enrichment": True, "allowed_sources": ["openalex"]}})
     env = dict(os.environ); env.pop("OPENALEX_API_KEY", None)
-    subprocess.run([sys.executable, str(ROOT / "scripts" / "enrich_library_metadata.py"), "--library", str(library), "--run-config", str(config), "--out", str(out)], check=True, env=env)
+    result = subprocess.run([sys.executable, str(ROOT / "scripts" / "enrich_library_metadata.py"), "--library", str(library), "--run-config", str(config), "--out", str(out)], capture_output=True, text=True, env=env)
+    assert result.returncode != 0
     report = json.loads((out / "metadata-enrichment.json").read_text(encoding="utf-8"))
     assert report["status"] == "unavailable"
     assert (out / "library-enriched.json").exists()

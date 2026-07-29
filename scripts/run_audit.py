@@ -1405,12 +1405,18 @@ def indicator_rows(report):
 
     def _d2(d):
         verdict = chk(recency_checks, "D2_recent_share")
+        outcome = ("No parseable year records were supplied; compliance cannot be assessed."
+                   if verdict == "not_assessable" and is_english else
+                   "未提供可解析的年份记录，无法判断是否达标。" if verdict == "not_assessable" else
+                   "Below the threshold." if verdict == "warning" and is_english else
+                   "低于阈值。" if verdict == "warning" else
+                   "Meets the threshold." if verdict == "pass" and is_english else
+                   "达标。" if verdict == "pass" else "需要人工核验。")
         return (verdict,
                 f"{_fmt_pct(d['ds'])}（{_fmt_num(d.get('d_rec'))}/{_fmt_num(d.get('d_dated'))} 有日期）",
                 d["d_status"],
                 f"近 {d['dy']} 年占比 {_fmt_pct(d['ds'])}。阈值按 profile：AI/通信 3年40%、常规 5年35%、基础设施 7年30%。"
-                f"{'低于阈值。' if verdict=='warning' else '达标。'}"
-                f"年份字段完整率 {_fmt_pct(d.get('d_comp'))}；<50% 时 D2 自动降级为 warning。")
+                f"{outcome}年份字段完整率 {_fmt_pct(d.get('d_comp'))}；<50% 时 D2 自动降级为 warning。")
 
     def _d3(d):
         verdict = chk(recency_checks, "D3_frontier")

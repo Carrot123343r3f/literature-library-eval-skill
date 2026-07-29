@@ -106,9 +106,9 @@ of what the current library supports and what should happen next.
 
 The AI will:
 
-1. Confirm your research question, engineering scope, and library location (max 3 questions); the first pass defaults to narrative review and local-only execution.
+1. Confirm your research question, engineering scope, and library location (max 3 questions); the first pass stays local by default.
 2. Accept JSON, CSV, RIS, or BibTeX through `import_library.py`; review the generated import preview before auditing.
-3. Compute all assessable A–F indicators and produce the audit package. Online discovery is available only after explicit authorization.
+3. Choose a clear mode: search preparation without a library, library health with a library, or a sufficiency audit only after explicitly selecting a review type. Online discovery is available only after explicit authorization.
 
 The full example report is a reference fixture, not a prerequisite for getting started.
 
@@ -122,20 +122,21 @@ python scripts/autopilot.py \
   --out first-pass
 ```
 
-This creates `first-pass/onboarding.html`: a small handoff with the saved question and next command. When you confirm the question is in scope, run:
+This creates `first-pass/onboarding.html`: a small handoff with the saved question and next command. After confirming scope, a run without a library produces `search-preparation.html`, not an audit. To check the basic health of an existing library, run:
 
 ```bash
 python scripts/autopilot.py \
   --question "How do robot localization methods handle low-light sensing?" \
   --scope-status in_scope \
   --library library.json \
+  --mode library-health \
   --out first-pass
 ```
 
-`--scope-status in_scope` is an explicit confirmation that this is an engineering question within the Skill's scope; it does not grant network access. `--library` is optional: a confirmed run without one creates an empty starter library and reports only what is assessable. To discover external candidates and generate an active screening queue, explicitly authorize it:
+`--scope-status in_scope` is an explicit confirmation that this is an engineering question within the Skill's scope; it does not grant network access. A library-health check is not a sufficiency audit. To run A–F, provide a library and explicitly choose a review type. To discover external candidates and generate an active screening queue, explicitly authorize it:
 
 ```bash
-python scripts/autopilot.py --question "How do robot localization methods handle low-light sensing?" --scope-status in_scope --library library.json --out first-pass --allow-external-discovery
+python scripts/autopilot.py --question "How do robot localization methods handle low-light sensing?" --scope-status in_scope --library library.json --mode sufficiency-audit --review-type systematic --out first-pass --allow-external-discovery
 ```
 
 OpenAlex is used when its key is available; authorized arXiv, Crossref, and Europe PMC adapters remain available without it. Autopilot suggestions are never formal inclusion decisions.

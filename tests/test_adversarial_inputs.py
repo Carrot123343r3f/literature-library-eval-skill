@@ -122,7 +122,8 @@ def test_autopilot_offline_runs_one_command_and_writes_triage_manifest(tmp_path)
     library.write_text(json.dumps([{"title": "Robot localization", "DOI": "10.1000/example"}]), encoding="utf-8")
     out = tmp_path / "autopilot"
     result = invoke("autopilot.py", "--question", "robot localization", "--library", library,
-                    "--out", out, "--offline", "--scope-status", "in_scope")
+                    "--out", out, "--offline", "--scope-status", "in_scope",
+                    "--mode", "sufficiency-audit", "--review-type", "narrative")
     assert result.returncode == 0, result.stderr
     assert (out / "audit" / "audit.html").is_file()
     assert (out / "autopilot-manifest.json").is_file()

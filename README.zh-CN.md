@@ -133,10 +133,10 @@ python scripts/autopilot.py `
   --out first-pass
 ```
 
-未确认范围时，autopilot 会生成引导页而非报错或臆断范围；`--scope-status in_scope` 只确认工程范围，不授予联网权限。`--library` 也可暂不提供，确认后会建立空白起步库并如实标出不可评估项。如需发现外部候选并生成主动筛选队列，必须显式授权：
+未确认范围时，autopilot 会生成引导页而非报错或臆断范围；`--scope-status in_scope` 只确认工程范围，不授予联网权限。没有 `--library` 时只交付检索准备计划，不会创建空库或生成 A–F 审计。提供库但未指定综述类型时，默认只交付库健康检查；要运行充分性审计，必须显式指定模式和综述类型。如需发现外部候选并生成主动筛选队列，必须显式授权：
 
 ```powershell
-python scripts/autopilot.py --question "低照度传感条件下机器人定位方法如何工作？" --scope-status in_scope --library library.json --out first-pass --allow-external-discovery
+python scripts/autopilot.py --question "低照度传感条件下机器人定位方法如何工作？" --scope-status in_scope --library library.json --mode sufficiency-audit --review-type systematic --out first-pass --allow-external-discovery
 ```
 
 有 OpenAlex Key 时使用 OpenAlex；没有 Key 时，仍可使用已授权的 arXiv、Crossref 和 Europe PMC。Autopilot 建议不会自动成为正式纳入决定。

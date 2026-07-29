@@ -85,17 +85,29 @@ def test_autopilot_unconfirmed_scope_writes_onboarding_without_audit(tmp_path):
     assert not (out / "audit" / "audit.html").exists()
 
 
-def test_autopilot_confirmed_scope_can_start_without_library(tmp_path):
+def test_autopilot_confirmed_scope_without_library_delivers_search_preparation_only(tmp_path):
     out = tmp_path / "first-pass"
     command = [sys.executable, str(ROOT / "scripts" / "autopilot.py"),
                "--question", "robot localization", "--out", str(out), "--offline",
                "--scope-status", "in_scope"]
     result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8")
     assert result.returncode == 0, result.stderr
-    assert (out / ".autopilot" / "starter-library.json").is_file()
-    assert (out / "audit" / "audit.html").is_file()
-    seed_plan = json.loads((out / "citations" / "citation-seeds.json").read_text(encoding="utf-8"))
-    assert seed_plan["status"] == "no_openalex_seed_available"
+    assert (out / "search-preparation.html").is_file()
+    manifest = json.loads((out / "autopilot-manifest.json").read_text(encoding="utf-8"))
+    assert manifest["mode"] == "search_preparation"
+    assert manifest["audit_status"] == "not_started"
+    assert not (out / "audit" / "audit.html").exists()
+
+
+def test_autopilot_library_health_does_not_emit_a_sufficiency_audit(tmp_path):
+    out = tmp_path / "health"
+    command = [sys.executable, str(ROOT / "scripts" / "autopilot.py"),
+               "--question", "robot localization", "--library", str(ROOT / "tests" / "library.json"),
+               "--out", str(out), "--offline", "--scope-status", "in_scope", "--mode", "library-health"]
+    result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8")
+    assert result.returncode == 0, result.stderr
+    assert (out / "library-health.html").is_file()
+    assert not (out / "audit" / "audit.html").exists()
 
 
 def test_citation_seed_plan_prefers_user_seed_then_library(tmp_path):
