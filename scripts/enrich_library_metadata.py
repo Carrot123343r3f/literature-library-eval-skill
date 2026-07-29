@@ -72,11 +72,16 @@ def main():
                     report["records"].append({"index": index, "title": clean(row.get("title")), "status": item_status,
                                               "match_confidence": lookup.get("match_confidence"), "filled_fields": filled,
                                               "lookup_status": lookup.get("status")})
+                attempted = [entry for entry in report["records"] if entry.get("lookup_status")]
+                if attempted and all(entry.get("lookup_status") == "source_error" for entry in attempted):
+                    report.update(status="unavailable", reason="all_authorized_source_requests_failed")
         (out / "library-enriched.json").write_text(json.dumps(enriched_rows, ensure_ascii=False, indent=2), encoding="utf-8")
         (out / "metadata-enrichment.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
         report["manifest"] = write_manifest(out, "metadata-enrichment", "1.0", artifacts, {"input_validation": "complete", "enrichment": report["status"], "report": "complete"})
         (out / "metadata-enrichment.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"Metadata enrichment: {report['status']}; matched {report['records_matched']}/{len(rows)} records.")
+        if report["status"] == "unavailable":
+            raise SystemExit("ERROR: metadata enrichment is unavailable; artifacts were retained for diagnosis and resume.")
     except (ValueError, OSError, json.JSONDecodeError) as exc:
         (out / "metadata-enrichment-error.json").write_text(json.dumps({"module": "metadata-enrichment", "status": "error", "message": "input_or_output_error", "error_type": type(exc).__name__}, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"ERROR: metadata enrichment failed ({type(exc).__name__}).", file=sys.stderr); raise SystemExit(2)

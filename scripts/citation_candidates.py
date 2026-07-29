@@ -46,6 +46,8 @@ def main():
             search_log.append({"seed": work_id, "status": "failed", "error_type": type(exc).__name__})
     (output / "citation-candidates.json").write_text(json.dumps({"generated_at": dt.datetime.now(dt.timezone.utc).isoformat(), "items": candidates, "status": "candidate_discovery", "search_log": search_log, "note": "Candidates require human screening before formal inclusion."}, ensure_ascii=False, indent=2), encoding="utf-8")
     write_manifest(output, "citation-candidates", "1.0", {"seed": args.seed, "run-config": args.run_config}, {"citation_discovery": "partial" if any(x["status"] == "failed" for x in search_log) else "complete"})
+    if search_log and not any(entry["status"] == "complete" for entry in search_log):
+        raise SystemExit("ERROR: every citation expansion request failed; artifacts were retained for diagnosis and resume.")
     print(f"Wrote {len(candidates)} citation candidates.")
 
 

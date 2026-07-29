@@ -188,6 +188,10 @@ def main():
         temporary.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
         os.replace(temporary, args.out)
     with open(args.out, "w", encoding="utf-8") as fh: json.dump(result, fh, ensure_ascii=False, indent=2)
+    source_results = [source for query in result["queries"] if isinstance(query, dict)
+                      for source in (query.get("sources") or {}).values() if isinstance(source, dict)]
+    if source_results and not any(source.get("status") in {"complete", "partial"} for source in source_results):
+        raise SystemExit("ERROR: every authorized source request failed; snapshot retained for diagnosis and resume.")
 
 
 if __name__ == "__main__": main()
