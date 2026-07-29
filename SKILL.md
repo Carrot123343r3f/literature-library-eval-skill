@@ -149,7 +149,8 @@ output boundaries are documented in `docs/optional-modules.md`.
 
 优先使用 `scripts/run_full_audit.py`，而非要求用户自行串联脚本。`autopilot.py` 在范围未确认时生成 `onboarding.html`、保存检索计划并成功结束；仅在用户显式确认 `--scope-status in_scope`（或 cross_domain）后生成完整 A-F 报告。它默认本地运行；范围确认绝不等同于联网授权。只有显式的 `--allow-metadata-enrichment`、`--allow-external-discovery` 或 `--allow-citation-tracking` 才会启用对应能力。
 
-1. `init --out run-config.json`：第一轮只询问研究问题、工程范围和文献库位置；综述类型先使用 narrative 默认值。它生成默认离线的可审阅配置，联网能力仅在后续需要时逐项授权。
+1. `init --out run-config.json`：第一轮只询问研究问题、工程范围和文献库位置；综述类型先使用 narrative 默认值。它生成默认离线的可审阅配置。
+2. `configure-permissions --run-config run-config.json`：后续需要时，以受控交互逐项确认元数据补齐、外部候选发现和引文追踪；显式选择完全本地时记录 `local_only_confirmed=true`。
 2. `run --run-config ... --library ... --out ...`：持久化 `workflow-state.json`；失败时根据状态文件续跑，而不是重新猜测用户意图。
 3. 非 JSON 输入先由 `import_library.py` 转成规范 `library.json`，并交付 `import-preview.json` 供用户检查字段缺失。
 4. 需要外部发现时，显式使用 `--collect --query-plan ...`；仅在 `allow_search=true` 且来源在 `allowed_sources` 内时运行。采集、去重和筛选模板会分别持久化。

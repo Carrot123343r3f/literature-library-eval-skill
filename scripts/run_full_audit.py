@@ -126,15 +126,57 @@ def init_config_v2(args):
     print("Created a local-first config. Review type defaults to narrative; online permissions stay disabled until explicitly enabled.")
 
 
+def configure_permissions(args):
+    """Record later, explicit permission choices without exposing run-config JSON."""
+    path = pathlib.Path(args.run_config)
+    try:
+        config = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise SystemExit(f"ERROR: cannot parse run-config: {exc}")
+    if not isinstance(config, dict):
+        raise SystemExit("ERROR: run-config must be an object")
+    automation = config.setdefault("automation", {})
+    local_only = input("Confirm fully local execution (disable all online capabilities)? [y/N]: ").strip().lower() in {"y", "yes"}
+    if local_only:
+        metadata = discovery = citations = False
+        sources = authorized = []
+    else:
+        metadata = input("Allow online metadata enrichment? [y/N]: ").strip().lower() in {"y", "yes"}
+        discovery = input("Allow online discovery of new candidate papers? [y/N]: ").strip().lower() in {"y", "yes"}
+        citations = input("Allow online citation tracking? [y/N]: ").strip().lower() in {"y", "yes"}
+        if any((metadata, discovery, citations)):
+            sources = [item.strip().lower() for item in input("Allowed sources (default openalex,arxiv,crossref,europepmc): ").split(",") if item.strip()]
+            sources = sources or ["openalex", "arxiv", "crossref", "europepmc"]
+            unknown = sorted(set(sources) - SUPPORTED_SOURCES)
+            if unknown:
+                raise SystemExit(f"ERROR: unsupported source(s): {', '.join(unknown)}")
+            authorized = [item.strip().lower() for item in input("Sources with a preconfigured legal login/connector (optional): ").split(",") if item.strip()]
+        else:
+            sources = authorized = []
+    automation.update({"allow_search": any((metadata, discovery, citations)),
+                       "allow_metadata_enrichment": metadata, "allow_external_discovery": discovery,
+                       "allow_citation_tracking": citations, "local_only_confirmed": local_only,
+                       "allowed_sources": sources, "authorized_sources": authorized})
+    errors = validate_run_config_contract(config)
+    if errors:
+        raise SystemExit("ERROR: invalid permission configuration:\n- " + "\n- ".join(errors))
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    temporary.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(temporary, path)
+    print("Saved explicit local/online permission choices to run-config.")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__); sub = parser.add_subparsers(dest="command", required=True)
     init = sub.add_parser("init"); init.add_argument("--out", required=True)
+    permissions = sub.add_parser("configure-permissions"); permissions.add_argument("--run-config", required=True)
     status = sub.add_parser("status"); status.add_argument("--out", required=True)
     execute = sub.add_parser("run"); execute.add_argument("--run-config", required=True); execute.add_argument("--out", required=True); execute.add_argument("--library")
     for name in ("context", "benchmark", "gold", "query-hits", "source-snapshot", "screening-decisions", "deduplication-log", "screening-summary", "search-meta", "search-iterations"): execute.add_argument("--" + name)
     execute.add_argument("--query-plan"); execute.add_argument("--optimization-run", help="optimization.py workspace to validate before audit"); execute.add_argument("--active-screen-budget", type=int, help="generate a prioritized human-screening queue after normalization"); execute.add_argument("--collect", action="store_true"); execute.add_argument("--citation-seed"); execute.add_argument("--resume", action="store_true"); execute.add_argument("--force", action="store_true")
     args = parser.parse_args()
     if args.command == "init": return init_config_v2(args)
+    if args.command == "configure-permissions": return configure_permissions(args)
     out = pathlib.Path(args.out); out.mkdir(parents=True, exist_ok=True)
     if args.command == "status": print(state_path(out).read_text(encoding="utf-8") if state_path(out).exists() else "No workflow state yet."); return
     run_signature = signature(args); steps = load_state(out, run_signature, args.resume, args.force)

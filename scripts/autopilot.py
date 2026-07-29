@@ -39,7 +39,7 @@ def build_config(question, library, review_type, sources, offline, scope_status,
             "library": {"provided": True, "path": pathlib.Path(library).name if library else "starter-library.json", "format": "json"},
             "automation": {"allow_search": allow_search, "allow_metadata_enrichment": allow_metadata_enrichment,
                             "allow_external_discovery": allow_external_discovery, "allow_citation_tracking": allow_citation_tracking,
-                            "local_only_confirmed": False, "allowed_sources": sources if allow_search else []},
+                            "local_only_confirmed": offline, "allowed_sources": sources if allow_search else []},
             "output": {"language": "zh-CN", "formats": ["html", "json"]}}
     if allow_search:
         config["quality"] = {"active_screen_budget": 100}

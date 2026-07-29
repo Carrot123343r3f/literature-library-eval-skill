@@ -73,3 +73,17 @@ def test_init_uses_three_questions_and_creates_a_local_first_config(tmp_path):
     assert config_data["automation"]["allow_search"] is False
     assert config_data["automation"]["local_only_confirmed"] is False
     assert "Allow online" not in result.stdout
+
+
+def test_configure_permissions_records_explicit_online_authorization(tmp_path):
+    run_config = tmp_path / "run-config.json"
+    config(run_config)
+    result = subprocess.run([
+        sys.executable, str(ROOT / "scripts" / "run_full_audit.py"), "configure-permissions", "--run-config", str(run_config),
+    ], input="n\ny\nn\nn\narxiv\n\n", capture_output=True, text=True, encoding="utf-8")
+    assert result.returncode == 0, result.stderr
+    config_data = json.loads(run_config.read_text(encoding="utf-8"))
+    assert config_data["automation"]["allow_search"] is True
+    assert config_data["automation"]["allow_metadata_enrichment"] is True
+    assert config_data["automation"]["local_only_confirmed"] is False
+    assert config_data["automation"]["allowed_sources"] == ["arxiv"]

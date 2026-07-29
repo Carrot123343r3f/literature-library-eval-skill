@@ -141,6 +141,8 @@ def test_autopilot_does_not_bundle_network_permissions_with_scope_confirmation()
                                      allow_external_discovery=True)
     assert enabled["automation"]["allow_search"] is True
     assert enabled["automation"]["allow_external_discovery"] is True
+    offline = autopilot.build_config("robot localization", None, "narrative", ["arxiv"], True, "in_scope")
+    assert offline["automation"]["local_only_confirmed"] is True
 
 
 def test_systematic_overview_with_evidence_gaps_is_exploratory_only():

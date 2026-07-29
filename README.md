@@ -140,6 +140,8 @@ python scripts/autopilot.py --question "How do robot localization methods handle
 
 OpenAlex is used when its key is available; authorized arXiv, Crossref, and Europe PMC adapters remain available without it. Autopilot suggestions are never formal inclusion decisions.
 
+For the guided workflow, run `python scripts/run_full_audit.py configure-permissions --run-config run-config.json` when you later need an online capability. It records each choice without requiring manual JSON edits.
+
 ## Six-Dimension Framework
 
 ## Optional advanced modules

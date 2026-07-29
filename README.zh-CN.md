@@ -141,6 +141,8 @@ python scripts/autopilot.py --question "低照度传感条件下机器人定位�
 
 有 OpenAlex Key 时使用 OpenAlex；没有 Key 时，仍可使用已授权的 arXiv、Crossref 和 Europe PMC。Autopilot 建议不会自动成为正式纳入决定。
 
+向导式工作流如在后续需要联网能力，运行 `python scripts/run_full_audit.py configure-permissions --run-config run-config.json`；它会逐项记录授权选择，无需手改 JSON。
+
 ## 六维框架
 
 ## 可选高级模块
