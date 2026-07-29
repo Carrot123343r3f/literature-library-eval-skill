@@ -15,10 +15,14 @@ try:
     from query_compiler import compile_query_plan
     from import_library import load as load_library
     from audit_core.contracts import normalize_language_tag
+    from run_audit import scope_records, stable_record_ids
+    from search_iterator import validate as validate_iterations
 except ImportError:
     from scripts.query_compiler import compile_query_plan
     from scripts.import_library import load as load_library
     from scripts.audit_core.contracts import normalize_language_tag
+    from scripts.run_audit import scope_records, stable_record_ids
+    from scripts.search_iterator import validate as validate_iterations
 
 
 DEFAULT_SOURCES = ["openalex", "arxiv", "crossref", "europepmc"]
@@ -134,9 +138,95 @@ def _question_terms(question):
     return expanded
 
 
-def audit_readiness(library, question, evidence_inputs=None, relevance_confirmed=False):
+def _load_records(path, label, errors):
+    """Load a records/items JSON payload without allowing parser failures downstream."""
+    try:
+        payload = json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        errors.append(f"{label} is unreadable JSON: {exc}"); return []
+    rows = payload if isinstance(payload, list) else payload.get("items", payload.get("records")) if isinstance(payload, dict) else None
+    if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
+        errors.append(f"{label} must be a JSON records[]/items[] array"); return []
+    return rows
+
+
+def _load_json_object(path, label, errors):
+    try:
+        value = json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        errors.append(f"{label} is unreadable JSON: {exc}"); return {}
+    if not isinstance(value, dict):
+        errors.append(f"{label} must be a JSON object"); return {}
+    return value
+
+
+def _validate_relevance_review(path, errors):
+    if not path:
+        return False
+    review = _load_json_object(path, "relevance review", errors)
+    required = ("reviewer", "reviewed_at", "rule", "sample", "decision")
+    if not all(isinstance(review.get(field), str) and review[field].strip() for field in required):
+        errors.append("relevance review requires reviewer, reviewed_at, rule, sample, and decision")
+        return False
+    if review.get("decision") != "relevant":
+        errors.append("relevance review decision must be 'relevant' to override lexical precheck")
+        return False
+    return True
+
+
+def validate_audit_evidence(evidence_inputs, context, review_type, relevance_review=None):
+    """Validate all evidence contracts before an A-F subprocess is allowed to run."""
+    errors = []
+    required = {"gold": "an independent gold/validation set", "query_hits": "query hits for A2",
+                "query_log": "a reproducible query log", "screening_decisions": "human screening decisions",
+                "search_iterations": "validated search iterations", "independent_pathways": "documented independent search pathways"}
+    for key, label in required.items():
+        if not evidence_inputs.get(key) or not pathlib.Path(evidence_inputs[key]).is_file():
+            errors.append(label)
+    gold = _load_records(evidence_inputs["gold"], "Gold set", errors) if evidence_inputs.get("gold") else []
+    hits = _load_records(evidence_inputs["query_hits"], "Query hits", errors) if evidence_inputs.get("query_hits") else []
+    scoped_gold, gold_scope = scope_records(gold, context)
+    scoped_hits, hits_scope = scope_records(hits, context)
+    if gold and not scoped_gold:
+        errors.append("Gold set has no records inside the declared time/language boundary")
+    if hits and not scoped_hits:
+        errors.append("Query hits have no records inside the declared time/language boundary")
+    if scoped_gold and not stable_record_ids(scoped_gold):
+        errors.append("Gold set needs at least one stable identifier after scope filtering")
+    log = _load_json_object(evidence_inputs["query_log"], "Query log", errors) if evidence_inputs.get("query_log") else {}
+    queries = log.get("queries", log.get("query_log", []))
+    if not isinstance(queries, list) or not queries or any(not isinstance(row, dict) or not {"source", "query", "fields", "date"} <= set(row) for row in queries):
+        errors.append("Query log needs non-empty queries[] with source/query/fields/date")
+    decisions_doc = _load_json_object(evidence_inputs["screening_decisions"], "Screening decisions", errors) if evidence_inputs.get("screening_decisions") else {}
+    decisions = decisions_doc.get("decisions", decisions_doc.get("screening_log", []))
+    if not isinstance(decisions, list) or not decisions or any(not isinstance(row, dict) or row.get("decision") not in {"include", "exclude"} or not str(row.get("reason") or "").strip() for row in decisions):
+        errors.append("Screening decisions need include/exclude decisions with reasons")
+    iterations = _load_json_object(evidence_inputs["search_iterations"], "Search iterations", errors) if evidence_inputs.get("search_iterations") else {}
+    iteration_errors, _warnings = validate_iterations(iterations) if iterations else (["missing"], [])
+    if iteration_errors:
+        errors.append("Search iterations invalid: " + "; ".join(iteration_errors[:3]))
+    heldout = iterations.get("heldout_test_set", []) if isinstance(iterations, dict) else []
+    scoped_heldout, _heldout_scope = scope_records(heldout, context)
+    if not scoped_heldout:
+        errors.append("Search iterations need a heldout_test_set inside the declared boundary")
+    if scoped_gold and stable_record_ids(scoped_gold) != stable_record_ids(scoped_heldout):
+        errors.append("Gold set and heldout_test_set must have identical stable-ID sets")
+    pathways = _load_records(evidence_inputs["independent_pathways"], "Independent pathways", errors) if evidence_inputs.get("independent_pathways") else []
+    minimum = {"systematic": 4, "umbrella": 5, "scoping": 3, "narrative": 3, "rapid": 2}.get(review_type, 3)
+    valid_types = {"db_boolean", "backward_citation", "forward_citation", "related_articles", "standards_guidelines"}
+    valid_paths = [row for row in pathways if isinstance(row, dict) and isinstance(row.get("pathway_id"), str)
+                   and row.get("type") in valid_types and row.get("completed") is True
+                   and row.get("screening_status") == "screened_complete"
+                   and isinstance(row.get("yield"), (int, float))]
+    if len(valid_paths) < minimum:
+        errors.append(f"Independent pathways need {minimum} completed, screened paths with type and yield")
+    review_ok = _validate_relevance_review(relevance_review, errors)
+    return errors, {"gold": gold_scope, "query_hits": hits_scope, "relevance_reviewed": review_ok}
+
+
+def audit_readiness(library, question, context, evidence_inputs=None, relevance_review=None):
     """Keep an explicit audit request from becoming an empty A-F report."""
-    records = load_library(library)
+    records, scope = scope_records(load_library(library), context)
     total = len(records)
     titled = sum(bool(row.get("title")) for row in records)
     dated = sum(bool(row.get("year")) for row in records)
@@ -151,24 +241,12 @@ def audit_readiness(library, question, evidence_inputs=None, relevance_confirmed
     matches = sum(any(term in (str(row.get("title", "")) + " " + str(row.get("abstractNote", ""))).casefold()
                       for term in terms) for row in records)
     minimum_match_share = 0.20
-    if terms and matches / total < minimum_match_share and not relevance_confirmed:
-        reasons.append(f"topical relevance precheck: at least {minimum_match_share:.0%} of records must match research-question terms, or confirm a documented manual relevance review")
-    evidence_inputs = evidence_inputs or {}
-    required_evidence = {"gold": "an independent gold/validation set", "query_log": "a reproducible query log",
-                         "screening_decisions": "human screening decisions", "independent_pathways": "documented independent search pathways"}
-    for key, label in required_evidence.items():
-        value = evidence_inputs.get(key)
-        if not value or not pathlib.Path(value).is_file():
-            reasons.append(label)
-    pathway_file = evidence_inputs.get("independent_pathways")
-    if pathway_file and pathlib.Path(pathway_file).is_file():
-        try:
-            payload = json.loads(pathlib.Path(pathway_file).read_text(encoding="utf-8"))
-            pathways = payload if isinstance(payload, list) else payload.get("items", [])
-            if not isinstance(pathways, list) or len(pathways) < 2:
-                reasons.append("at least two documented independent search pathways")
-        except (OSError, json.JSONDecodeError, AttributeError):
-            reasons.append("a readable independent-pathways JSON list")
+    evidence_errors, evidence_scope = validate_audit_evidence(evidence_inputs or {}, context, context.get("review_type", ""), relevance_review)
+    if terms and total and matches / total < minimum_match_share and not evidence_scope["relevance_reviewed"]:
+        reasons.append(f"topical relevance precheck: at least {minimum_match_share:.0%} of scoped records must match research-question terms, or supply a documented relevance review")
+    reasons.extend(evidence_errors)
+    if scope["unknown_language_records"] and context.get("languages") and "all" not in {normalize_language_tag(x) for x in context["languages"]}:
+        reasons.append("language metadata is missing for scoped-library candidates; enrich it, document a manual boundary review, or use all")
     return records, reasons
 
 
@@ -213,7 +291,9 @@ def run(args):
     terms = plan["queries"][0].get("terms", []) if plan["queries"] else []
     config_path = control / "run-config.json"; context_path = control / "context.json"; plan_path = control / "query-plan.json"
     evidence_inputs = {key: value for key, value in {
-        "gold": args.gold, "query_log": args.query_log, "screening_decisions": args.screening_decisions,
+        "gold": args.gold, "query_hits": args.query_hits, "query_log": args.query_log,
+        "screening_decisions": args.screening_decisions, "search_iterations": args.search_iterations,
+        "independent_pathways": args.independent_pathways,
     }.items() if value}
     config_path.write_text(json.dumps(build_config(
         args.question, args.library, args.review_type, sources, args.offline, args.scope_status,
@@ -221,8 +301,11 @@ def run(args):
         allow_external_discovery=args.allow_external_discovery,
         allow_citation_tracking=args.allow_citation_tracking, time_start=args.time_start,
         time_end=args.time_end, languages=[item.strip() for item in (args.languages or "").split(",") if item.strip()],
-        output_language=args.output_language or "zh-CN", evidence_inputs=evidence_inputs), ensure_ascii=False, indent=2), encoding="utf-8")
+        output_language=args.output_language or "zh-CN"), ensure_ascii=False, indent=2), encoding="utf-8")
     context = build_context(args.question, terms)
+    context.update({"review_type": args.review_type, "year_start": args.time_start, "year_end": args.time_end,
+                    "languages": [item.strip() for item in (args.languages or "").split(",") if item.strip()],
+                    "output_language": args.output_language or "zh-CN", "scope_status": args.scope_status})
     if args.independent_pathways:
         try:
             pathways = json.loads(pathlib.Path(args.independent_pathways).read_text(encoding="utf-8"))
@@ -258,9 +341,7 @@ def run(args):
     if not args.output_language: missing.append("--output-language")
     if missing:
         raise ValueError("sufficiency-audit requires explicit confirmation of " + ", ".join(missing) + ".")
-    _, readiness_gaps = audit_readiness(library, args.question,
-                                        {**evidence_inputs, "independent_pathways": args.independent_pathways},
-                                        args.confirm_relevance)
+    _, readiness_gaps = audit_readiness(library, args.question, context, evidence_inputs, args.relevance_review)
     if readiness_gaps:
         write_sufficiency_precheck(out, readiness_gaps, args.output_language or "zh-CN")
         (out / "autopilot-manifest.json").write_text(json.dumps({"schema_version": "1.0", "mode": "sufficiency_precheck", "audit_status": "not_started", "question": args.question, "missing_minimum_inputs": readiness_gaps}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -270,6 +351,12 @@ def run(args):
     command = [sys.executable, str(pathlib.Path(__file__).with_name("run_full_audit.py")), "run",
                "--run-config", str(config_path), "--library", str(library),
                "--context", str(context_path), "--out", str(out)]
+    for flag, key in (("--gold", "gold"), ("--query-hits", "query_hits"), ("--search-iterations", "search_iterations"),
+                      ("--screening-decisions", "screening_decisions")):
+        if evidence_inputs.get(key):
+            command.extend([flag, evidence_inputs[key]])
+    if evidence_inputs.get("query_log"):
+        command.extend(["--run-log", evidence_inputs["query_log"]])
     if args.allow_external_discovery and not args.offline:
         command += ["--collect", "--query-plan", str(plan_path), "--active-screen-budget", str(args.screen_budget)]
     subprocess.run(command, check=True)
@@ -293,10 +380,12 @@ def main():
     parser.add_argument("--languages", help="Comma-separated language boundary required for sufficiency-audit.")
     parser.add_argument("--output-language", choices=("zh-CN", "en"), help="Explicit report language required for sufficiency-audit.")
     parser.add_argument("--gold", help="Independent gold/validation set required before an A-F audit can start.")
+    parser.add_argument("--query-hits", help="Scope-filterable query-hit records required to calculate A2.")
     parser.add_argument("--query-log", help="Reproducible query log required before an A-F audit can start.")
     parser.add_argument("--screening-decisions", help="Human screening decisions required before an A-F audit can start.")
+    parser.add_argument("--search-iterations", help="Validated development/held-out iteration record required for A2 independence.")
     parser.add_argument("--independent-pathways", help="JSON list of documented independent search pathways required before an A-F audit can start.")
-    parser.add_argument("--confirm-relevance", action="store_true", help="Record a documented manual relevance review when lexical matching is insufficient.")
+    parser.add_argument("--relevance-review", help="JSON reviewer/date/rule/sample/decision record required to override lexical relevance precheck.")
     parser.add_argument("--scope-status", default="scope_uncertain", choices=("in_scope", "cross_domain", "out_of_scope", "scope_uncertain"),
                         help="Explicit scope decision. Full A-F execution requires in_scope or cross_domain; default is a safe draft state.")
     parser.add_argument("--sources", default=",".join(DEFAULT_SOURCES)); parser.add_argument("--offline", action="store_true",

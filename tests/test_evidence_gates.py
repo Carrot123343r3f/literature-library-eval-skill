@@ -208,6 +208,32 @@ def test_source_labels_do_not_establish_f5_traceability(tmp_path):
     assert row["meets_standard"] == "not_assessable"
 
 
+def test_autopilot_invalid_evidence_is_a_precheck_not_a_traceback(tmp_path):
+    library = tmp_path / "library.json"
+    library.write_text(json.dumps([
+        {"title": f"Robot localization {index}", "year": 2024, "language": "en", "DOI": f"10.1/lib{index}"}
+        for index in range(3)
+    ]), encoding="utf-8")
+    bad_files = {}
+    for name, payload in (("gold", {}), ("hits", {}), ("log", {}), ("decisions", {}), ("iterations", {}), ("paths", [{}, {}])):
+        path = tmp_path / f"{name}.json"; path.write_text(json.dumps(payload), encoding="utf-8"); bad_files[name] = path
+    out = tmp_path / "invalid-evidence"
+    command = [sys.executable, str(ROOT / "scripts" / "autopilot.py"), "--question", "robot localization",
+               "--library", str(library), "--out", str(out), "--offline", "--scope-status", "in_scope",
+               "--mode", "sufficiency-audit", "--review-type", "systematic", "--time-start", "2020", "--time-end", "2026", "--languages", "en", "--output-language", "en",
+               "--gold", str(bad_files["gold"]), "--query-hits", str(bad_files["hits"]), "--query-log", str(bad_files["log"]),
+               "--screening-decisions", str(bad_files["decisions"]), "--search-iterations", str(bad_files["iterations"]), "--independent-pathways", str(bad_files["paths"])]
+    result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8")
+    assert result.returncode == 0, result.stderr
+    assert "Traceback" not in result.stderr + result.stdout
+    manifest = json.loads((out / "autopilot-manifest.json").read_text(encoding="utf-8"))
+    assert manifest["mode"] == "sufficiency_precheck"
+    assert any("Gold set" in item for item in manifest["missing_minimum_inputs"])
+    config_text = (out / ".autopilot" / "run-config.json").read_text(encoding="utf-8")
+    assert str(tmp_path) not in config_text
+    assert not (out / "audit" / "audit.html").exists()
+
+
 def test_autopilot_relevance_mismatch_stops_at_sufficiency_precheck(tmp_path):
     library = tmp_path / "bridges.json"
     library.write_text(json.dumps([
