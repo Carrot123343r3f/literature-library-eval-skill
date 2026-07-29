@@ -185,7 +185,7 @@ def main():
     permissions = sub.add_parser("configure-permissions"); permissions.add_argument("--run-config", required=True)
     status = sub.add_parser("status"); status.add_argument("--out", required=True)
     execute = sub.add_parser("run"); execute.add_argument("--run-config", required=True); execute.add_argument("--out", required=True); execute.add_argument("--library")
-    for name in ("context", "benchmark", "gold", "query-hits", "run-log", "source-snapshot", "screening-decisions", "deduplication-log", "screening-summary", "search-meta", "search-iterations"): execute.add_argument("--" + name)
+    for name in ("context", "benchmark", "gold", "query-hits", "run-log", "source-snapshot", "screening-decisions", "deduplication-log", "screening-summary", "search-meta", "search-iterations", "independent-pathways", "relevance-review"): execute.add_argument("--" + name)
     execute.add_argument("--query-plan"); execute.add_argument("--optimization-run", help="optimization.py workspace to validate before audit"); execute.add_argument("--active-screen-budget", type=int, help="generate a prioritized human-screening queue after normalization"); execute.add_argument("--collect", action="store_true"); execute.add_argument("--citation-seed"); execute.add_argument("--resume", action="store_true"); execute.add_argument("--force", action="store_true")
     args = parser.parse_args()
     if args.command == "init": return init_config_v2(args)
@@ -216,6 +216,24 @@ def main():
     else:
         library = pathlib.Path("")
     if not library.is_file(): raise SystemExit("ERROR: provide an existing --library or library.path in run-config.")
+    # Shared product gate: a self-reported allowed_assessment_level must never
+    # bypass the same evidence qualification used by the low-friction entry.
+    try:
+        from autopilot import audit_readiness
+        project = config.get("project", {})
+        scope_context = {"review_type": project.get("review_type", ""),
+                         "year_start": (project.get("time_range") or {}).get("start"),
+                         "year_end": (project.get("time_range") or {}).get("end"),
+                         "languages": project.get("languages", []),
+                         "scope_status": project.get("scope_status", "")}
+        evidence = {"gold": args.gold, "query_hits": args.query_hits, "query_log": args.run_log,
+                    "screening_decisions": args.screening_decisions, "search_iterations": args.search_iterations,
+                    "independent_pathways": args.independent_pathways}
+        _, readiness_errors = audit_readiness(library, project.get("research_question", ""), scope_context, evidence, args.relevance_review)
+        if readiness_errors:
+            raise SystemExit("ERROR: sufficiency audit preflight failed:\n- " + "\n- ".join(readiness_errors))
+    except ImportError as exc:
+        raise SystemExit(f"ERROR: shared audit preflight is unavailable: {exc}")
     canonical = library
     if library.suffix.lower() != ".json":
         imported = out / "import"; run([sys.executable, script("import_library.py"), "--input", str(library), "--out", str(imported)], steps, "import", out, run_signature, [imported / "library.json", imported / "import-preview.json"], args.resume); canonical = imported / "library.json"

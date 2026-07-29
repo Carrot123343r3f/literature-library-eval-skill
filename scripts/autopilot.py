@@ -352,11 +352,13 @@ def run(args):
                "--run-config", str(config_path), "--library", str(library),
                "--context", str(context_path), "--out", str(out)]
     for flag, key in (("--gold", "gold"), ("--query-hits", "query_hits"), ("--search-iterations", "search_iterations"),
-                      ("--screening-decisions", "screening_decisions")):
+                      ("--screening-decisions", "screening_decisions"), ("--independent-pathways", "independent_pathways")):
         if evidence_inputs.get(key):
             command.extend([flag, evidence_inputs[key]])
     if evidence_inputs.get("query_log"):
         command.extend(["--run-log", evidence_inputs["query_log"]])
+    if args.relevance_review:
+        command.extend(["--relevance-review", args.relevance_review])
     if args.allow_external_discovery and not args.offline:
         command += ["--collect", "--query-plan", str(plan_path), "--active-screen-budget", str(args.screen_budget)]
     subprocess.run(command, check=True)

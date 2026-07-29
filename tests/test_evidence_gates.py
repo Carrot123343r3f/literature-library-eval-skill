@@ -234,6 +234,14 @@ def test_autopilot_invalid_evidence_is_a_precheck_not_a_traceback(tmp_path):
     assert not (out / "audit" / "audit.html").exists()
 
 
+def test_run_full_audit_cannot_bypass_shared_preflight(tmp_path):
+    config = tmp_path / "run-config.json"
+    config.write_text(json.dumps({"schema_version": "1.0", "project": {"research_question": "robot localization", "review_type": "systematic", "scope_status": "in_scope", "time_range": {"start": 2020, "end": 2026}, "languages": ["en"], "allowed_assessment_level": "full"}, "library": {"provided": True, "path": str(ROOT / "tests" / "library.json"), "format": "json"}, "automation": {"allow_search": False, "allowed_sources": []}, "output": {"language": "en", "formats": ["html"]}}), encoding="utf-8")
+    result = subprocess.run([sys.executable, str(ROOT / "scripts" / "run_full_audit.py"), "run", "--run-config", str(config), "--out", str(tmp_path / "out")], capture_output=True, text=True, encoding="utf-8")
+    assert result.returncode != 0
+    assert "sufficiency audit preflight failed" in result.stderr
+
+
 def test_autopilot_relevance_mismatch_stops_at_sufficiency_precheck(tmp_path):
     library = tmp_path / "bridges.json"
     library.write_text(json.dumps([
