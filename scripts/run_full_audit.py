@@ -3,6 +3,7 @@
 import argparse
 import datetime as dt
 import hashlib
+import html
 import json
 import os
 import pathlib
@@ -216,6 +217,11 @@ def main():
     else:
         library = pathlib.Path("")
     if not library.is_file(): raise SystemExit("ERROR: provide an existing --library or library.path in run-config.")
+    automation = config.get("automation") or {}
+    # Permission failures describe the user's requested action and must win over
+    # evidence diagnostics that are irrelevant until collection is authorized.
+    if args.collect and (automation.get("allow_search") is not True or automation.get("allow_external_discovery") is not True):
+        raise SystemExit("ERROR: --collect requires automation.allow_search=true and automation.allow_external_discovery=true.")
     # Shared product gate: a self-reported allowed_assessment_level must never
     # bypass the same evidence qualification used by the low-friction entry.
     try:
@@ -226,19 +232,28 @@ def main():
                          "year_end": (project.get("time_range") or {}).get("end"),
                          "languages": project.get("languages", []),
                          "scope_status": project.get("scope_status", "")}
-        evidence = {"gold": args.gold, "query_hits": args.query_hits, "query_log": args.run_log,
-                    "screening_decisions": args.screening_decisions, "search_iterations": args.search_iterations,
+        configured = config.get("evidence_inputs") or {}
+        def pick(cli, key):
+            value = cli or configured.get(key)
+            if not value: return None
+            candidate = pathlib.Path(value)
+            return str(candidate if candidate.is_absolute() else pathlib.Path(args.run_config).resolve().parent / candidate)
+        evidence = {"gold": pick(args.gold, "gold"), "query_hits": pick(args.query_hits, "query_hits"), "query_log": pick(args.run_log, "query_log"),
+                    "screening_decisions": pick(args.screening_decisions, "screening_decisions"), "search_iterations": pick(args.search_iterations, "search_iterations"),
                     "independent_pathways": args.independent_pathways}
-        _, readiness_errors, _scope_matrix = audit_readiness(library, project.get("research_question", ""), scope_context, evidence, args.relevance_review)
+        _, readiness_errors, scope_matrix = audit_readiness(library, project.get("research_question", ""), scope_context, evidence, args.relevance_review)
         if readiness_errors:
-            raise SystemExit("ERROR: sufficiency audit preflight failed:\n- " + "\n- ".join(readiness_errors))
+            precheck = {"schema_version": "1.0", "mode": "sufficiency_precheck", "audit_status": "not_started", "missing_minimum_inputs": readiness_errors, "scope_matrix": scope_matrix}
+            (out / "precheck.json").write_text(json.dumps(precheck, ensure_ascii=False, indent=2), encoding="utf-8")
+            (out / "precheck.html").write_text("<!doctype html><html><meta charset='utf-8'><title>Sufficiency precheck</title><h1>Sufficiency audit not started</h1><ul>" + "".join(f"<li>{html.escape(item)}</li>" for item in readiness_errors) + "</ul></html>", encoding="utf-8")
+            print("Sufficiency audit not started; wrote precheck.html and precheck.json.")
+            return
     except ImportError as exc:
         raise SystemExit(f"ERROR: shared audit preflight is unavailable: {exc}")
     canonical = library
     if library.suffix.lower() != ".json":
         imported = out / "import"; run([sys.executable, script("import_library.py"), "--input", str(library), "--out", str(imported)], steps, "import", out, run_signature, [imported / "library.json", imported / "import-preview.json"], args.resume); canonical = imported / "library.json"
         config["library"] = {"provided": True, "path": str(canonical), "format": "json", "normalization_required": False}; resolved = out / "resolved-run-config.json"; resolved.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8"); args.run_config = str(resolved)
-    automation = config.get("automation") or {}
     optimization_run = args.optimization_run or (config.get("optimization") or {}).get("run_root")
     if optimization_run:
         optimization_gate = [sys.executable, script("optimization.py"), "validate", "--run", optimization_run, "--strict"]

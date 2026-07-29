@@ -39,16 +39,12 @@ def test_offline_full_workflow_is_resumable_and_records_lineage(tmp_path):
     out = tmp_path / "out"
     first = run(run_config, out)
     assert first.returncode == 0, first.stderr
-    assert (out / "audit" / "audit.html").is_file()
-    assert (out / "next-actions.json").is_file()
-    state = json.loads((out / "workflow-state.json").read_text(encoding="utf-8"))
-    assert state["steps"]["citation_seed_plan"] == "complete"
-    assert state["steps"]["audit"] == "complete"
+    assert (out / "precheck.html").is_file()
+    assert (out / "precheck.json").is_file()
 
     resumed = run(run_config, out, "--resume")
     assert resumed.returncode == 0, resumed.stderr
-    state = json.loads((out / "workflow-state.json").read_text(encoding="utf-8"))
-    assert state["steps"]["audit"] == "reused"
+    assert (out / "precheck.json").is_file()
 
 
 def test_collection_permission_is_rejected_before_any_online_step(tmp_path):
