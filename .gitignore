@@ -8,6 +8,7 @@ demo-output/
 outputs/
 academic-library-data/
 simulation-audit-output/
+adversarial-reeval-output/
 audit.json
 audit.html
 !example-all-modules-report/audit/audit.html
