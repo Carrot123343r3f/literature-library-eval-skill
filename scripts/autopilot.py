@@ -25,17 +25,23 @@ def build_context(question, terms):
                                       "source": "autopilot_question_only"}}
 
 
-def build_config(question, library, review_type, sources, offline, scope_status):
+def build_config(question, library, review_type, sources, offline, scope_status,
+                 *, allow_metadata_enrichment=False, allow_external_discovery=False,
+                 allow_citation_tracking=False):
+    """Build an explicit-permission config; scope confirmation never grants network access."""
+    if offline:
+        allow_metadata_enrichment = allow_external_discovery = allow_citation_tracking = False
+    allow_search = any((allow_metadata_enrichment, allow_external_discovery, allow_citation_tracking))
     config = {"schema_version": "1.0",
             "project": {"research_question": question, "review_type": review_type,
                         "scope_status": scope_status,
                         "scope_rationale": "explicit autopilot scope confirmation" if scope_status == "in_scope" else "autopilot draft; scope not confirmed"},
             "library": {"provided": True, "path": pathlib.Path(library).name if library else "starter-library.json", "format": "json"},
-            "automation": {"allow_search": not offline, "allow_metadata_enrichment": False,
-                            "allow_external_discovery": not offline, "allow_citation_tracking": not offline,
-                            "local_only_confirmed": offline, "allowed_sources": [] if offline else sources},
+            "automation": {"allow_search": allow_search, "allow_metadata_enrichment": allow_metadata_enrichment,
+                            "allow_external_discovery": allow_external_discovery, "allow_citation_tracking": allow_citation_tracking,
+                            "local_only_confirmed": not allow_search, "allowed_sources": sources if allow_search else []},
             "output": {"language": "zh-CN", "formats": ["html", "json"]}}
-    if not offline:
+    if allow_search:
         config["quality"] = {"active_screen_budget": 100}
     return config
 
@@ -65,7 +71,11 @@ def run(args):
     plan = compile_query_plan(args.question, sources or ["arxiv"])
     terms = plan["queries"][0].get("terms", []) if plan["queries"] else []
     config_path = control / "run-config.json"; context_path = control / "context.json"; plan_path = control / "query-plan.json"
-    config_path.write_text(json.dumps(build_config(args.question, args.library, args.review_type, sources, args.offline, args.scope_status), ensure_ascii=False, indent=2), encoding="utf-8")
+    config_path.write_text(json.dumps(build_config(
+        args.question, args.library, args.review_type, sources, args.offline, args.scope_status,
+        allow_metadata_enrichment=args.allow_metadata_enrichment,
+        allow_external_discovery=args.allow_external_discovery,
+        allow_citation_tracking=args.allow_citation_tracking), ensure_ascii=False, indent=2), encoding="utf-8")
     context_path.write_text(json.dumps(build_context(args.question, terms), ensure_ascii=False, indent=2), encoding="utf-8")
     plan_path.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
     if args.scope_status not in {"in_scope", "cross_domain"}:
@@ -78,7 +88,7 @@ def run(args):
     command = [sys.executable, str(pathlib.Path(__file__).with_name("run_full_audit.py")), "run",
                "--run-config", str(config_path), "--library", str(library),
                "--context", str(context_path), "--out", str(out)]
-    if not args.offline:
+    if args.allow_external_discovery and not args.offline:
         command += ["--collect", "--query-plan", str(plan_path), "--active-screen-budget", str(args.screen_budget)]
     subprocess.run(command, check=True)
     candidates = out / "normalization" / "candidates.json"
@@ -86,7 +96,8 @@ def run(args):
         triage = out / "screening" / "auto-triage.json"
         subprocess.run([sys.executable, str(pathlib.Path(__file__).with_name("auto_triage.py")),
                         "--candidates", str(candidates), "--question", args.question, "--out", str(triage)], check=True)
-    (out / "autopilot-manifest.json").write_text(json.dumps({"schema_version": "1.0", "mode": "offline" if args.offline else "multi-source", "sources_requested": sources, "question": args.question, "scope_status": args.scope_status, "human_gates": ["scope", "standards", "screening", "final_inclusion"]}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    mode = "external_discovery" if args.allow_external_discovery and not args.offline else "local"
+    (out / "autopilot-manifest.json").write_text(json.dumps({"schema_version": "1.0", "mode": mode, "sources_requested": sources if not args.offline else [], "question": args.question, "scope_status": args.scope_status, "human_gates": ["scope", "standards", "screening", "final_inclusion"]}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def main():
@@ -95,10 +106,16 @@ def main():
     parser.add_argument("--review-type", default="narrative", choices=("narrative", "systematic", "scoping", "rapid", "umbrella"))
     parser.add_argument("--scope-status", default="scope_uncertain", choices=("in_scope", "cross_domain", "out_of_scope", "scope_uncertain"),
                         help="Explicit scope decision. Full A-F execution requires in_scope or cross_domain; default is a safe draft state.")
-    parser.add_argument("--sources", default=",".join(DEFAULT_SOURCES)); parser.add_argument("--offline", action="store_true")
+    parser.add_argument("--sources", default=",".join(DEFAULT_SOURCES)); parser.add_argument("--offline", action="store_true",
+                        help="Disable all online capabilities (the default is already local-only).")
+    parser.add_argument("--allow-metadata-enrichment", action="store_true", help="Explicitly allow online metadata enrichment.")
+    parser.add_argument("--allow-external-discovery", action="store_true", help="Explicitly allow online discovery of candidate papers.")
+    parser.add_argument("--allow-citation-tracking", action="store_true", help="Explicitly allow online citation candidate discovery.")
     parser.add_argument("--screen-budget", type=int, default=100)
     args = parser.parse_args()
     if args.screen_budget < 1: parser.error("--screen-budget must be positive")
+    if args.offline and any((args.allow_metadata_enrichment, args.allow_external_discovery, args.allow_citation_tracking)):
+        parser.error("--offline cannot be combined with an --allow-* online capability")
     try: run(args)
     except (OSError, ValueError, subprocess.CalledProcessError) as exc: parser.error(str(exc))
 

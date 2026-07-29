@@ -110,34 +110,20 @@ def script(name): return str(ROOT / name)
 
 
 def init_config_v2(args):
-    """Create a user-confirmed config; every online capability is opt-in."""
+    """Create a local-first config in one three-question intake round."""
     question = input("Research question/title: ").strip()
-    review_type = input("Review type [narrative/systematic/scoping/rapid/umbrella] (default narrative): ").strip() or "narrative"
     scope_answer = input("Is this an engineering review question within this skill's scope? [y/n/uncertain]: ").strip().lower()
     scope_status = {"y": "in_scope", "yes": "in_scope", "n": "out_of_scope", "no": "out_of_scope"}.get(scope_answer, "scope_uncertain")
     library = input("Library path (optional; can be imported later): ").strip()
-    allow = input("Allow online metadata enrichment? [y/N]: ").strip().lower() in {"y", "yes"}
-    discover = input("Allow online discovery of new candidate papers? [y/N]: ").strip().lower() in {"y", "yes"}
-    citations = input("Allow online citation tracking? [y/N]: ").strip().lower() in {"y", "yes"}
-    local_only = input("Run fully locally? [y/N]: ").strip().lower() in {"y", "yes"}
-    if local_only:
-        allow = False; discover = False; citations = False
-    allow_search = allow or discover or citations
-    sources = [item.strip().lower() for item in input("Allowed sources (comma-separated, default openalex,arxiv,crossref,europepmc): ").split(",") if item.strip()] if allow_search else []
-    if allow_search and not sources:
-        sources = ["openalex", "arxiv", "crossref", "europepmc"]
-    unknown_sources = sorted(set(sources) - SUPPORTED_SOURCES)
-    if unknown_sources:
-        raise SystemExit(f"ERROR: unsupported source(s): {', '.join(unknown_sources)}")
-    authorized = [item.strip().lower() for item in input("Sources with a preconfigured legal login/connector (comma-separated, optional): ").split(",") if item.strip()] if allow_search else []
-    config = {"schema_version": "1.0", "project": {"research_question": question, "review_type": review_type,
+    config = {"schema_version": "1.0", "project": {"research_question": question, "review_type": "narrative",
               "scope_status": scope_status,
               "scope_rationale": "confirmed during guided initialization" if scope_status != "scope_uncertain" else "user did not confirm engineering scope"},
               "library": {"provided": bool(library), "path": library or None, "format": "json" if library.endswith(".json") else None},
-              "automation": {"allow_search": allow_search, "allow_metadata_enrichment": allow, "allow_external_discovery": discover, "allow_citation_tracking": citations,
-                             "local_only_confirmed": local_only, "allowed_sources": sources, "authorized_sources": authorized},
+              "automation": {"allow_search": False, "allow_metadata_enrichment": False, "allow_external_discovery": False, "allow_citation_tracking": False,
+                             "local_only_confirmed": True, "allowed_sources": [], "authorized_sources": []},
               "output": {"language": "zh-CN", "formats": ["html", "json"]}}
     pathlib.Path(args.out).write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
+    print("Created a local-first config. Review type defaults to narrative; online permissions stay disabled until explicitly enabled.")
 
 
 def main():

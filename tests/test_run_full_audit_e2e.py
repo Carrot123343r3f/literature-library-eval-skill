@@ -59,3 +59,16 @@ def test_collection_permission_is_rejected_before_any_online_step(tmp_path):
     result = run(run_config, tmp_path / "out", "--collect", "--query-plan", plan)
     assert result.returncode != 0
     assert "allow_external_discovery" in result.stderr
+
+
+def test_init_uses_three_questions_and_creates_a_local_first_config(tmp_path):
+    output = tmp_path / "run-config.json"
+    result = subprocess.run([
+        sys.executable, str(ROOT / "scripts" / "run_full_audit.py"), "init", "--out", str(output),
+    ], input="robot localization\ny\n\n", capture_output=True, text=True, encoding="utf-8")
+    assert result.returncode == 0, result.stderr
+    config_data = json.loads(output.read_text(encoding="utf-8"))
+    assert config_data["project"]["scope_status"] == "in_scope"
+    assert config_data["project"]["review_type"] == "narrative"
+    assert config_data["automation"]["allow_search"] is False
+    assert "Allow online" not in result.stdout

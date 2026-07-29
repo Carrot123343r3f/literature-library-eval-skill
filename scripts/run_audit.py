@@ -1060,11 +1060,11 @@ def _result_overview(report):
     gaps = [row for row in rows if row.get("meets_standard") == "not_assessable"]
     candidate = [row for row in rows if row.get("evidence_status") == "candidate_discovery"]
     if failed:
-        readiness = "暂不建议据此声明文献库已准备完毕"
+        readiness = "暂不建议开始有限范围初稿；先解决阻断项"
     elif gaps:
-        readiness = "有条件可用：关键证据仍需补齐"
+        readiness = "可以开始有限范围初稿，但关键证据仍需补齐"
     else:
-        readiness = "可进入下一阶段，但应持续监测警示项"
+        readiness = "可以开始初稿；仍应持续监测警示项"
 
     lines = ["## 评估结论\n", f"**文献库准备度：{readiness}。**"]
     lines.append(
