@@ -195,7 +195,8 @@ def validate_run_config(rc):
     if isinstance(automation, dict):
         allowed_automation = {"allow_search", "allow_metadata_enrichment", "allow_external_discovery",
                               "allow_citation_tracking", "local_only_confirmed", "allow_query_refinement",
-                              "allowed_sources", "authorized_sources", "stop_conditions"}
+                              "allowed_sources", "online_allowed_sources", "offline_snapshot_sources",
+                              "authorized_sources", "stop_conditions"}
         errors.extend(f"unknown automation field: {key}" for key in sorted(set(automation) - allowed_automation))
         if "allow_search" not in automation:
             errors.append("automation.allow_search is required")
@@ -222,6 +223,12 @@ def validate_run_config(rc):
             errors.append("automation.allowed_sources must be an array")
         elif any(not isinstance(source, str) or source.casefold() not in supported_sources for source in allowed_sources):
             errors.append("automation.allowed_sources contains an unsupported source")
+        online_sources = automation.get("online_allowed_sources", allowed_sources)
+        if not isinstance(online_sources, list) or any(source not in {"openalex", "crossref", "arxiv", "europepmc"} for source in online_sources):
+            errors.append("automation.online_allowed_sources must contain only built-in online sources")
+        offline_sources = automation.get("offline_snapshot_sources", [])
+        if not isinstance(offline_sources, list) or any(not isinstance(source, str) or source.casefold() not in supported_sources for source in offline_sources):
+            errors.append("automation.offline_snapshot_sources contains an unsupported source")
     else:
         errors.append("automation is required and must be an object")
 

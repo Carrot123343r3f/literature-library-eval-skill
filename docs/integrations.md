@@ -14,6 +14,11 @@ Export to RIS, BibTeX or CSV → normalize with `scripts/import_library.py` befo
 
 ## Literature Databases
 
+`automation.online_allowed_sources` authorizes only built-in live collectors
+(OpenAlex, Crossref, arXiv, Europe PMC). `automation.offline_snapshot_sources`
+records sources supplied through local exports and never grants network access.
+The legacy `allowed_sources` remains only for backwards-compatible configs.
+
 | Source | Status | Notes |
 |---|---|---|
 | OpenAlex | ✅ v1.0 | Open scholarly metadata and optional default discovery source. A missing `OPENALEX_API_KEY` does not block arXiv/Crossref/Europe PMC adapters; the key is never requested in chat or written to outputs. |

@@ -76,3 +76,26 @@ def test_human_report_shows_threshold_calibration():
     assert "Threshold calibration" in rendered
     assert "communications profile v1" in rendered
     assert "confirmed by user" in rendered
+
+
+def test_imported_snapshot_a3_is_only_estimated_when_every_source_is_complete(tmp_path):
+    ieee = tmp_path / "ieee.ris"; scopus = tmp_path / "scopus.csv"
+    shutil.copy(FIXTURES / "ieee_xplore.ris", ieee); shutil.copy(FIXTURES / "scopus.csv", scopus)
+    common = {"scope_filters": {"years": "2020-2026"}, "dedup_rule": "DOI", "exported_at": "2026-07-30T10:00:00Z",
+              "reported_total": 1, "exported_count": 1, "completeness_basis": "reported_total_matches_export"}
+    entries = [{**common, "source": "ieee_xplore", "input": ieee.name, "query": "q1"},
+               {**common, "source": "scopus", "input": scopus.name, "query": "q2"}]
+    manifest_path = tmp_path / "exports.json"; manifest_path.write_text(json.dumps({"sources": entries}), encoding="utf-8")
+    snapshot = tmp_path / "snapshot.json"
+    subprocess.run([sys.executable, str(ROOT / "scripts" / "import_source_snapshots.py"), "--manifest", str(manifest_path), "--out", str(snapshot)], check=True)
+    context = tmp_path / "context.json"; context.write_text(json.dumps({"review_type": "narrative"}), encoding="utf-8")
+    library = tmp_path / "library.json"; library.write_text("[]", encoding="utf-8")
+    out = tmp_path / "audit"
+    command = [sys.executable, str(ROOT / "scripts" / "run_audit.py"), "--library", str(library), "--context", str(context), "--candidate-snapshots", str(snapshot), "--out", str(out)]
+    subprocess.run(command, check=True)
+    assert json.loads((out / "audit.json").read_text(encoding="utf-8"))["coverage"]["a3"]["status"] == "estimated_lower_bound"
+    entries[1]["scope_filters"] = {"years": "2019-2026"}
+    manifest_path.write_text(json.dumps({"sources": entries}), encoding="utf-8")
+    subprocess.run([sys.executable, str(ROOT / "scripts" / "import_source_snapshots.py"), "--manifest", str(manifest_path), "--out", str(snapshot)], check=True)
+    subprocess.run(command, check=True)
+    assert json.loads((out / "audit.json").read_text(encoding="utf-8"))["coverage"]["a3"]["status"] == "partial_snapshot"

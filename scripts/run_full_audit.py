@@ -121,7 +121,7 @@ def init_config_v2(args):
               "scope_rationale": "confirmed during guided initialization" if scope_status != "scope_uncertain" else "user did not confirm engineering scope"},
               "library": {"provided": bool(library), "path": library or None, "format": "json" if library.endswith(".json") else None},
               "automation": {"allow_search": False, "allow_metadata_enrichment": False, "allow_external_discovery": False, "allow_citation_tracking": False,
-                             "local_only_confirmed": False, "allowed_sources": [], "authorized_sources": []},
+                             "local_only_confirmed": False, "allowed_sources": [], "online_allowed_sources": [], "offline_snapshot_sources": [], "authorized_sources": []},
               "standards": {"calibration_basis": "reference_default", "calibration_reference": "Initial diagnostic; calibrate before decision-bearing use."},
               "output": {"language": "zh-CN", "formats": ["html", "json"]}}
     pathlib.Path(args.out).write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -146,30 +146,35 @@ def configure_permissions(args):
         ("allow_external_discovery", "external discovery"),
         ("allow_citation_tracking", "citation tracking"),
     ) if automation.get(key) is True]
-    source_summary = ", ".join(automation.get("allowed_sources", [])) or "none"
+    source_summary = ", ".join(automation.get("online_allowed_sources", automation.get("allowed_sources", []))) or "none"
     print("Current permissions: fully-local confirmed=" + ("yes" if automation.get("local_only_confirmed") else "no") +
           "; enabled=" + (", ".join(enabled) if enabled else "none") + "; sources=" + source_summary)
     local_only = input("Confirm fully local execution (disable all online capabilities)? [y/N]: ").strip().lower() in {"y", "yes"}
     if local_only:
         metadata = discovery = citations = False
-        sources = authorized = []
+        sources = offline_sources = authorized = []
     else:
         metadata = input("Allow online metadata enrichment? [y/N]: ").strip().lower() in {"y", "yes"}
         discovery = input("Allow online discovery of new candidate papers? [y/N]: ").strip().lower() in {"y", "yes"}
         citations = input("Allow online citation tracking? [y/N]: ").strip().lower() in {"y", "yes"}
         if any((metadata, discovery, citations)):
-            sources = [item.strip().lower() for item in input("Allowed sources (default openalex,arxiv,crossref,europepmc; institutional exports: ieee_xplore,scopus,web_of_science,ei_compendex,inspec): ").split(",") if item.strip()]
+            sources = [item.strip().lower() for item in input("Online sources (default openalex,arxiv,crossref,europepmc): ").split(",") if item.strip()]
             sources = sources or ["openalex", "arxiv", "crossref", "europepmc"]
-            unknown = sorted(set(sources) - SUPPORTED_SOURCES)
+            unknown = sorted(set(sources) - {"openalex", "arxiv", "crossref", "europepmc"})
             if unknown:
-                raise SystemExit(f"ERROR: unsupported source(s): {', '.join(unknown)}")
+                raise SystemExit(f"ERROR: no live connector for: {', '.join(unknown)}. Add it under offline snapshot sources instead.")
+            offline_sources = [item.strip().lower() for item in input("Offline snapshot sources (optional: ieee_xplore,scopus,web_of_science,ei_compendex,inspec): ").split(",") if item.strip()]
+            unknown_offline = sorted(set(offline_sources) - SUPPORTED_SOURCES)
+            if unknown_offline:
+                raise SystemExit(f"ERROR: unsupported offline snapshot source(s): {', '.join(unknown_offline)}")
             authorized = [item.strip().lower() for item in input("Sources with a preconfigured legal login/connector (optional): ").split(",") if item.strip()]
         else:
-            sources = authorized = []
+            sources = offline_sources = authorized = []
     automation.update({"allow_search": any((metadata, discovery, citations)),
                        "allow_metadata_enrichment": metadata, "allow_external_discovery": discovery,
                        "allow_citation_tracking": citations, "local_only_confirmed": local_only,
-                       "allowed_sources": sources, "authorized_sources": authorized})
+                       "allowed_sources": sources, "online_allowed_sources": sources,
+                       "offline_snapshot_sources": offline_sources, "authorized_sources": authorized})
     errors = validate_run_config_contract(config)
     if errors:
         raise SystemExit("ERROR: invalid permission configuration:\n- " + "\n- ".join(errors))

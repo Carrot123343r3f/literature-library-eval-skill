@@ -34,9 +34,11 @@ def load_search_authorization(run_config_path, required_permission=None):
         raise PermissionError(f"automation.{required_permission} must be true before this online operation")
     if "allowed_sources" not in automation:
         raise ValueError("automation.allowed_sources is required for online collection")
-    allowed = automation["allowed_sources"]
+    # `allowed_sources` is retained for backwards-compatible run configs. New
+    # configs split live permission from offline snapshot provenance.
+    allowed = automation.get("online_allowed_sources", automation["allowed_sources"])
     if not isinstance(allowed, list) or not all(isinstance(x, str) for x in allowed):
-        raise ValueError("automation.allowed_sources must be an array of source names")
+        raise ValueError("automation.online_allowed_sources must be an array of live source names")
     return {x.casefold() for x in allowed}
 
 
