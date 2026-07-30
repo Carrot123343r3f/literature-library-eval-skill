@@ -46,7 +46,10 @@ def test_full_workflow_resolves_library_relative_to_config(tmp_path):
     out = tmp_path / "out"
     result = invoke("run_full_audit.py", "run", "--run-config", config_path, "--out", out)
     assert result.returncode == 0, result.stderr
-    assert (out / "audit" / "audit.html").is_file()
+    assert (out / "sufficiency-precheck.html").is_file()
+    precheck = json.loads((out / "sufficiency-precheck.json").read_text(encoding="utf-8"))
+    assert precheck["audit_status"] == "not_started"
+    assert precheck["completion"] == "precheck_delivered"
 
 
 def test_screening_summary_uses_same_lowercase_doi_identity(tmp_path):
@@ -130,6 +133,15 @@ def test_autopilot_offline_runs_one_command_and_writes_triage_manifest(tmp_path)
     assert (out / "sufficiency-precheck.html").is_file()
     assert (out / "autopilot-manifest.json").is_file()
     assert not (out / "audit" / "audit.html").exists()
+    absolute_library_path = str(library).encode("utf-8")
+    assert all(absolute_library_path not in path.read_bytes() for path in out.rglob("*") if path.is_file())
+    replay_config = out / ".autopilot" / "run-config.json"
+    replay = json.loads(replay_config.read_text(encoding="utf-8"))
+    assert replay["library"]["path"].startswith("inputs/")
+    replay_out = tmp_path / "replay"
+    replay_result = invoke("run_full_audit.py", "run", "--run-config", replay_config, "--out", replay_out)
+    assert replay_result.returncode == 0, replay_result.stderr
+    assert (replay_out / "sufficiency-precheck.json").is_file()
 
 
 def test_autopilot_does_not_bundle_network_permissions_with_scope_confirmation():
@@ -146,6 +158,25 @@ def test_autopilot_does_not_bundle_network_permissions_with_scope_confirmation()
     assert enabled["automation"]["allow_external_discovery"] is True
     offline = autopilot.build_config("robot localization", None, "narrative", ["arxiv"], True, "in_scope")
     assert offline["automation"]["local_only_confirmed"] is True
+
+
+def test_autopilot_invalid_evidence_delivers_a_precheck(tmp_path):
+    library = tmp_path / "library.json"
+    library.write_text(json.dumps([
+        {"title": f"Robot localization {index}", "year": 2024, "language": "en", "DOI": f"10.1000/{index}"}
+        for index in range(3)
+    ]), encoding="utf-8")
+    malformed = tmp_path / "malformed-gold.json"
+    malformed.write_text("not json", encoding="utf-8")
+    common = ("--question", "robot localization", "--library", library, "--offline", "--scope-status", "in_scope",
+              "--mode", "sufficiency-audit", "--review-type", "systematic", "--time-start", "2020", "--time-end", "2026",
+              "--languages", "en", "--output-language", "en")
+    for evidence, out_name in ((tmp_path / "missing-gold.json", "missing"), (malformed, "malformed")):
+        out = tmp_path / out_name
+        result = invoke("autopilot.py", *common, "--gold", evidence, "--out", out)
+        assert result.returncode == 0, result.stderr
+        precheck = json.loads((out / "sufficiency-precheck.json").read_text(encoding="utf-8"))
+        assert precheck["audit_status"] == "not_started"
 
 
 def test_systematic_overview_with_evidence_gaps_is_exploratory_only():

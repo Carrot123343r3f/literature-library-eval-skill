@@ -133,7 +133,7 @@ python scripts/autopilot.py `
   --out first-pass
 ```
 
-未确认范围时，autopilot 会生成引导页而非报错或臆断范围；`--scope-status in_scope` 只确认工程范围，不授予联网权限。没有 `--library` 时只交付检索准备计划，不会创建空库或生成 A–F 审计。`--mode auto` 即使提供综述类型也只交付库健康检查；要运行充分性审计，必须显式指定 `--mode sufficiency-audit`、综述类型、时间/语言边界和输出语言。基础库输入不足时只交付审计预检查，不会生成 A–F 报告。如需发现外部候选并生成主动筛选队列，必须显式授权：
+未确认范围时，autopilot 会生成引导页而非报错或臆断范围；`--scope-status in_scope` 只确认工程范围，不授予联网权限。没有 `--library` 时只交付检索准备计划，不会创建空库或生成 A–F 审计。`--mode auto` 即使提供综述类型也只交付库健康检查；要运行充分性审计，必须显式指定 `--mode sufficiency-audit`、综述类型、时间/语言边界和输出语言。基础库或证据不足时，两入口统一交付 `sufficiency-precheck.html` 与 `sufficiency-precheck.json`，不会生成 A–F 报告；JSON 的 `audit_status: not_started` 和 `completion: precheck_delivered` 是机器判定依据，退出码 0 仅表示预检查已成功交付。如需发现外部候选并生成主动筛选队列，必须显式授权：
 
 ```powershell
 python scripts/autopilot.py --question "低照度传感条件下机器人定位方法如何工作？" --scope-status in_scope --library library.json --mode sufficiency-audit --review-type systematic --time-start 2020 --time-end 2026 --languages en --output-language zh-CN --out first-pass --allow-external-discovery

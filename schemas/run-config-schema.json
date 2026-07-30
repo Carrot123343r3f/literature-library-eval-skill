@@ -74,6 +74,9 @@
         "search_meta": {"type": ["string", "null"], "description": "search_meta.json from search_for_eval.py. Produced by: search_for_eval.py. Supports: A2 sensitivity, B discovery candidates."},
         "screening_summary": {"type": ["string", "null"], "description": "screening-summary.json from summarize_screening.py. Supports B/F screening evidence only; never substitutes for search_meta."},
         "search_iterations": {"type": ["string", "null"], "description": "iterations.json with dev_set, tuning validation_set, and heldout_test_set. A2 measured requires heldout_test_set to match gold by stable IDs."},
+        "independent_pathways": {"type": ["string", "null"], "description": "Documented independent-search pathway records. Required for a full A–F audit and archived with the audit package."},
+        "relevance_review": {"type": ["string", "null"], "description": "Optional documented manual relevance review used only to override the lexical precheck; archived with the audit package."},
+        "context": {"type": ["string", "null"], "description": "Context JSON containing the bounded search-round and pathway interpretation used by A–F calculations."},
         "failed_sources": {"type": "array", "items": {"type": "string"}, "description": "Names of sources that failed during collection. Produced by: all collectors. Supports: A2/A3 partial_snapshot downgrade."}
       }
     },

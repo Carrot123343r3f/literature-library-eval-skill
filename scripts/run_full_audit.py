@@ -3,7 +3,6 @@
 import argparse
 import datetime as dt
 import hashlib
-import html
 import json
 import os
 import pathlib
@@ -225,7 +224,7 @@ def main():
     # Shared product gate: a self-reported allowed_assessment_level must never
     # bypass the same evidence qualification used by the low-friction entry.
     try:
-        from autopilot import audit_readiness
+        from autopilot import audit_readiness, write_sufficiency_precheck
         project = config.get("project", {})
         scope_context = {"review_type": project.get("review_type", ""),
                          "year_start": (project.get("time_range") or {}).get("start"),
@@ -238,22 +237,41 @@ def main():
             if not value: return None
             candidate = pathlib.Path(value)
             return str(candidate if candidate.is_absolute() else pathlib.Path(args.run_config).resolve().parent / candidate)
-        evidence = {"gold": pick(args.gold, "gold"), "query_hits": pick(args.query_hits, "query_hits"), "query_log": pick(args.run_log, "query_log"),
-                    "screening_decisions": pick(args.screening_decisions, "screening_decisions"), "search_iterations": pick(args.search_iterations, "search_iterations"),
+        for attribute, key in (("context", "context"), ("benchmark", "benchmark"), ("gold", "gold"),
+                               ("query_hits", "query_hits"), ("run_log", "query_log"),
+                               ("source_snapshot", "source_snapshot"), ("screening_decisions", "screening_decisions"),
+                               ("deduplication_log", "deduplication_log"), ("screening_summary", "screening_summary"),
+                               ("search_meta", "search_meta"), ("search_iterations", "search_iterations"),
+                               ("independent_pathways", "independent_pathways"),
+                               ("relevance_review", "relevance_review")):
+            setattr(args, attribute, pick(getattr(args, attribute), key))
+        evidence = {"gold": args.gold, "query_hits": args.query_hits, "query_log": args.run_log,
+                    "screening_decisions": args.screening_decisions, "search_iterations": args.search_iterations,
                     "independent_pathways": args.independent_pathways}
-        _, readiness_errors, scope_matrix = audit_readiness(library, project.get("research_question", ""), scope_context, evidence, args.relevance_review)
+        _, readiness_errors, scope_matrix = audit_readiness(
+            library, project.get("research_question", ""), scope_context, evidence, args.relevance_review)
         if readiness_errors:
-            precheck = {"schema_version": "1.0", "mode": "sufficiency_precheck", "audit_status": "not_started", "missing_minimum_inputs": readiness_errors, "scope_matrix": scope_matrix}
-            (out / "precheck.json").write_text(json.dumps(precheck, ensure_ascii=False, indent=2), encoding="utf-8")
-            (out / "precheck.html").write_text("<!doctype html><html><meta charset='utf-8'><title>Sufficiency precheck</title><h1>Sufficiency audit not started</h1><ul>" + "".join(f"<li>{html.escape(item)}</li>" for item in readiness_errors) + "</ul></html>", encoding="utf-8")
-            print("Sufficiency audit not started; wrote precheck.html and precheck.json.")
+            output_language = (config.get("output") or {}).get("language", "zh-CN")
+            write_sufficiency_precheck(out, readiness_errors, output_language)
+            precheck = {"schema_version": "1.0", "mode": "sufficiency_precheck",
+                        "audit_status": "not_started", "completion": "precheck_delivered",
+                        "exit_code_contract": 0, "missing_minimum_inputs": readiness_errors,
+                        "scope_matrix": scope_matrix}
+            (out / "sufficiency-precheck.json").write_text(json.dumps(precheck, ensure_ascii=False, indent=2), encoding="utf-8")
+            print("Sufficiency audit not started; delivered sufficiency-precheck.html and sufficiency-precheck.json (exit 0: precheck delivered, not A-F complete).")
             return
     except ImportError as exc:
         raise SystemExit(f"ERROR: shared audit preflight is unavailable: {exc}")
     canonical = library
     if library.suffix.lower() != ".json":
         imported = out / "import"; run([sys.executable, script("import_library.py"), "--input", str(library), "--out", str(imported)], steps, "import", out, run_signature, [imported / "library.json", imported / "import-preview.json"], args.resume); canonical = imported / "library.json"
-        config["library"] = {"provided": True, "path": str(canonical), "format": "json", "normalization_required": False}; resolved = out / "resolved-run-config.json"; resolved.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8"); args.run_config = str(resolved)
+        original_config_dir = pathlib.Path(args.run_config).resolve().parent
+        for key, value in (config.get("evidence_inputs") or {}).items():
+            if isinstance(value, str) and value:
+                original = pathlib.Path(value)
+                source = original if original.is_absolute() else original_config_dir / original
+                config["evidence_inputs"][key] = pathlib.Path(os.path.relpath(source, out)).as_posix()
+        config["library"] = {"provided": True, "path": "import/library.json", "format": "json", "normalization_required": False}; resolved = out / "resolved-run-config.json"; resolved.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8"); args.run_config = str(resolved)
     optimization_run = args.optimization_run or (config.get("optimization") or {}).get("run_root")
     if optimization_run:
         optimization_gate = [sys.executable, script("optimization.py"), "validate", "--run", optimization_run, "--strict"]
@@ -298,7 +316,7 @@ def main():
     discovered_citations = citations / "citation-candidates.json"
     if discovered_citations.is_file():
         command.extend(["--citation-discovery", str(discovered_citations)])
-    for flag, value in (("--context", args.context), ("--benchmark", args.benchmark), ("--gold", args.gold), ("--query-hits", args.query_hits), ("--run-log", args.run_log), ("--candidate-snapshots", args.source_snapshot), ("--decision-log", args.screening_decisions), ("--deduplication-log", args.deduplication_log), ("--screening-summary", args.screening_summary), ("--search-meta", args.search_meta), ("--search-iterations", args.search_iterations)):
+    for flag, value in (("--context", args.context), ("--benchmark", args.benchmark), ("--gold", args.gold), ("--query-hits", args.query_hits), ("--run-log", args.run_log), ("--candidate-snapshots", args.source_snapshot), ("--decision-log", args.screening_decisions), ("--deduplication-log", args.deduplication_log), ("--screening-summary", args.screening_summary), ("--search-meta", args.search_meta), ("--search-iterations", args.search_iterations), ("--independent-pathways", args.independent_pathways), ("--relevance-review", args.relevance_review)):
         if value: command.extend([flag, value])
     run(command, steps, "audit", out, run_signature, [audit / "audit.json", audit / "audit.html"], args.resume)
     run([sys.executable, script("next_actions.py"), "--audit", str(audit / "audit.json"), "--out", str(out)], steps, "actions", out, run_signature, [out / "next-actions.json"], args.resume)

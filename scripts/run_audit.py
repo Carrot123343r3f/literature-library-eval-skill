@@ -1790,6 +1790,8 @@ def copy_inputs_and_manifest(report, artifact_paths, out):
                 shutil.copy2(src, dst)
             if payload is not None or src_path.suffix.lower() != ".json":
                 entry["copied_to"] = str(dst.relative_to(out))
+                if src_path.suffix.lower() == ".json":
+                    entry["archive_status"] = "redacted_json_copy"
             else:
                 entry["archive_status"] = "hash_only_unparseable_json"
             entry["source_filename"] = src_path.name
@@ -1814,6 +1816,8 @@ def copy_inputs_and_manifest(report, artifact_paths, out):
             shutil.copy2(lib_path, dst)
         if payload is not None or lib_source.suffix.lower() != ".json":
             entry["copied_to"] = str(dst.relative_to(out))
+            if lib_source.suffix.lower() == ".json":
+                entry["archive_status"] = "redacted_json_copy"
         else:
             entry["archive_status"] = "hash_only_unparseable_json"
         manifest["input_files"]["library"] = entry
@@ -1951,6 +1955,8 @@ def main():
                    help="search_meta.json from search_for_eval.py — auto-detected alongside --query-hits if omitted")
     p.add_argument("--screening-summary", help="screening-summary.json; B/F evidence only, never search execution evidence")
     p.add_argument("--search-iterations", help="iterations.json; validates independent development/validation evidence")
+    p.add_argument("--independent-pathways", help="documented independent-search pathway records; merged into context and archived")
+    p.add_argument("--relevance-review", help="documented manual relevance review; archived as precheck provenance")
     p.add_argument("--citation-seed-plan", help="citation-seeds.json; records automatic/user seed provenance")
     p.add_argument("--citation-discovery", help="citation-candidates.json; records unscreened citation candidates")
     p.add_argument("--out", required=True)
@@ -2009,6 +2015,9 @@ def main():
         if ev.get("search_meta") and not a.search_meta: a.search_meta = _resolve(ev["search_meta"])
         if ev.get("screening_summary") and not a.screening_summary: a.screening_summary = _resolve(ev["screening_summary"])
         if ev.get("search_iterations") and not a.search_iterations: a.search_iterations = _resolve(ev["search_iterations"])
+        if ev.get("independent_pathways") and not a.independent_pathways: a.independent_pathways = _resolve(ev["independent_pathways"])
+        if ev.get("relevance_review") and not a.relevance_review: a.relevance_review = _resolve(ev["relevance_review"])
+        if ev.get("context") and not a.context: a.context = _resolve(ev["context"])
 
         ctx_from_rc = {
             "review_type": rc.get("project", {}).get("review_type", ""),
@@ -2049,6 +2058,12 @@ def main():
             ctx["standards"] = {**ctx.get("standards", {}), **configured_standards}
     ctx.setdefault("library_path", a.library)
     ctx.setdefault("output_language", "zh-CN")
+    if a.independent_pathways:
+        pathways_doc = json.loads(pathlib.Path(a.independent_pathways).read_text(encoding="utf-8"))
+        pathways = pathways_doc if isinstance(pathways_doc, list) else pathways_doc.get("items") if isinstance(pathways_doc, dict) else None
+        if not isinstance(pathways, list):
+            p.error("independent pathways must be a JSON array or object with items[]")
+        ctx["independent_pathways"] = pathways
     gold_assessment = gold_independence(a.benchmark, a.gold, ctx)
     ctx["gold_independence_status"] = gold_assessment["status"]
     ctx["gold_independence_record_check"] = gold_assessment
@@ -2400,6 +2415,8 @@ def main():
                                       "run-log": a.run_log, "search-meta": search_meta_path,
                                       "screening-summary": a.screening_summary,
                                       "search-iterations": a.search_iterations,
+                                      "independent-pathways": a.independent_pathways,
+                                      "relevance-review": a.relevance_review,
                                       "citation-seed-plan": a.citation_seed_plan,
                                       "citation-discovery": a.citation_discovery}),
               "summary": summary,
@@ -2435,6 +2452,8 @@ def main():
                          "search-meta": search_meta_path,
                          "screening-summary": a.screening_summary,
                          "search-iterations": a.search_iterations,
+                         "independent-pathways": a.independent_pathways,
+                         "relevance-review": a.relevance_review,
                          "citation-seed-plan": a.citation_seed_plan,
                          "citation-discovery": a.citation_discovery,
                          "context": a.context}.items() if v is not None})

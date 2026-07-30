@@ -1,11 +1,14 @@
 # Outputs: Understanding Your Audit Report
 
-## The Audit Package
+## Full-Audit Package
 
 `audit.html` is the only human-readable report. `audit.json`, `manifest.json`,
 and `inputs/` are retained for reproducibility and integration.
 
-Every run produces:
+`run_audit.py --out <audit-output>` writes the following package directly to
+`<audit-output>`. `run_full_audit.py --out <workflow-output>` writes the same
+package under `<workflow-output>/audit/`. Only a run that passes the sufficiency
+gate produces:
 
 ```text
 out/
@@ -15,6 +18,27 @@ out/
 ├── inputs/               ← All inputs copied with hash-prefixed names
 └── .tmp/                 ← Auto-generated resolved config
 ```
+
+## Sufficiency-precheck Package
+
+When the library or evidence is insufficient, both `run_full_audit.py` and
+`autopilot.py` produce the same lightweight package instead of an empty A–F
+report:
+
+```text
+out/
+├── sufficiency-precheck.html  ← Localized explanation of the evidence gaps
+└── sufficiency-precheck.json  ← audit_status=not_started; completion=precheck_delivered
+```
+
+The command exits with status 0 because the precheck was successfully delivered.
+Automation must inspect `audit_status` (or require `audit/audit.json`) to decide
+whether a complete A–F audit ran.
+
+Autopilot stores a movable, hash-named input bundle under
+`.autopilot/inputs/`. Its `.autopilot/run-config.json` references only those
+relative bundle paths; external CLI paths are neither persisted nor needed to
+replay the generated configuration.
 
 ## Guided Workflow Outputs
 
@@ -70,4 +94,4 @@ Derived from `schemas/indicator-registry.json` — the single source of truth.
 
 ## Reproducibility
 
-Every run is reproducible: `run-config.json` captures decisions, `manifest.json` records hashes, inputs are copied. Re-running with same inputs produces identical `audit.json`.
+Every completed A–F audit is reproducible: `run-config.json` captures decisions and input paths, `manifest.json` records hashes, and inputs are copied. Re-running with the same inputs produces identical `audit.json`. A precheck is reproducible as an evidence-gap decision, but is not an audit result.

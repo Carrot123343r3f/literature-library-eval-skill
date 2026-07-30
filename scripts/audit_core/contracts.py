@@ -230,7 +230,8 @@ def validate_run_config(rc):
         else:
             allowed_evidence = {"benchmark", "gold", "query_log", "query_hits", "query_plan",
                                 "source_snapshot", "screening_decisions", "deduplication_log",
-                                "search_meta", "screening_summary", "search_iterations", "failed_sources"}
+                                "search_meta", "screening_summary", "search_iterations",
+                                "independent_pathways", "relevance_review", "context", "failed_sources"}
             errors.extend(f"unknown evidence_inputs field: {key}" for key in sorted(set(evidence) - allowed_evidence))
             for key, value in evidence.items():
                 if key == "failed_sources":

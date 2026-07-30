@@ -4,10 +4,11 @@
 
 1. 导出你的文献库为 JSON、CSV、RIS 或 BibTeX。
 2. 运行 `run_full_audit.py init`，第一轮只确认研究问题、工程范围和文献库位置；综述类型先使用 narrative 默认值。它默认完全本地运行；需要在线元数据补齐、外部候选发现或引文追踪时，再逐项明确授权。
-3. 运行 `run_full_audit.py run`。即使没有检索式、Gold 集或种子文献，也会生成 HTML 首轮报告。
+3. 运行 `run_full_audit.py run`。如果缺少检索式、独立 Gold 集、人工筛选决定或独立检索路径，流程会交付 `sufficiency-precheck.html`，而不会生成空壳 A–F 报告。
 
-首轮报告会显示全部指标，但会将缺少正式证据的项目明确标为
-`not_assessable`。这不是失败，而是后续工作的最小清单。
+预检查是一次成功交付但不是审计完成：其 JSON 中固定为
+`audit_status: "not_started"` 和 `completion: "precheck_delivered"`。仅在
+`audit/audit.html` 与 `audit/audit.json` 存在时，A–F 审计才算完成。
 
 ## 看报告时先看什么
 
@@ -24,6 +25,10 @@
 - 将下载的 JSON/CSV 传回 `screen_candidates.py --decisions` 验证。
 
 只有已确认的人工纳入决定才能进入 B 饱和度指标。AI 候选、推荐分数和自动规则筛选都不能替代该决定。
+每条声明为完成的独立检索路径还必须保存其 `candidate_ids` 与
+`screened_candidate_ids`；两者都必须是检索命中的稳定标识符，并与人工
+筛选决定逐一对应。重复路径 ID、重复路径类型或不完整的路径筛选覆盖都会
+停在 precheck。
 
 ## 联网、隐私与失败处理
 
@@ -31,7 +36,8 @@
 
 ## 你应保存的文件
 
-- `audit.html`：唯一面向用户的审计报告。
-- `audit.json`、`manifest.json`、`inputs/`：复现、共享和后续 Agent 调用。
+- `sufficiency-precheck.html`、`sufficiency-precheck.json`：证据不足时的唯一交付；后者提供机器可判定状态和缺口。
+- `audit/audit.html`：完整 A–F 审计的唯一面向用户报告。
+- `audit/audit.json`、`audit/manifest.json`、`audit/inputs/`：完整审计的复现、共享和后续 Agent 调用。
 - `screening-decisions.json`：人工筛选依据。
 - `next-actions.json`：机器可读的后续行动队列。

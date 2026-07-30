@@ -14,14 +14,14 @@ import sys
 try:
     from query_compiler import compile_query_plan
     from import_library import load as load_library
-    from audit_core.contracts import normalize_language_tag
-    from run_audit import scope_records, stable_record_ids
+    from audit_core.contracts import normalize_language_tag, public_value
+    from run_audit import ids, scope_records, stable_record_ids
     from search_iterator import validate as validate_iterations
 except ImportError:
     from scripts.query_compiler import compile_query_plan
     from scripts.import_library import load as load_library
-    from scripts.audit_core.contracts import normalize_language_tag
-    from scripts.run_audit import scope_records, stable_record_ids
+    from scripts.audit_core.contracts import normalize_language_tag, public_value
+    from scripts.run_audit import ids, scope_records, stable_record_ids
     from scripts.search_iterator import validate as validate_iterations
 
 
@@ -49,7 +49,7 @@ def build_config(question, library, review_type, sources, offline, scope_status,
                         "time_range": {"start": time_start, "end": time_end},
                         "languages": languages or [],
                         "scope_rationale": "explicit autopilot scope confirmation" if scope_status == "in_scope" else "autopilot draft; scope not confirmed"},
-            "library": {"provided": bool(library), "path": pathlib.Path(library).name if library else None, "format": "json" if library else None},
+            "library": {"provided": bool(library), "path": str(library) if library and not pathlib.Path(library).is_absolute() else (pathlib.Path(library).name if library else None), "format": pathlib.Path(library).suffix.lstrip(".").lower() if library else None},
             "automation": {"allow_search": allow_search, "allow_metadata_enrichment": allow_metadata_enrichment,
                             "allow_external_discovery": allow_external_discovery, "allow_citation_tracking": allow_citation_tracking,
                             "local_only_confirmed": offline, "allowed_sources": sources if allow_search else []},
@@ -59,6 +59,23 @@ def build_config(question, library, review_type, sources, offline, scope_status,
     if evidence_inputs:
         config["evidence_inputs"] = evidence_inputs
     return config
+
+
+def bundle_input(path, bundle_dir, label):
+    """Create a movable, path-free input copy and return its config-relative name."""
+    try:
+        source = pathlib.Path(path)
+        suffix = source.suffix.lower()
+        raw = source.read_bytes()
+        if suffix == ".json":
+            raw = json.dumps(public_value(json.loads(raw.decode("utf-8"))), ensure_ascii=False, indent=2).encode("utf-8")
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    digest = __import__("hashlib").sha256(raw).hexdigest()
+    destination = bundle_dir / f"{label}__{digest[:12]}{suffix}"
+    if not destination.exists():
+        destination.write_bytes(raw)
+    return f"inputs/{destination.name}", {"sha256": digest, "filename": destination.name, "redacted_json": suffix == ".json"}
 
 
 def write_onboarding(out, question, plan, sources):
@@ -193,6 +210,7 @@ def validate_audit_evidence(evidence_inputs, context, review_type, relevance_rev
         errors.append("Query hits have no records inside the declared time/language boundary")
     if scoped_gold and not stable_record_ids(scoped_gold):
         errors.append("Gold set needs at least one stable identifier after scope filtering")
+    hit_ids = stable_record_ids(scoped_hits)
     log = _load_json_object(evidence_inputs["query_log"], "Query log", errors) if evidence_inputs.get("query_log") else {}
     queries = log.get("queries", log.get("query_log", []))
     if not isinstance(queries, list) or not queries or any(not isinstance(row, dict) or not {"source", "query", "fields", "date"} <= set(row) for row in queries):
@@ -201,6 +219,20 @@ def validate_audit_evidence(evidence_inputs, context, review_type, relevance_rev
     decisions = decisions_doc.get("decisions", decisions_doc.get("screening_log", []))
     if not isinstance(decisions, list) or not decisions or any(not isinstance(row, dict) or row.get("decision") not in {"include", "exclude"} or not str(row.get("reason") or "").strip() for row in decisions):
         errors.append("Screening decisions need include/exclude decisions with reasons")
+    else:
+        decision_ids = []
+        for row in decisions:
+            candidate_ids = ids({"id": row.get("candidate_id")})
+            if len(candidate_ids) != 1:
+                errors.append("Screening decisions need one stable candidate_id per decision")
+                continue
+            decision_ids.append(next(iter(candidate_ids)))
+        if len(decision_ids) != len(set(decision_ids)):
+            errors.append("Screening decisions contain duplicate candidate_id values")
+        if hit_ids and (set(decision_ids) - hit_ids):
+            errors.append("Screening decisions reference candidate_id values outside query hits")
+        if hit_ids and not hit_ids <= set(decision_ids):
+            errors.append("Screening decisions must cover every stable-ID query hit before a full audit")
     iterations = _load_json_object(evidence_inputs["search_iterations"], "Search iterations", errors) if evidence_inputs.get("search_iterations") else {}
     iteration_errors, _warnings = validate_iterations(iterations) if iterations else (["missing"], [])
     if iteration_errors:
@@ -220,6 +252,40 @@ def validate_audit_evidence(evidence_inputs, context, review_type, relevance_rev
                    and isinstance(row.get("yield"), (int, float))]
     if len(valid_paths) < minimum:
         errors.append(f"Independent pathways need {minimum} completed, screened paths with type and yield")
+    else:
+        pathway_ids = [row["pathway_id"].strip() for row in valid_paths]
+        pathway_types = [row["type"] for row in valid_paths]
+        if any(not value for value in pathway_ids) or len(pathway_ids) != len(set(pathway_ids)):
+            errors.append("Independent pathways need unique, non-empty pathway_id values")
+        if len(pathway_types) != len(set(pathway_types)):
+            errors.append("Independent pathways need distinct pathway types; repeated types are not independent")
+        screened_decision_ids = set(decision_ids) if 'decision_ids' in locals() else set()
+        for pathway in valid_paths:
+            raw_candidates = pathway.get("candidate_ids")
+            raw_screened = pathway.get("screened_candidate_ids")
+            if not isinstance(raw_candidates, list) or not raw_candidates or not isinstance(raw_screened, list):
+                errors.append("Each independent pathway needs candidate_ids and screened_candidate_ids for auditable screening coverage")
+                continue
+            def canonical(values):
+                resolved = []
+                for value in values:
+                    value_ids = ids({"id": value})
+                    if len(value_ids) != 1:
+                        return None
+                    resolved.append(next(iter(value_ids)))
+                return resolved
+            candidate_ids = canonical(raw_candidates)
+            screened_ids = canonical(raw_screened)
+            if candidate_ids is None or screened_ids is None or len(candidate_ids) != len(set(candidate_ids)) or len(screened_ids) != len(set(screened_ids)):
+                errors.append("Each pathway candidate_ids and screened_candidate_ids must contain unique stable identifiers")
+                continue
+            candidate_set, screened_set = set(candidate_ids), set(screened_ids)
+            if candidate_set - hit_ids:
+                errors.append("Independent pathway candidate_ids must belong to query hits")
+            if candidate_set - screened_decision_ids:
+                errors.append("Independent pathway candidates need corresponding human screening decisions")
+            if screened_set != candidate_set:
+                errors.append("Independent pathway screening coverage is incomplete or includes candidates outside that pathway")
     review_ok = _validate_relevance_review(relevance_review, errors)
     return errors, {"gold": gold_scope, "query_hits": hits_scope,
                     "heldout": _heldout_scope, "relevance_reviewed": review_ok}
@@ -291,19 +357,23 @@ def run(args):
     sources = [x.strip().casefold() for x in args.sources.split(",") if x.strip()] if not args.offline else []
     plan = compile_query_plan(args.question, sources or ["arxiv"])
     terms = plan["queries"][0].get("terms", []) if plan["queries"] else []
-    config_path = control / "run-config.json"; context_path = control / "context.json"; plan_path = control / "query-plan.json"
+    config_path = control / "run-config.json"; context_path = control / "context.json"; plan_path = control / "query-plan.json"; bundle_dir = control / "inputs"; bundle_dir.mkdir(exist_ok=True)
     evidence_inputs = {key: value for key, value in {
         "gold": args.gold, "query_hits": args.query_hits, "query_log": args.query_log,
         "screening_decisions": args.screening_decisions, "search_iterations": args.search_iterations,
-        "independent_pathways": args.independent_pathways,
+        "independent_pathways": args.independent_pathways, "relevance_review": args.relevance_review,
     }.items() if value}
-    config_path.write_text(json.dumps(build_config(
-        args.question, args.library, args.review_type, sources, args.offline, args.scope_status,
-        allow_metadata_enrichment=args.allow_metadata_enrichment,
-        allow_external_discovery=args.allow_external_discovery,
-        allow_citation_tracking=args.allow_citation_tracking, time_start=args.time_start,
-        time_end=args.time_end, languages=[item.strip() for item in (args.languages or "").split(",") if item.strip()],
-        output_language=args.output_language or "zh-CN"), ensure_ascii=False, indent=2), encoding="utf-8")
+    bundle_manifest = {}
+    library_reference = None
+    if args.library:
+        bundled_library = bundle_input(args.library, bundle_dir, "library")
+        if bundled_library:
+            library_reference, bundle_manifest["library"] = bundled_library
+    bundled_evidence = {}
+    for key, value in evidence_inputs.items():
+        bundled = bundle_input(value, bundle_dir, key.replace("_", "-"))
+        if bundled:
+            bundled_evidence[key], bundle_manifest[key] = bundled
     context = build_context(args.question, terms)
     context.update({"review_type": args.review_type, "year_start": args.time_start, "year_end": args.time_end,
                     "languages": [item.strip() for item in (args.languages or "").split(",") if item.strip()],
@@ -316,6 +386,15 @@ def run(args):
             raise ValueError(f"invalid --independent-pathways: {exc}")
     context_path.write_text(json.dumps(context, ensure_ascii=False, indent=2), encoding="utf-8")
     plan_path.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
+    bundled_evidence["context"] = "context.json"
+    config_path.write_text(json.dumps(build_config(
+        args.question, library_reference, args.review_type, sources, args.offline, args.scope_status,
+        allow_metadata_enrichment=args.allow_metadata_enrichment,
+        allow_external_discovery=args.allow_external_discovery,
+        allow_citation_tracking=args.allow_citation_tracking, time_start=args.time_start,
+        time_end=args.time_end, languages=[item.strip() for item in (args.languages or "").split(",") if item.strip()],
+        output_language=args.output_language or "zh-CN", evidence_inputs=bundled_evidence), ensure_ascii=False, indent=2), encoding="utf-8")
+    (control / "input-bundle-manifest.json").write_text(json.dumps(bundle_manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     if args.scope_status not in {"in_scope", "cross_domain"}:
         write_onboarding(out, args.question, plan, sources)
         (out / "autopilot-manifest.json").write_text(json.dumps({"schema_version": "1.0", "mode": "needs_scope_confirmation", "sources_requested": sources, "question": args.question, "scope_status": args.scope_status, "human_gates": ["scope"]}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -346,21 +425,17 @@ def run(args):
     _, readiness_gaps, scope_matrix = audit_readiness(library, args.question, context, evidence_inputs, args.relevance_review)
     if readiness_gaps:
         write_sufficiency_precheck(out, readiness_gaps, args.output_language or "zh-CN")
-        (out / "autopilot-manifest.json").write_text(json.dumps({"schema_version": "1.0", "mode": "sufficiency_precheck", "audit_status": "not_started", "question": args.question, "missing_minimum_inputs": readiness_gaps, "scope_matrix": scope_matrix}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        precheck = {"schema_version": "1.0", "mode": "sufficiency_precheck",
+                    "audit_status": "not_started", "completion": "precheck_delivered",
+                    "exit_code_contract": 0, "question": args.question,
+                    "missing_minimum_inputs": readiness_gaps, "scope_matrix": scope_matrix}
+        (out / "sufficiency-precheck.json").write_text(json.dumps(precheck, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        (out / "autopilot-manifest.json").write_text(json.dumps(precheck, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print("[2/3] Delivered a sufficiency precheck; the A-F audit was not started.", flush=True)
         return
     print("[2/3] Running the sufficiency audit; missing evidence will remain explicit.", flush=True)
     command = [sys.executable, str(pathlib.Path(__file__).with_name("run_full_audit.py")), "run",
-               "--run-config", str(config_path), "--library", str(library),
-               "--context", str(context_path), "--out", str(out)]
-    for flag, key in (("--gold", "gold"), ("--query-hits", "query_hits"), ("--search-iterations", "search_iterations"),
-                      ("--screening-decisions", "screening_decisions"), ("--independent-pathways", "independent_pathways")):
-        if evidence_inputs.get(key):
-            command.extend([flag, evidence_inputs[key]])
-    if evidence_inputs.get("query_log"):
-        command.extend(["--run-log", evidence_inputs["query_log"]])
-    if args.relevance_review:
-        command.extend(["--relevance-review", args.relevance_review])
+               "--run-config", str(config_path), "--out", str(out)]
     if args.allow_external_discovery and not args.offline:
         command += ["--collect", "--query-plan", str(plan_path), "--active-screen-budget", str(args.screen_budget)]
     subprocess.run(command, check=True)
