@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "project": {
+    "research_question": "How ready is a local library for a review of vision-based surface-defect inspection in manufacturing?",
+    "review_type": "systematic",
+    "engineering_profile": ["mechanical_manufacturing"],
+    "scope_status": "in_scope",
+    "time_range": {"start": 2020, "end": 2026},
+    "languages": ["en"],
+    "allowed_assessment_level": "full"
+  },
+  "library": {"provided": true, "path": "library.json", "format": "json", "normalization_required": false},
+  "automation": {
+    "allow_search": false,
+    "allow_metadata_enrichment": false,
+    "allow_external_discovery": false,
+    "allow_citation_tracking": false,
+    "local_only_confirmed": true,
+    "allowed_sources": [],
+    "online_allowed_sources": [],
+    "offline_snapshot_sources": ["ieee_xplore", "scopus"]
+  },
+  "evidence_inputs": {"source_snapshot": "outputs/institutional-snapshot.json"},
+  "standards": {"defaults_profile": "mechanical_manufacturing", "calibration_basis": "reference_default", "calibration_reference": "Teaching example; not a decision-bearing calibration.", "confirmed_by_user": false},
+  "output": {"language": "en", "formats": ["html", "json"]}
+}

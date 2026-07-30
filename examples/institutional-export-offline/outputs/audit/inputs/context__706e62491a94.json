@@ -1,0 +1,17 @@
+{
+  "review_type": "systematic",
+  "profile": "mechanical_manufacturing",
+  "year_start": 2020,
+  "year_end": 2026,
+  "languages": [
+    "en"
+  ],
+  "output_language": "en",
+  "scope_status": "in_scope",
+  "standards": {
+    "confirmed_by_user": false,
+    "defaults_profile": "mechanical_manufacturing",
+    "calibration_basis": "reference_default",
+    "calibration_reference": "Teaching example; not a decision-bearing calibration."
+  }
+}

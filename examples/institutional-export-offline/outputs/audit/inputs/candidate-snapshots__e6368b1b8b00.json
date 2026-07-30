@@ -1,0 +1,135 @@
+{
+  "schema_version": "1.2",
+  "generated_at": "2026-07-30T12:35:58.657730+00:00",
+  "queries": [
+    {
+      "id": "institutional-exports",
+      "sources": {
+        "ieee_xplore": {
+          "status": "complete",
+          "complete": true,
+          "reported_total": 2,
+          "retrieved": 2,
+          "items": [
+            {
+              "title": "Vision-based surface defect inspection in industrial production",
+              "DOI": "10.1109/example.2024.00001",
+              "year": 2024,
+              "abstractNote": "",
+              "publicationTitle": "IEEE Transactions on Industrial Informatics",
+              "authors": [],
+              "source": "",
+              "language": "en"
+            },
+            {
+              "title": "Real-time defect detection under low illumination",
+              "DOI": "10.1109/example.2025.00002",
+              "year": 2025,
+              "abstractNote": "",
+              "publicationTitle": "IEEE International Conference on Automation",
+              "authors": [],
+              "source": "",
+              "language": "en"
+            }
+          ],
+          "scope_filters": {
+            "years": "2020-2026",
+            "languages": [
+              "en"
+            ],
+            "document_types": [
+              "article",
+              "conference paper"
+            ]
+          },
+          "dedup_rule": "DOI exact match",
+          "import_quality": {
+            "record_count": 2,
+            "missing": {
+              "title": 0,
+              "year": 0,
+              "stable_id": 0
+            },
+            "missing_rates": {
+              "title": 0.0,
+              "year": 0.0,
+              "stable_id": 0.0
+            },
+            "warnings": []
+          },
+          "provenance": {
+            "mode": "user_export",
+            "filename": "ieee-xplore.ris",
+            "sha256": "ca69136a9629ec7022b30b82a8c1658cf8f5482dc6d5bb539f6435494bb7d907",
+            "query": "(\"All Metadata\":\"surface defect\") AND (\"All Metadata\":\"visual inspection\")",
+            "exported_at": "2026-07-30T09:30:00Z",
+            "export_limit": 2000,
+            "completeness_basis": "reported_total_matches_export"
+          }
+        },
+        "scopus": {
+          "status": "complete",
+          "complete": true,
+          "reported_total": 2,
+          "retrieved": 2,
+          "items": [
+            {
+              "title": "Vision-based surface defect inspection in industrial production",
+              "DOI": "10.1109/example.2024.00001",
+              "year": 2024,
+              "abstractNote": "",
+              "publicationTitle": "IEEE Transactions on Industrial Informatics",
+              "authors": [],
+              "source": "",
+              "language": "en"
+            },
+            {
+              "title": "Multiscale visual inspection for manufacturing defects",
+              "DOI": "10.1016/j.example.2023.00003",
+              "year": 2023,
+              "abstractNote": "",
+              "publicationTitle": "Journal of Manufacturing Systems",
+              "authors": [],
+              "source": "",
+              "language": "en"
+            }
+          ],
+          "scope_filters": {
+            "years": "2020-2026",
+            "languages": [
+              "en"
+            ],
+            "document_types": [
+              "article",
+              "conference paper"
+            ]
+          },
+          "dedup_rule": "DOI exact match",
+          "import_quality": {
+            "record_count": 2,
+            "missing": {
+              "title": 0,
+              "year": 0,
+              "stable_id": 0
+            },
+            "missing_rates": {
+              "title": 0.0,
+              "year": 0.0,
+              "stable_id": 0.0
+            },
+            "warnings": []
+          },
+          "provenance": {
+            "mode": "user_export",
+            "filename": "scopus.csv",
+            "sha256": "018b3c88b40e2e13dde03778fe6373605b4f32c07e321a43cbe37445e2a1dae2",
+            "query": "TITLE-ABS-KEY(\"surface defect\" AND \"visual inspection\")",
+            "exported_at": "2026-07-30T09:35:00Z",
+            "export_limit": 2000,
+            "completeness_basis": "reported_total_matches_export"
+          }
+        }
+      }
+    }
+  ]
+}

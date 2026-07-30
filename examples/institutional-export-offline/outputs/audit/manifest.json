@@ -1,0 +1,61 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-07-30T12:36:00.514155+00:00",
+  "run_audit_version": "model-x-2026-07-21",
+  "git_commit": "67f7bc87014cffe01a07d06b52130d15a64c1e1b",
+  "run_audit_sha256": "c093c46ae554d16a4e8a5b36537204b68a84becc5f8c7be822e2de67bf9ce886",
+  "python_version": "3.13.5",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "review_type": "系统综述",
+  "standards_applied": {
+    "confirmed_by_user": false,
+    "defaults_profile": "mechanical_manufacturing",
+    "calibration_basis": "reference_default",
+    "calibration_reference": "Teaching example; not a decision-bearing calibration.",
+    "a1_min_recall": 0.9,
+    "a2_min_recall": 0.85,
+    "f_access_rate": 0.8,
+    "f_provenance_rate": 0.95,
+    "f_core_metadata_rate": 0.95,
+    "f_abstract_rate": 0.85,
+    "d_freshness_days": 90,
+    "b_ggr_threshold": 0.02,
+    "b_drr_threshold": 0.05,
+    "balance_top_share_warning": 0.8,
+    "balance_cv_warning": 1.0,
+    "balance_gini_warning": 0.6,
+    "balance_shannon_low_warning": 0.45,
+    "balance_shannon_high_warning": 0.95,
+    "topic_top_share_warning": 0.7,
+    "topic_cv_warning": 0.8,
+    "topic_gini_warning": 0.5,
+    "topic_shannon_low_warning": 0.55,
+    "topic_target_tvd_warning": 0.25,
+    "topic_min_sources": 2,
+    "topic_source_top_share_warning": 0.8
+  },
+  "record_source_paths": false,
+  "input_files": {
+    "candidate-snapshots": {
+      "provided": true,
+      "sha256": "e6368b1b8b00c1ddf32c745e9f778097d347f39f944647c441182ac8790a0b5c",
+      "copied_to": "inputs\\candidate-snapshots__e6368b1b8b00.json",
+      "archive_status": "redacted_json_copy",
+      "source_filename": "institutional-snapshot.json"
+    },
+    "context": {
+      "provided": true,
+      "sha256": "706e62491a9472b4bc55ccc437be3e580ff1e181994e0de43478f87bb2bf14f9",
+      "copied_to": "inputs\\context__706e62491a94.json",
+      "archive_status": "redacted_json_copy",
+      "source_filename": "resolved-config.json"
+    },
+    "library": {
+      "provided": true,
+      "sha256": "54dfed1aa3ff8797bc3b7ba4be401c4f98099b64a5ff480cfcdab3bd156a4427",
+      "source_filename": "library.json",
+      "copied_to": "inputs\\library__54dfed1aa3ff.json",
+      "archive_status": "redacted_json_copy"
+    }
+  }
+}

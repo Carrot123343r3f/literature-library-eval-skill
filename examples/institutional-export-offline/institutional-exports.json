@@ -1,0 +1,28 @@
+{
+  "sources": [
+    {
+      "source": "ieee_xplore",
+      "input": "raw-exports/ieee-xplore.ris",
+      "query": "(\"All Metadata\":\"surface defect\") AND (\"All Metadata\":\"visual inspection\")",
+      "scope_filters": {"years": "2020-2026", "languages": ["en"], "document_types": ["article", "conference paper"]},
+      "dedup_rule": "DOI exact match",
+      "exported_at": "2026-07-30T09:30:00Z",
+      "reported_total": 2,
+      "exported_count": 2,
+      "export_limit": 2000,
+      "completeness_basis": "reported_total_matches_export"
+    },
+    {
+      "source": "scopus",
+      "input": "raw-exports/scopus.csv",
+      "query": "TITLE-ABS-KEY(\"surface defect\" AND \"visual inspection\")",
+      "scope_filters": {"years": "2020-2026", "languages": ["en"], "document_types": ["article", "conference paper"]},
+      "dedup_rule": "DOI exact match",
+      "exported_at": "2026-07-30T09:35:00Z",
+      "reported_total": 2,
+      "exported_count": 2,
+      "export_limit": 2000,
+      "completeness_basis": "reported_total_matches_export"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+Reproduced locally on 2026-07-30 (offline, Python UTF-8 mode).
+
+1. python scripts/import_source_snapshots.py --manifest examples/institutional-export-offline/institutional-exports.json --out examples/institutional-export-offline/outputs/institutional-snapshot.json
+   Result: 2 sources, 4 exported records, both source exports complete.
+
+2. python scripts/run_audit.py --run-config examples/institutional-export-offline/run-config.json --out examples/institutional-export-offline/outputs/audit
+   Result: audit.html and audit.json created.
+
+Observed A3 result: estimated_lower_bound, deduplicated candidate lower bound = 3
+(IEEE Xplore stable IDs = 2; Scopus stable IDs = 2).
+
+The HTML report intentionally leaves recall, saturation, and several workflow
+items not_assessable because those require additional documented evidence.
