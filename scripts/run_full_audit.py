@@ -19,7 +19,8 @@ except ImportError:  # direct execution with scripts/ on sys.path
     from lle_core.state_machine import can_advance
 
 ROOT = pathlib.Path(__file__).resolve().parent
-SUPPORTED_SOURCES = {"openalex", "crossref", "arxiv", "europepmc"}
+SUPPORTED_SOURCES = {"openalex", "crossref", "arxiv", "europepmc", "ieee_xplore",
+                     "scopus", "web_of_science", "ei_compendex", "inspec"}
 
 
 def signature(args):
@@ -121,6 +122,7 @@ def init_config_v2(args):
               "library": {"provided": bool(library), "path": library or None, "format": "json" if library.endswith(".json") else None},
               "automation": {"allow_search": False, "allow_metadata_enrichment": False, "allow_external_discovery": False, "allow_citation_tracking": False,
                              "local_only_confirmed": False, "allowed_sources": [], "authorized_sources": []},
+              "standards": {"calibration_basis": "reference_default", "calibration_reference": "Initial diagnostic; calibrate before decision-bearing use."},
               "output": {"language": "zh-CN", "formats": ["html", "json"]}}
     pathlib.Path(args.out).write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
     print("Created a local-first config. Review type defaults to narrative; online permissions stay disabled until explicitly enabled.")
@@ -156,7 +158,7 @@ def configure_permissions(args):
         discovery = input("Allow online discovery of new candidate papers? [y/N]: ").strip().lower() in {"y", "yes"}
         citations = input("Allow online citation tracking? [y/N]: ").strip().lower() in {"y", "yes"}
         if any((metadata, discovery, citations)):
-            sources = [item.strip().lower() for item in input("Allowed sources (default openalex,arxiv,crossref,europepmc): ").split(",") if item.strip()]
+            sources = [item.strip().lower() for item in input("Allowed sources (default openalex,arxiv,crossref,europepmc; institutional exports: ieee_xplore,scopus,web_of_science,ei_compendex,inspec): ").split(",") if item.strip()]
             sources = sources or ["openalex", "arxiv", "crossref", "europepmc"]
             unknown = sorted(set(sources) - SUPPORTED_SOURCES)
             if unknown:

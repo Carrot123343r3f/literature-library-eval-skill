@@ -69,6 +69,15 @@ Every conclusion is evidence-graded:
 | `manual-verification-required` | Needs human decision |
 | `not_assessable` | Missing inputs — this is *actionable*, not failure |
 
+## Threshold calibration
+
+Defaults are reference values, not universal laws. Each decision-bearing run
+should record `standards.calibration_basis` (`domain_profile`, `local_pilot`,
+`expert_panel`, or `published_protocol`) and a concise
+`standards.calibration_reference`. Use `reference_default` only for an initial
+diagnostic, and report threshold sensitivity when a small change could alter a
+recommended action.
+
 ## Limitations
 
 - All thresholds are reference values, not universal laws

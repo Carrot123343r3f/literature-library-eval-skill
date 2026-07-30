@@ -12,22 +12,32 @@ def clean(value):
 
 
 def canonical(row):
-    title = clean(row.get("title") or row.get("TI") or row.get("T1"))
-    doi = clean(row.get("DOI") or row.get("doi")).replace("https://doi.org/", "")
-    year = re.search(r"\b(19|20)\d{2}\b", clean(row.get("year") or row.get("PY") or row.get("date")))
+    # Common RIS tags and institutional CSV headers.  Do not silently accept
+    # an export just because it parsed: downstream A3 needs stable IDs.
+    folded = {str(key).casefold(): value for key, value in row.items()}
+    def first(*names):
+        for name in names:
+            value = row.get(name)
+            if value not in (None, ""): return value
+            value = folded.get(name.casefold())
+            if value not in (None, ""): return value
+        return ""
+    title = clean(first("title", "Title", "Article Title", "Document Title", "TI", "T1"))
+    doi = clean(first("DOI", "doi", "DO", "DI", "DOI Link")).replace("https://doi.org/", "")
+    year = re.search(r"\b(19|20)\d{2}\b", clean(first("year", "Publication Year", "Year Published", "PY", "Y1", "date", "Publication Date")))
     return {"title": title, "DOI": doi, "year": int(year.group(0)) if year else None,
-            "abstractNote": clean(row.get("abstract") or row.get("AB")),
-            "publicationTitle": clean(row.get("journal") or row.get("JO") or row.get("venue")),
-            "authors": row.get("authors") or [], "source": clean(row.get("source")),
-            "language": clean(row.get("language") or row.get("languageCode") or row.get("lang") or row.get("LA"))}
+            "abstractNote": clean(first("abstract", "Abstract", "AB")),
+            "publicationTitle": clean(first("journal", "Source title", "Publication Name", "SO", "JO", "venue")),
+            "authors": first("authors", "Authors", "AU") or [], "source": clean(first("source", "Source", "Database")),
+            "language": clean(first("language", "languageCode", "lang", "LA"))}
 
 
 def parse_ris(text):
     records, current = [], {}
     for line in text.splitlines():
-        if line.startswith("TY  - "):
+        if line.startswith("TY  -"):
             current = {}
-        elif line.startswith("ER  - "):
+        elif line.startswith("ER  -"):
             records.append(current); current = {}
         elif len(line) >= 6 and line[2:6] == "  - ":
             key, value = line[:2], line[6:]

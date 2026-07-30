@@ -21,6 +21,25 @@ Export to RIS, BibTeX or CSV → normalize with `scripts/import_library.py` befo
 | Semantic Scholar | 📋 v1.x | Strong AI/CS coverage, citation graph |
 | IEEE Xplore / Scopus / WoS | 📋 v2.0 | Institutional access required |
 
+### Institutional database exports
+
+IEEE Xplore, Scopus, Web of Science, Ei Compendex, and Inspec exports can be
+used now without a live API connector. `scripts/import_source_snapshots.py`
+converts RIS, CSV, BibTeX, or JSON exports into an A3-compatible snapshot using
+a **per-source manifest**. It records the source-specific query, scope filters,
+export time, reported total, export limit, completeness basis, and SHA-256 of
+the original export. It never uses or stores database credentials.
+
+```bash
+python scripts/import_source_snapshots.py --manifest institutional-exports.json --out institutional-snapshot.json
+```
+
+Each `institutional-exports.json` entry must include `source`, `input`, `query`,
+`scope_filters`, `dedup_rule`, and `exported_at`. A source is `complete` only
+when its `reported_total` is present, the imported count covers that total, and
+`completeness_basis` documents an uncapped/full export. Otherwise it is always
+`partial`; it retains provenance but cannot support an A3 conclusion.
+
 ## Companion Skills
 
 ### literature-library-eval (this skill)

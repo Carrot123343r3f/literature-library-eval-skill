@@ -213,7 +213,9 @@ def validate_run_config(rc):
                 for permission in ("allow_metadata_enrichment", "allow_external_discovery", "allow_citation_tracking")):
             errors.append("online capability permissions require automation.allow_search=true")
         allowed_sources = automation.get("allowed_sources", [])
-        supported_sources = {"openalex", "crossref", "arxiv", "europepmc"}
+        supported_sources = {"openalex", "crossref", "arxiv", "europepmc",
+                             "ieee_xplore", "scopus", "web_of_science",
+                             "ei_compendex", "inspec"}
         if "allowed_sources" not in automation:
             errors.append("automation.allowed_sources is required")
         elif not isinstance(allowed_sources, list):
@@ -242,6 +244,14 @@ def validate_run_config(rc):
 
     standards = rc.get("standards", {})
     if isinstance(standards, dict):
+        allowed_standards = {"defaults_profile", "calibration_basis", "calibration_reference",
+                             "user_overrides", "confirmed_by_user"}
+        errors.extend(f"unknown standards field: {key}" for key in sorted(set(standards) - allowed_standards))
+        if standards.get("calibration_basis") is not None and standards["calibration_basis"] not in {
+                "reference_default", "domain_profile", "local_pilot", "expert_panel", "published_protocol"}:
+            errors.append("standards.calibration_basis is invalid")
+        if standards.get("calibration_reference") is not None and not isinstance(standards["calibration_reference"], str):
+            errors.append("standards.calibration_reference must be a string")
         overrides = standards.get("user_overrides")
         if overrides is not None and not isinstance(overrides, dict):
             errors.append("standards.user_overrides must be an object")

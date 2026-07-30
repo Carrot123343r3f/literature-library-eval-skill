@@ -54,7 +54,7 @@
         "allow_citation_tracking": {"type": "boolean", "default": false},
         "local_only_confirmed": {"type": "boolean", "default": false, "description": "True only after the user explicitly chose fully local execution."},
         "allow_query_refinement": {"type": "boolean", "default": false},
-        "allowed_sources": {"type": "array", "items": {"enum": ["openalex", "crossref", "arxiv", "europepmc"]}, "default": []},
+        "allowed_sources": {"type": "array", "items": {"enum": ["openalex", "crossref", "arxiv", "europepmc", "ieee_xplore", "scopus", "web_of_science", "ei_compendex", "inspec"]}, "default": [], "description": "Permitted sources. Only openalex/crossref/arxiv/europepmc have built-in online collectors; the remaining sources are accepted only as user-exported offline snapshots unless an authorized connector is installed."},
         "authorized_sources": {"type": "array", "items": {"type": "string"}, "description": "Names of sources for which the user has authorized a preconfigured connector/session; never store passwords or tokens here."},
         "stop_conditions": {"type": "array", "items": {"type": "string"}}
       }
@@ -84,7 +84,9 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "defaults_profile": {"type": "string", "description": "Which profile generated the defaults"},
+        "defaults_profile": {"type": "string", "description": "Which review/engineering profile generated the defaults"},
+        "calibration_basis": {"type": "string", "enum": ["reference_default", "domain_profile", "local_pilot", "expert_panel", "published_protocol"], "description": "Why the selected thresholds are appropriate; defaults are reference values, not universal laws."},
+        "calibration_reference": {"type": "string", "description": "Short citation, protocol identifier, or local-pilot rationale for threshold selection."},
         "user_overrides": {"type": "object", "description": "User-provided threshold overrides"},
         "confirmed_by_user": {"type": "boolean", "default": false}
       }

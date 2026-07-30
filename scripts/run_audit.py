@@ -172,7 +172,8 @@ def load_snapshot(path):
             if not isinstance(result, dict) or not isinstance(result.get("items", []), list):
                 raise ValueError("source snapshot source results must contain items[]")
             bucket = sources.setdefault(name, {"items": [], "statuses": [], "completion_flags": [],
-                                               "scope_filters": data.get("scope_filters"), "dedup_rule": data.get("dedup_rule")})
+                                               "scope_filters": result.get("scope_filters", data.get("scope_filters")),
+                                               "dedup_rule": result.get("dedup_rule", data.get("dedup_rule"))})
             bucket["items"].extend(result.get("items", []))
             bucket["statuses"].append(result.get("status", "unknown"))
             bucket["completion_flags"].append(result.get("complete") is True)
@@ -1255,8 +1256,13 @@ def _english_report_markdown(report, rows):
     else:
         readiness = "No automated blocker was found; human methodological review remains required."
     scope = report.get("context", {}).get("scope_application", {})
+    standards = report.get("standards", {})
+    calibration = standards.get("calibration_basis", "not recorded")
+    calibration_reference = standards.get("calibration_reference", "not recorded")
+    confirmation = "confirmed by user" if standards.get("confirmed_by_user") else "not confirmed by user"
     lines = ["# Literature Library Evidence Audit", "", "## Decision", "", f"**{readiness}**", "",
              f"Scope applied before every A-F calculation: {scope.get('in_scope_records', 0)} of {scope.get('total_records', 0)} records included; {scope.get('time_excluded_records', 0)} excluded by time and {scope.get('language_excluded_records', 0)} by language.", "",
+             "## Threshold calibration", "", f"- Basis: `{calibration}` ({confirmation}).", f"- Reference: {calibration_reference}", "",
              "## Scope", "", "| Boundary | Applied value |", "| --- | --- |",
              f"| Time | {scope.get('time_boundary', {}).get('start', 'not specified')}–{scope.get('time_boundary', {}).get('end', 'not specified')} |",
              f"| Languages | {', '.join(scope.get('language_boundary', ['all']))} |", "",
@@ -1913,6 +1919,12 @@ def write(report, out, artifact_paths=None):
     md.append(f"| 工程领域 | {pr} |"); md.append(f"| 研究范围 | {sc} |")
     if a3l: md.append(f"| 全域参考 | OpenAlex 候选下界 {a3l} 篇 |")
     md.append("")
+    standards = report.get("standards", {})
+    md.append("## Threshold calibration\n")
+    md.append(f"- Basis: `{standards.get('calibration_basis', 'not recorded')}`")
+    md.append(f"- Reference: {standards.get('calibration_reference', 'not recorded')}")
+    md.append(f"- User confirmation: {'confirmed' if standards.get('confirmed_by_user') else 'not confirmed'}")
+    md.append("")
     # 2. Decision-first conclusion.  The complete register remains in the body.
     md.append(result_overview); md.append("")
     # 3. A–F 六维评估总表
@@ -2028,11 +2040,18 @@ def main():
             "output_language": rc.get("output", {}).get("language", "zh-CN"),
             "scope_status": scope_status,
         }
-        user_stds = rc.get("standards", {}).get("user_overrides", {})
-        confirmed = rc.get("standards", {}).get("confirmed_by_user", False)
+        rc_standards = rc.get("standards", {})
+        user_stds = rc_standards.get("user_overrides", {})
+        confirmed = rc_standards.get("confirmed_by_user", False)
         if user_stds:
             ctx_from_rc["standards"] = dict(user_stds)
         ctx_from_rc.setdefault("standards", {})["confirmed_by_user"] = confirmed
+        # Preserve the calibration rationale beside the resolved numerical
+        # thresholds.  It is evidence about interpretation, not a threshold
+        # override, so it must not be discarded during config-to-context mapping.
+        for key in ("defaults_profile", "calibration_basis", "calibration_reference"):
+            if key in rc_standards:
+                ctx_from_rc["standards"][key] = rc_standards[key]
         # Run configuration is the authority for review type, scope, and their
         # default thresholds even when an orchestration layer supplies context.
         rc_ctx_overrides.update(ctx_from_rc)
