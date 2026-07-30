@@ -1,9 +1,9 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-07-30T12:36:00.514155+00:00",
+  "generated_at": "2026-07-30T12:53:01.517999+00:00",
   "run_audit_version": "model-x-2026-07-21",
-  "git_commit": "67f7bc87014cffe01a07d06b52130d15a64c1e1b",
-  "run_audit_sha256": "c093c46ae554d16a4e8a5b36537204b68a84becc5f8c7be822e2de67bf9ce886",
+  "git_commit": "0562b35af17bd769e877c1b9c1925b967d9a43e9",
+  "run_audit_sha256": "54255d9770ac6cd0021f79a3ef2f7daf7d1f9afcd19e46b8ed7974776f5892d6",
   "python_version": "3.13.5",
   "platform": "Windows-11-10.0.26200-SP0",
   "review_type": "系统综述",
@@ -38,8 +38,8 @@
   "input_files": {
     "candidate-snapshots": {
       "provided": true,
-      "sha256": "e6368b1b8b00c1ddf32c745e9f778097d347f39f944647c441182ac8790a0b5c",
-      "copied_to": "inputs\\candidate-snapshots__e6368b1b8b00.json",
+      "sha256": "e098d325f4024c46f59cf57f6f04845fafc24ad2941b6d2df07883c994d6b237",
+      "copied_to": "inputs\\candidate-snapshots__e098d325f402.json",
       "archive_status": "redacted_json_copy",
       "source_filename": "institutional-snapshot.json"
     },

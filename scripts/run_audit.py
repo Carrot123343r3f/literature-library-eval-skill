@@ -1898,11 +1898,20 @@ def write(report, out, artifact_paths=None):
     ]
 
     if str(ctx.get("output_language", "zh-CN")).lower().startswith("en"):
+        beginner_steps = {
+            "A1": "Create an independent 10–20 paper must-include set with stable identifiers.",
+            "A2": "Run the documented query against that held-out set and save the hit snapshot.",
+            "B1": "Complete one backward- and one forward-citation pass, then screen and log the additions.",
+            "B2": "Complete the independent pathways and record their screened marginal yields.",
+            "B3": "Record pathway completion and an independent validation decision before claiming saturation.",
+            "C1": "Add topic or evidence-role tags to each included record.",
+            "F1": "Save each database query, fields, date, filters, and result count in a run log.",
+        }
         english_actions = [
             {"code": item["code"], "title": EN_INDICATOR_NAMES.get(item["code"], item["code"]),
              "verdict": item["verdict"],
              "why": "This indicator needs documented evidence before it can support a review conclusion.",
-             "next_step": "Open the evidence appendix and add the smallest missing documented input."}
+             "next_step": beginner_steps.get(item["code"], "Open the evidence appendix and add the smallest missing documented input.")}
             for item in action_items
         ]
         (out / "audit.html").write_text(

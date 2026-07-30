@@ -145,6 +145,10 @@ OpenAlex is used when its key is available; authorized arXiv, Crossref, and Euro
 
 For the guided workflow, run `python scripts/run_full_audit.py configure-permissions --run-config run-config.json` when you later need an online capability. It records each choice without requiring manual JSON edits.
 
+### I already have IEEE, Scopus, or WoS exports
+
+Use the [offline institutional-export example](examples/institutional-export-offline/README.md): it includes synthetic IEEE/Scopus exports, a per-source manifest, generated audit output, and a one-command reproduction check. It demonstrates what A3 can establish and the concrete follow-up work needed for a review-readiness conclusion.
+
 ## Six-Dimension Framework
 
 ## Optional advanced modules
