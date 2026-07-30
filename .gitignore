@@ -6,6 +6,7 @@ __pycache__/
 audit-output/
 demo-output/
 outputs/
+.local-output/
 academic-library-data/
 simulation-audit-output/
 adversarial-reeval-output/

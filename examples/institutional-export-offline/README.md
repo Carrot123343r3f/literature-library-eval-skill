@@ -17,9 +17,12 @@ powershell -ExecutionPolicy Bypass -File .\examples\institutional-export-offline
 Cross-platform alternative: `python examples/institutional-export-offline/reproduce.py`.
 
 The script first validates and normalizes the two raw exports into
-`outputs/institutional-snapshot.json`, then runs the A–F audit with the
-persisted `run-config.json`. Open `outputs/audit/audit.html` afterwards.
+`.local-output/institutional-snapshot.json`, then runs the A–F audit with the
+persisted `run-config.json`. Open `.local-output/audit/audit.html` afterwards.
 It also checks the teaching expectations and prints a short success message.
+
+The committed `reference-output/` is the verified teaching result. Local
+reruns only write `.local-output/`, which is ignored by Git.
 
 ## What the result demonstrates
 
