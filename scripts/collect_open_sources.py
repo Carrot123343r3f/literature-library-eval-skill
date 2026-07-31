@@ -15,6 +15,22 @@ from audit_core.contracts import validate_run_config
 
 MAX_RECORDS_PER_SOURCE_QUERY = 10_000
 
+# Single executable mapping for every built-in online operation.  Callers must
+# name an operation rather than hand-copy a permission flag.
+ONLINE_OPERATION_PERMISSIONS = {
+    "metadata_enrichment": "allow_metadata_enrichment",
+    "diagnostic_query": "allow_query_refinement",
+    "candidate_collection": "allow_external_discovery",
+    "citation_tracking": "allow_citation_tracking",
+}
+
+
+def operation_permission(operation):
+    try:
+        return ONLINE_OPERATION_PERMISSIONS[operation]
+    except KeyError as exc:
+        raise ValueError(f"unknown online operation: {operation}") from exc
+
 
 def load_search_authorization(run_config_path, required_permission=None):
     """Return the persisted source allowlist after enforcing search consent."""

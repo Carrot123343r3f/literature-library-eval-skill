@@ -8,7 +8,7 @@ import tempfile
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from collect_open_sources import load_authorized_plan
+from collect_open_sources import load_authorized_plan, load_search_authorization
 from run_audit import _validate_run_config, stability
 from search_for_eval import compute_recall, entry_ids
 from evalset_audit import audit as audit_evalset
@@ -241,6 +241,23 @@ def test_collector_requires_discovery_specific_permission():
         config.write_text(json.dumps({"automation": {"allow_search": True, "allow_external_discovery": True, "allowed_sources": ["openalex"]}}), encoding="utf-8")
         _, allowed = load_authorized_plan(config, plan, "allow_external_discovery")
         assert allowed == {"openalex"}
+
+
+def test_diagnostic_query_requires_refinement_not_candidate_discovery_permission():
+    with tempfile.TemporaryDirectory() as temp:
+        config = pathlib.Path(temp) / "run-config.json"
+        config.write_text(json.dumps({"automation": {
+            "allow_search": True, "allow_query_refinement": False,
+            "allow_external_discovery": True, "allowed_sources": ["arxiv"]}}), encoding="utf-8")
+        try:
+            load_search_authorization(config, "allow_query_refinement")
+            raise AssertionError("query refinement must be separately authorized")
+        except PermissionError:
+            pass
+        config.write_text(json.dumps({"automation": {
+            "allow_search": True, "allow_query_refinement": True,
+            "allow_external_discovery": False, "allowed_sources": ["arxiv"]}}), encoding="utf-8")
+        assert load_search_authorization(config, "allow_query_refinement") == {"arxiv"}
 
 
 def test_online_collection_rejects_missing_source_allowlist():

@@ -5,7 +5,8 @@
 `audit.html` is the only human-readable report. `audit.json`, `manifest.json`,
 and `inputs/` are retained for reproducibility and integration.
 
-`run_audit.py --out <audit-output>` writes the following package directly to
+The entry-point and delivery priority are defined in
+[the execution contract](execution-contract.md). `run_audit.py --out <audit-output>` writes the following package directly to
 `<audit-output>`. `run_full_audit.py --out <workflow-output>` writes the same
 package under `<workflow-output>/audit/`. Only a run that passes the sufficiency
 gate produces:

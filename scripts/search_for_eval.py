@@ -148,7 +148,10 @@ def main():
     if a.min_cited < 0:
         p.error('--min-cited must be non-negative')
     try:
-        allowed_sources = load_search_authorization(a.run_config, "allow_external_discovery")
+        # A diagnostic query may evaluate/refine a documented query, but it
+        # never adds records to the user's library.  Candidate collection is a
+        # separate operation with a separate consent flag.
+        allowed_sources = load_search_authorization(a.run_config, "allow_query_refinement")
     except (ValueError, PermissionError) as exc:
         p.error(str(exc))
     configured_sources = list(allowed_sources)

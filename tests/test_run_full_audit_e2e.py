@@ -187,7 +187,7 @@ def test_configure_permissions_records_explicit_online_authorization(tmp_path):
     config(run_config)
     result = subprocess.run([
         sys.executable, str(ROOT / "scripts" / "run_full_audit.py"), "configure-permissions", "--run-config", str(run_config),
-    ], input="n\ny\nn\nn\narxiv\n\n\n", capture_output=True, text=True, encoding="utf-8")
+    ], input="n\ny\nn\nn\nn\narxiv\n\n\n", capture_output=True, text=True, encoding="utf-8")
     assert result.returncode == 0, result.stderr
     config_data = json.loads(run_config.read_text(encoding="utf-8"))
     assert config_data["automation"]["allow_search"] is True
@@ -218,7 +218,7 @@ def test_unsupported_permission_source_leaves_config_unchanged(tmp_path):
     before = run_config.read_bytes()
     result = subprocess.run([
         sys.executable, str(ROOT / "scripts" / "run_full_audit.py"), "configure-permissions", "--run-config", str(run_config),
-    ], input="n\nn\ny\nn\nunsupported-source\n", capture_output=True, text=True, encoding="utf-8")
+    ], input="n\nn\nn\ny\nn\nunsupported-source\n", capture_output=True, text=True, encoding="utf-8")
     assert result.returncode != 0
     assert "no live connector" in result.stderr
     assert run_config.read_bytes() == before

@@ -138,6 +138,7 @@ def init_config_v2(args):
               "scope_rationale": "confirmed during guided initialization" if scope_status != "scope_uncertain" else "user did not confirm engineering scope"},
               "library": {"provided": bool(library), "path": library or None, "format": "json" if library.endswith(".json") else None},
               "automation": {"allow_search": False, "allow_metadata_enrichment": False, "allow_external_discovery": False, "allow_citation_tracking": False,
+                             "allow_query_refinement": False,
                              "local_only_confirmed": False, "allowed_sources": [], "online_allowed_sources": [], "offline_snapshot_sources": [], "authorized_sources": []},
               "standards": {"calibration_basis": "reference_default", "calibration_reference": "Initial diagnostic; calibrate before decision-bearing use."},
               "output": {"language": "zh-CN", "formats": ["html", "json"]}}
@@ -160,6 +161,7 @@ def configure_permissions(args):
     automation = config["automation"]
     enabled = [label for key, label in (
         ("allow_metadata_enrichment", "metadata enrichment"),
+        ("allow_query_refinement", "diagnostic query refinement"),
         ("allow_external_discovery", "external discovery"),
         ("allow_citation_tracking", "citation tracking"),
     ) if automation.get(key) is True]
@@ -169,27 +171,29 @@ def configure_permissions(args):
     if args.non_interactive:
         local_only = args.local_only
         metadata = args.allow_metadata_enrichment
+        refinement = args.allow_query_refinement
         discovery = args.allow_external_discovery
         citations = args.allow_citation_tracking
-        if local_only and any((metadata, discovery, citations)):
+        if local_only and any((metadata, refinement, discovery, citations)):
             raise SystemExit("ERROR: --local-only cannot be combined with online permission flags.")
-        if not local_only and not any((metadata, discovery, citations)):
+        if not local_only and not any((metadata, refinement, discovery, citations)):
             raise SystemExit("ERROR: --non-interactive requires --local-only or at least one --allow-* permission flag.")
         sources = source_list(args.online_sources)
         offline_sources = source_list(args.offline_snapshot_sources)
         authorized = source_list(args.authorized_sources)
     else:
         local_only = prompt("Confirm fully local execution (disable all online capabilities)? [y/N]: ").strip().lower() in {"y", "yes"}
-        metadata = discovery = citations = False
+        metadata = refinement = discovery = citations = False
         sources = offline_sources = authorized = []
     if local_only:
-        metadata = discovery = citations = False
+        metadata = refinement = discovery = citations = False
         sources = offline_sources = authorized = []
     elif not args.non_interactive:
         metadata = prompt("Allow online metadata enrichment? [y/N]: ").strip().lower() in {"y", "yes"}
+        refinement = prompt("Allow diagnostic query execution/refinement without adding candidate papers? [y/N]: ").strip().lower() in {"y", "yes"}
         discovery = prompt("Allow online discovery of new candidate papers? [y/N]: ").strip().lower() in {"y", "yes"}
         citations = prompt("Allow online citation tracking? [y/N]: ").strip().lower() in {"y", "yes"}
-        if any((metadata, discovery, citations)):
+        if any((metadata, refinement, discovery, citations)):
             sources = source_list(prompt("Online sources (default openalex,arxiv,crossref,europepmc): "))
             sources = sources or ["openalex", "arxiv", "crossref", "europepmc"]
             unknown = sorted(set(sources) - {"openalex", "arxiv", "crossref", "europepmc"})
@@ -199,7 +203,7 @@ def configure_permissions(args):
             authorized = source_list(prompt("Sources with a preconfigured legal login/connector (optional): "))
         else:
             sources = offline_sources = authorized = []
-    if any((metadata, discovery, citations)):
+    if any((metadata, refinement, discovery, citations)):
         sources = sources or ["openalex", "arxiv", "crossref", "europepmc"]
     unknown = sorted(set(sources) - {"openalex", "arxiv", "crossref", "europepmc"})
     if unknown:
@@ -207,8 +211,8 @@ def configure_permissions(args):
     unknown_offline = sorted(set(offline_sources) - SUPPORTED_SOURCES)
     if unknown_offline:
         raise SystemExit(f"ERROR: unsupported offline snapshot source(s): {', '.join(unknown_offline)}")
-    automation.update({"allow_search": any((metadata, discovery, citations)),
-                       "allow_metadata_enrichment": metadata, "allow_external_discovery": discovery,
+    automation.update({"allow_search": any((metadata, refinement, discovery, citations)),
+                       "allow_metadata_enrichment": metadata, "allow_query_refinement": refinement, "allow_external_discovery": discovery,
                        "allow_citation_tracking": citations, "local_only_confirmed": local_only,
                        "allowed_sources": sources, "online_allowed_sources": sources,
                        "offline_snapshot_sources": offline_sources, "authorized_sources": authorized})
@@ -230,6 +234,7 @@ def main():
     permissions.add_argument("--non-interactive", action="store_true", help="use explicit flags instead of prompts")
     permissions.add_argument("--local-only", action="store_true")
     permissions.add_argument("--allow-metadata-enrichment", action="store_true")
+    permissions.add_argument("--allow-query-refinement", action="store_true")
     permissions.add_argument("--allow-external-discovery", action="store_true")
     permissions.add_argument("--allow-citation-tracking", action="store_true")
     permissions.add_argument("--online-sources", help="comma-separated live connector sources")
