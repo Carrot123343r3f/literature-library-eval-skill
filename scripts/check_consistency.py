@@ -93,6 +93,14 @@ def check_delivery_contract():
 
 def check_scripts():
     errors = []
+    # Every public output option must use the one fail-closed implementation.
+    # This catches new helper scripts that accidentally recreate ad-hoc mkdir/
+    # overwrite behavior outside the workflow orchestrator.
+    output_option = re.compile(r'add_argument\("--(?:out|output)"')
+    for path in (ROOT / "scripts").glob("*.py"):
+        text = path.read_text(encoding="utf-8", errors="replace")
+        if output_option.search(text) and "audit_core.safe_paths" not in text:
+            errors.append(f"{path.relative_to(ROOT)} exposes an output option without audit_core.safe_paths")
     for name in ("optimization.py", "quality_optimization.py", "experiment_attribution.py", "evalset_audit.py", "search_iterator.py", "query_compiler.py", "auto_triage.py", "autopilot.py", "citation_seed_plan.py", "run_full_audit.py", "run_audit.py", "check_consistency.py"):
         path = ROOT / "scripts" / name
         if not path.exists():

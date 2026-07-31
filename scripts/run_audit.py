@@ -6,6 +6,7 @@ from math import log
 from audit_core.contracts import compact as _shared_compact, indicator_evidence_qualifier, normalize_language_tag, public_value as _shared_public_value, reconcile_indicator_evidence, validate_context as _validate_context, validate_indicator_evidence, validate_run_config as _shared_validate_run_config
 from audit_core.coverage import evaluate_gold_recall, evaluate_multisource_lower_bound
 from audit_core.rendering import render_markdown_html
+from audit_core.safe_paths import prepare_output_dir as _prepare_output_dir
 
 # Review-type → default thresholds (narrative / systematic / scoping / rapid / umbrella)
 REVIEW_THRESHOLDS = {
@@ -1976,8 +1977,10 @@ def main():
     p.add_argument("--relevance-review", help="documented manual relevance review; archived as precheck provenance")
     p.add_argument("--citation-seed-plan", help="citation-seeds.json; records automatic/user seed provenance")
     p.add_argument("--citation-discovery", help="citation-candidates.json; records unscreened citation candidates")
-    p.add_argument("--out", required=True)
+    p.add_argument("--out", required=True); p.add_argument("--force", action="store_true")
     a = p.parse_args()
+    try: a.out = str(_prepare_output_dir(a.out, force=a.force))
+    except ValueError as exc: p.error(str(exc))
 
     # ── run-config mode: auto-resolve all inputs from run-config.json ──
     rc_base_dir = None

@@ -5,6 +5,7 @@ import datetime as dt
 import json
 import pathlib
 import sys
+from audit_core.safe_paths import prepare_output_dir
 
 from paper_evaluation.contracts import clean, load_items
 from paper_evaluation.evaluation import add_contribution, evaluate_record, recommend
@@ -79,9 +80,10 @@ def main():
     p.add_argument("--external-search", action="store_true", help="Allow live OpenAlex candidate discovery in addition to metadata enrichment.")
     p.add_argument("--offline", action="store_true", help="Disable all live lookups; must be chosen explicitly for a fully local run.")
     p.add_argument("--top-n", type=int, default=20)
+    p.add_argument("--force", action="store_true")
     a = p.parse_args()
     if not 1 <= a.top_n <= 100: p.error("--top-n must be between 1 and 100")
-    out = pathlib.Path(a.out); out.mkdir(parents=True, exist_ok=True)
+    out = prepare_output_dir(a.out, force=a.force)
     artifacts = {"library": a.library or a.paper, "context": a.context, "run-config": a.run_config, "external-candidates": a.external_candidates}
     step_status = {"input_validation": "pending", "library_evaluation": "pending", "external_discovery": "pending", "report": "pending"}
     try:

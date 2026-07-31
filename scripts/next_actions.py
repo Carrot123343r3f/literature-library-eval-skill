@@ -3,6 +3,7 @@
 import argparse
 import json
 import pathlib
+from audit_core.safe_paths import prepare_output_dir
 
 
 RECOVERY = {
@@ -33,9 +34,9 @@ def build(audit):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__); parser.add_argument("--audit", required=True); parser.add_argument("--out", required=True)
+    parser = argparse.ArgumentParser(description=__doc__); parser.add_argument("--audit", required=True); parser.add_argument("--out", required=True); parser.add_argument("--force", action="store_true")
     args = parser.parse_args(); audit = json.loads(pathlib.Path(args.audit).read_text(encoding="utf-8")); result = build(audit)
-    output = pathlib.Path(args.out); output.mkdir(parents=True, exist_ok=True)
+    output = prepare_output_dir(args.out, force=args.force)
     (output / "next-actions.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"Created {len(result['actions'])} recoverable action(s).")
 

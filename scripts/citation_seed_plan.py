@@ -6,6 +6,7 @@ import argparse
 import datetime as dt
 import json
 import pathlib
+from audit_core.safe_paths import prepare_output_file
 import re
 
 
@@ -54,7 +55,7 @@ def make_plan(library, candidates, user_seeds=None, limit=5):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--library", required=True); parser.add_argument("--candidates")
-    parser.add_argument("--user-seed"); parser.add_argument("--out", required=True); parser.add_argument("--limit", type=int, default=5)
+    parser.add_argument("--user-seed"); parser.add_argument("--out", required=True); parser.add_argument("--limit", type=int, default=5); parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
     if not 1 <= args.limit <= 20:
         parser.error("--limit must be between 1 and 20")
@@ -66,7 +67,7 @@ def main():
                "counts": {"user_seed_candidates": len(load_items(args.user_seed)) if args.user_seed else 0,
                           "library_records": len(library), "initial_search_candidates": len(candidates), "selected_seeds": len(seeds)},
                "note": "Automatic seeds are candidate-discovery inputs only; citation results require screening before formal inclusion."}
-    output = pathlib.Path(args.out); output.parent.mkdir(parents=True, exist_ok=True)
+    output = prepare_output_file(args.out, force=args.force)
     output.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"Prepared {len(seeds)} citation seed(s): {status}.")
 

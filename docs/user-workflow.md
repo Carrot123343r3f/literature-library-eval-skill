@@ -40,4 +40,4 @@
 - `audit/audit.html`：完整 A–F 审计的唯一面向用户报告。
 - `audit/audit.json`、`audit/manifest.json`、`audit/inputs/`：完整审计的复现、共享和后续 Agent 调用。
 - `screening-decisions.json`：人工筛选依据。
-- `next-actions.json`：机器可读的后续行动队列。
+- `actions/next-actions.json`：机器可读的后续行动队列。

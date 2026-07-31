@@ -45,7 +45,7 @@ replay the generated configuration.
 
 `run_full_audit.py` additionally writes `workflow-state.json` (v2 durable
 stage state, signature-bound steps, artifact hashes, and recoverable errors),
-`next-actions.json` (recoverable actions), and, when applicable,
+`actions/next-actions.json` (recoverable actions), and, when applicable,
 `import/import-preview.json`, `screening/screening-decisions.json`,
 `screening/screening-summary.json`, and `citations/citation-candidates.json`
 plus manifests. Use `--resume` only with the same inputs; use a fresh run or

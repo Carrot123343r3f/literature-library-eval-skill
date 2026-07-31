@@ -6,14 +6,15 @@ import argparse
 import json
 import pathlib
 import sys
+from audit_core.safe_paths import prepare_output_file
 
 
 def load(path):
     return json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
 
 
-def dump(path, value):
-    path = pathlib.Path(path); path.parent.mkdir(parents=True, exist_ok=True)
+def dump(path, value, force=False):
+    path = prepare_output_file(path, force=force)
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
@@ -67,11 +68,11 @@ def attribute(baseline, candidates, metric_specs=None, tolerance=0.02):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--baseline", required=True); parser.add_argument("--candidates", required=True); parser.add_argument("--out", required=True); parser.add_argument("--metric-specs"); parser.add_argument("--tolerance", type=float, default=0.02)
+    parser.add_argument("--baseline", required=True); parser.add_argument("--candidates", required=True); parser.add_argument("--out", required=True); parser.add_argument("--metric-specs"); parser.add_argument("--tolerance", type=float, default=0.02); parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
     try:
         result = attribute(load(args.baseline), load(args.candidates), load(args.metric_specs) if args.metric_specs else None, args.tolerance)
-        dump(args.out, result); print(json.dumps(result, ensure_ascii=False, indent=2))
+        dump(args.out, result, args.force); print(json.dumps(result, ensure_ascii=False, indent=2))
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         print(f"error: {exc}", file=sys.stderr); return 2
     return 0

@@ -7,6 +7,7 @@ import hashlib
 import json
 import pathlib
 import sys
+from audit_core.safe_paths import prepare_output_file
 
 
 ID_KEYS = ("doi", "pmid", "pmcid", "arxiv_id", "openalex_id", "id")
@@ -78,11 +79,11 @@ def audit(dev, validation, min_dev=3, min_validation=3):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--dev", required=True); parser.add_argument("--validation", required=True); parser.add_argument("--out", required=True); parser.add_argument("--min-dev", type=int, default=3); parser.add_argument("--min-validation", type=int, default=3)
+    parser.add_argument("--dev", required=True); parser.add_argument("--validation", required=True); parser.add_argument("--out", required=True); parser.add_argument("--min-dev", type=int, default=3); parser.add_argument("--min-validation", type=int, default=3); parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
     try:
         result = audit(load_items(args.dev), load_items(args.validation), args.min_dev, args.min_validation)
-        pathlib.Path(args.out).parent.mkdir(parents=True, exist_ok=True); pathlib.Path(args.out).write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        prepare_output_file(args.out, force=args.force).write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print(json.dumps(result, ensure_ascii=False, indent=2)); return 1 if result["status"] == "invalid" else 0
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         print(f"error: {exc}", file=sys.stderr); return 2

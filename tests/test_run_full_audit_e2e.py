@@ -85,6 +85,18 @@ def test_run_config_alone_completes_full_audit_and_archives_evidence(tmp_path):
     assert manifest["input_files"]["independent-pathways"]["archive_status"] == "redacted_json_copy"
     assert str(tmp_path) not in (out / "audit" / "audit.html").read_text(encoding="utf-8")
 
+    # A same-name output is not reusable merely because it still exists.  Its
+    # recorded ledger hash must match before --resume can skip the audit step.
+    (out / "audit" / "audit.json").write_text('{"tampered": true}', encoding="utf-8")
+    resumed = subprocess.run([sys.executable, str(ROOT / "scripts" / "run_full_audit.py"), "run",
+                               "--run-config", str(run_config), "--out", str(out), "--resume"],
+                              capture_output=True, text=True, encoding="utf-8")
+    assert resumed.returncode != 0
+    assert "SHA-256 mismatch: audit/audit.json" in resumed.stderr
+    state = json.loads((out / "workflow-state.json").read_text(encoding="utf-8"))
+    assert state["steps"]["audit"] == "tampered_or_stale"
+    assert state["steps"]["actions"] == "stale_upstream"
+
     (tmp_path / "pathways.json").write_text(json.dumps([
         {"pathway_id": "db", "type": "db_boolean", "completed": True, "screening_status": "screened_complete", "yield": 0.0}
         for _ in range(4)

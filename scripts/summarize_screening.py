@@ -4,6 +4,7 @@ import argparse
 import datetime as dt
 import json
 import pathlib
+from audit_core.safe_paths import prepare_output_dir
 
 
 def candidate_id(item, index):
@@ -11,7 +12,7 @@ def candidate_id(item, index):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__); parser.add_argument("--candidates", required=True); parser.add_argument("--decisions", required=True); parser.add_argument("--out", required=True)
+    parser = argparse.ArgumentParser(description=__doc__); parser.add_argument("--candidates", required=True); parser.add_argument("--decisions", required=True); parser.add_argument("--out", required=True); parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
     try:
         raw = json.loads(pathlib.Path(args.candidates).read_text(encoding="utf-8"))
@@ -52,7 +53,7 @@ def main():
         "round_evidence_status": "requires_explicit_round_context",
         "note": "Screening evidence only. Merge it with recorded search-round and pathway context before using it for B saturation metrics.",
     }
-    out = pathlib.Path(args.out); out.mkdir(parents=True, exist_ok=True); (out / "screening-summary.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+    out = prepare_output_dir(args.out, force=args.force); (out / "screening-summary.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 if __name__ == "__main__": main()

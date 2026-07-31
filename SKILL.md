@@ -49,7 +49,7 @@ S3 确认完成 → SRCH-1 工程 PICO 分解 → SRCH-2 构建开发集+验证�
 
 > ⚠️ `search_for_eval.py` 是**单轮诊断性检索器**，仅调用 `allowed_sources` 中的来源。若已授权的来源不可用（包括 OpenAlex 缺少 Key），会显式记录失败，本次不建立 A2 召回率；它不会扩大到未授权来源。它提供 dev_recall/validation_recall 的诊断估计和 discovery candidates，但**不具备以下能力**：不做引文追踪、不做独立路径发现、不做筛选确认。不同来源的引用计数不可直接比较；没有引用计数的来源只提供 ID/题录发现。discovery candidates 不等于纳入项——只有经过标题/摘要/全文筛选确认后的新增文献才能填入 B1 GGR 分子和 B2 DRR 分子。第2-5轮及以上的迭代检索、多源异构语法映射、独立路径执行（引文追踪等）由 AI agent 在对话中手动执行，而非由此脚本自动完成。
 
-1. 通过 `scripts/search_for_eval.py` 执行首轮检索（带 `--dev-set` 和 `--pico` 参数）
+1. 仅当 `allow_query_refinement=true` 时，通过 `scripts/search_for_eval.py` 执行首轮检索（带 `--dev-set` 和 `--pico` 参数）；否则只保存 query plan，A2/B 保持 `not_assessable`。
 2. 读取 `search_meta.json` 获取 `dev_recall` 和 `validation_recall`
 3. 诊断漏项 → 选择一种原子改动 → **AI agent 手动执行新检索式** → 记录到 `context.search_iterations`
 4. 每轮计算新的 dev_recall 和 validation_recall
@@ -153,7 +153,7 @@ output boundaries are documented in `docs/optional-modules.md`.
 
 For a full A–F diagnostic, apply declared time and language boundaries to every record-based calculation before computing indicators. Accept standard ISO and BCP-47 language tags (for example `zh-CN`); exclude records with unknown boundary metadata instead of assuming they are in scope. A library-only request receives that diagnostic with evidence gaps marked `not_assessable`; require documented independent validation, reproducible queries, human screening decisions, and independent pathways only before claiming a formal sufficiency conclusion.
 
-已有文献库时，先使用 `scripts/run_audit.py --run-config ...` 交付降级 A–F 诊断，而非把用户直接送入充分性预检。`run_full_audit.py` 适用于受控的工作流，`autopilot.py` 有三种明确模式：无库时为 `search-preparation`（只交付检索准备计划）；`--mode auto` 下只会进入 `library-health`（只检查基础可用性）；只有显式 `--mode sufficiency-audit`，并提供库、`--review-type`、时间边界、语言边界和输出语言时，才会尝试作正式充分性判断。基础库输入不足时，充分性路径交付 `sufficiency-precheck.html` 与 `sufficiency-precheck.json`；后者的 `audit_status: not_started` 与 `completion: precheck_delivered` 是机器判定依据，退出码 0 仅表示预检查已成功交付。它默认本地运行；范围确认绝不等同于联网授权。只有显式的 `--allow-metadata-enrichment`、`--allow-external-discovery` 或 `--allow-citation-tracking` 才会启用对应能力。
+已有文献库时，先使用 `scripts/run_audit.py --run-config ...` 交付降级 A–F 诊断，而非把用户直接送入充分性预检。`run_full_audit.py` 适用于受控的工作流，`autopilot.py` 有三种明确模式：无库时为 `search-preparation`（只交付检索准备计划）；`--mode auto` 下只会进入 `library-health`（只检查基础可用性）；只有显式 `--mode sufficiency-audit`，并提供库、`--review-type`、时间边界、语言边界和输出语言时，才会尝试作正式充分性判断。基础库输入不足时，充分性路径交付 `sufficiency-precheck.html` 与 `sufficiency-precheck.json`；后者的 `audit_status: not_started` 与 `completion: precheck_delivered` 是机器判定依据，退出码 0 仅表示预检查已成功交付。它默认本地运行；四项联网权限（含 `--allow-query-refinement`）以 `docs/execution-contract.md` 为准。
 
 1. `init --out run-config.json`：第一轮只询问研究问题、工程范围和文献库位置；综述类型先使用 narrative 默认值。它生成默认离线的可审阅配置。
 2. `configure-permissions --run-config run-config.json`：后续需要时，以受控交互逐项确认元数据补齐、外部候选发现和引文追踪；显式选择完全本地时记录 `local_only_confirmed=true`。
@@ -161,6 +161,6 @@ For a full A–F diagnostic, apply declared time and language boundaries to ever
 4. 非 JSON 输入先由 `import_library.py` 转成规范 `library.json`，并交付 `import-preview.json` 供用户检查字段缺失。
 5. 需要外部发现时，显式使用 `--collect --query-plan ...`；仅在 `allow_search=true` 且来源在 `allowed_sources` 内时运行。采集、去重和筛选模板会分别持久化。
 6. `citation_candidates.py` 只产生后向/前向引文**候选**；`screen_candidates.py` 的人工 `include/exclude` 决定及理由才可作为 B/F5 的输入。
-7. 完成后读取 `next-actions.json`：它把 fail、warning、not_assessable 转为“为什么、需要什么证据、下一步做什么”。
+7. 完成后读取 `actions/next-actions.json`：它把 fail、warning、not_assessable 转为“为什么、需要什么证据、下一步做什么”。
 
 不要把 `candidate_discovery`、自动导入成功、或筛选模板的 `pending` 当成正式纳入或检索趋稳。

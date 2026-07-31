@@ -38,6 +38,7 @@ The iterations.json schema:
 }
 """
 import argparse, json, sys, pathlib
+from audit_core.safe_paths import prepare_output_file
 from collections import Counter
 try:
     from optimization import record_iteration, validate_run
@@ -300,6 +301,7 @@ def main():
     tp = sp.add_parser("table", help="Generate comparison table from iterations.json")
     tp.add_argument("--iterations", required=True, help="iterations.json file")
     tp.add_argument("--output", help="Output markdown file (stdout if omitted)")
+    tp.add_argument("--force", action="store_true")
 
     xp = sp.add_parser("sync", help="Persist validated rounds in the shared optimization run")
     xp.add_argument("--iterations", required=True, help="iterations.json file")
@@ -334,7 +336,7 @@ def main():
         matrix = generate_pathway_matrix(data)
         output = table + "\n\n" + matrix if matrix else table
         if a.output:
-            pathlib.Path(a.output).write_text(output + "\n", encoding="utf-8")
+            prepare_output_file(a.output, force=a.force).write_text(output + "\n", encoding="utf-8")
             print(f"Comparison table written to {a.output}")
         else:
             print(output)

@@ -26,7 +26,7 @@ with tempfile.TemporaryDirectory() as temp:
     assert (screening / "screening-template.csv").exists()
     template["decisions"][0].update({"decision": "include", "reason": "matches frozen criteria"})
     decision_path = root / "decisions.json"; decision_path.write_text(json.dumps(template), encoding="utf-8")
-    invoke("screen_candidates.py", "--candidates", imported / "library.json", "--decisions", decision_path, "--out", screening)
+    invoke("screen_candidates.py", "--candidates", imported / "library.json", "--decisions", decision_path, "--out", screening, "--force")
     invoke("summarize_screening.py", "--candidates", imported / "library.json", "--decisions", screening / "screening-decisions.json", "--out", summary)
     screening_meta = json.loads((summary / "screening-summary.json").read_text(encoding="utf-8"))
     assert screening_meta["search_rounds"] == []

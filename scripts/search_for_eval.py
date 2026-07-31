@@ -24,6 +24,7 @@ import argparse, json, urllib.request, urllib.parse, re, time, sys, pathlib
 from collect_open_sources import COLLECTORS, load_search_authorization
 from credentials import CredentialError, require_openalex_api_key
 from audit_core.contracts import public_value
+from audit_core.safe_paths import prepare_output_dir
 
 
 def read_json(path):
@@ -138,7 +139,7 @@ def main():
     p.add_argument('--dev-set', help='[v2] 开发集 JSON — 用于迭代检索式（多次使用）')
     p.add_argument('--validation-set', help='[v2] 独立验证集 JSON — 仅用于最终 A2 判定（看过即"烧掉"，不用于调检索式）')
     p.add_argument('--pico', help='[v2] 工程 PICO 分解 JSON — object/technology/performance/context')
-    p.add_argument('--out', required=True)
+    p.add_argument('--out', required=True); p.add_argument('--force', action='store_true')
     p.add_argument('--min-cited', type=int, default=10, help='潜在新增的 cited_by 下限')
     p.add_argument('--max-per-query', type=int, default=50,
                    help='每检索式最大命中数（仅首屏 top cited，非完整快照）')
@@ -382,7 +383,8 @@ def main():
             'yield': round(new_c / len(ph), 4)
         })
 
-    out = pathlib.Path(a.out); out.mkdir(parents=True, exist_ok=True)
+    try: out = prepare_output_dir(a.out, force=a.force)
+    except ValueError as exc: p.error(str(exc))
     (out / "query-hits.json").write_text(json.dumps(all_hits, ensure_ascii=False, indent=2), encoding="utf-8")
     potential_add.sort(key=lambda x: -(x.get('cited_by_count') or 0))
     json.dump({'first_round_discovery_rate': discovery_ggr,

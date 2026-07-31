@@ -46,12 +46,13 @@ def compile_query_plan(question, sources):
 
 if __name__ == "__main__":
     import argparse, json
+    from audit_core.safe_paths import prepare_output_file
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--question", required=True)
     parser.add_argument("--sources", default=",".join(SUPPORTED_SOURCES))
     parser.add_argument("--out", required=True)
+    parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
-    pathlib = __import__("pathlib")
     plan = compile_query_plan(args.question, [x.strip() for x in args.sources.split(",") if x.strip()])
-    path = pathlib.Path(args.out); path.parent.mkdir(parents=True, exist_ok=True)
+    path = prepare_output_file(args.out, force=args.force)
     path.write_text(json.dumps(plan, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

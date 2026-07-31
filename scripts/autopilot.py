@@ -7,6 +7,7 @@ import datetime as dt
 import html
 import json
 import pathlib
+from audit_core.safe_paths import prepare_output_dir
 import re
 import subprocess
 import sys
@@ -352,7 +353,8 @@ def write_sufficiency_precheck(out, reasons, output_language="zh-CN"):
 
 
 def run(args):
-    out = pathlib.Path(args.out); control = out / ".autopilot"; control.mkdir(parents=True, exist_ok=True)
+    out = prepare_output_dir(args.out, force=args.force)
+    control = out / ".autopilot"; control.mkdir(exist_ok=True)
     print("[1/3] Preparing the first-run plan...", flush=True)
     sources = [x.strip().casefold() for x in args.sources.split(",") if x.strip()] if not args.offline else []
     plan = compile_query_plan(args.question, sources or ["arxiv"])
@@ -438,6 +440,9 @@ def run(args):
                "--run-config", str(config_path), "--out", str(out)]
     if args.allow_external_discovery and not args.offline:
         command += ["--collect", "--query-plan", str(plan_path), "--active-screen-budget", str(args.screen_budget)]
+    # The child accepts only this autopilot-owned control directory; it never
+    # receives blanket overwrite authority for user output files.
+    command.append("--allow-autopilot-control-dir")
     subprocess.run(command, check=True)
     candidates = out / "normalization" / "candidates.json"
     if candidates.is_file():
@@ -451,6 +456,7 @@ def run(args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--question", required=True); parser.add_argument("--library"); parser.add_argument("--out", required=True)
+    parser.add_argument("--force", action="store_true", help="explicitly allow replacing an existing autopilot output directory")
     parser.add_argument("--mode", default="auto", choices=("auto", "search-preparation", "library-health", "sufficiency-audit"),
                         help="Search preparation and library health do not produce A-F sufficiency conclusions.")
     parser.add_argument("--review-type", choices=("narrative", "systematic", "scoping", "rapid", "umbrella"))

@@ -7,6 +7,7 @@ import html
 import io
 import json
 import pathlib
+from audit_core.safe_paths import prepare_output_dir
 
 
 VALID = {"include", "exclude", "pending"}
@@ -64,8 +65,8 @@ def write_workbench(rows, decisions, out):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--candidates", required=True); parser.add_argument("--out", required=True); parser.add_argument("--decisions")
-    args = parser.parse_args(); output = pathlib.Path(args.out); output.mkdir(parents=True, exist_ok=True)
+    parser.add_argument("--candidates", required=True); parser.add_argument("--out", required=True); parser.add_argument("--decisions"); parser.add_argument("--force", action="store_true")
+    args = parser.parse_args(); output = prepare_output_dir(args.out, force=args.force)
     try:
         raw = json.loads(pathlib.Path(args.candidates).read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:

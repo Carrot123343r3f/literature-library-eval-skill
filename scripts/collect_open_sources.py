@@ -11,6 +11,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from credentials import require_openalex_api_key
 from audit_core.contracts import validate_run_config
+from audit_core.safe_paths import prepare_output_file
 
 
 MAX_RECORDS_PER_SOURCE_QUERY = 10_000
@@ -156,7 +157,10 @@ def main():
     parser.add_argument("--out", required=True, help="source snapshot JSON")
     parser.add_argument("--max-records", type=int, default=1000, help="maximum records per source/query; a limit means an incomplete snapshot")
     parser.add_argument("--resume", action="store_true", help="reuse completed query entries from an existing output snapshot")
+    parser.add_argument("--force", action="store_true", help="overwrite an existing output snapshot")
     args = parser.parse_args()
+    try: args.out = str(prepare_output_file(args.out, force=args.force, resume=args.resume))
+    except ValueError as exc: parser.error(str(exc))
     if not 1 <= args.max_records <= MAX_RECORDS_PER_SOURCE_QUERY:
         parser.error(f"--max-records must be between 1 and {MAX_RECORDS_PER_SOURCE_QUERY}")
     try:

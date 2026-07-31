@@ -5,6 +5,7 @@ import csv
 import json
 import pathlib
 import re
+from audit_core.safe_paths import prepare_output_dir
 
 
 def clean(value):
@@ -69,10 +70,10 @@ def load(path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input", required=True); parser.add_argument("--out", required=True)
+    parser.add_argument("--input", required=True); parser.add_argument("--out", required=True); parser.add_argument("--force", action="store_true")
     args = parser.parse_args(); rows = load(args.input)
     missing_title = sum(not row["title"] for row in rows); missing_year = sum(row["year"] is None for row in rows)
-    output = pathlib.Path(args.out); output.mkdir(parents=True, exist_ok=True)
+    output = prepare_output_dir(args.out, force=args.force)
     (output / "library.json").write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")
     report = {"source_filename": pathlib.Path(args.input).name, "records_imported": len(rows),
               "missing_title": missing_title, "missing_year": missing_year,

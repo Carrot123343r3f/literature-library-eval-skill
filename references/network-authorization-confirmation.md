@@ -2,12 +2,13 @@
 
 这是文献评价流程的第一步，不在检索开始后再临时询问。
 
-## 必须确认的四项
+## 必须确认的五项
 
 1. 默认不联网。只有用户明确授权后，AI 才能联网补齐元数据：DOI、作者、年份、引用数、FWCI、开放全文地址和主题。
-2. 是否允许发现新的外部候选文章。它与元数据补齐分开，默认不自动扩展候选库。
-3. 是否主动选择完全本地运行。只有用户明确选择后，才使用 `--offline`。
-4. 允许使用哪些网站/数据库，以及是否存在合法的预配置登录会话、连接器或环境凭据。
+2. 是否允许执行诊断检索与调词（`allow_query_refinement`）。它不扩展文献库。
+3. 是否允许发现新的外部候选文章。它与调词和元数据补齐分开，默认不自动扩展候选库。
+4. 是否允许引文追踪。它只产生未筛选候选。
+5. 是否主动选择完全本地运行，并确认允许使用的网站/数据库及预配置合法连接器。
 
 ## 安全边界
 
@@ -23,6 +24,7 @@
   "automation": {
     "allow_search": true,
     "allow_metadata_enrichment": true,
+    "allow_query_refinement": false,
     "allow_external_discovery": false,
     "allow_citation_tracking": false,
     "allowed_sources": ["openalex"],
@@ -31,6 +33,6 @@
 }
 ```
 
-`allow_search` 是在线操作的总开关；`allow_metadata_enrichment`、`allow_external_discovery` 和 `allow_citation_tracking` 分别授权元数据补齐、外部候选发现和引文追踪，三者均默认 `false`，不能相互替代。完全本地运行时，应在用户确认后使用 `--offline`。
+`allow_search` 是在线操作的总开关；四项独立权限（元数据补齐、诊断检索/调词、外部候选发现、引文追踪）均默认 `false`，不能相互替代。完整映射以 `docs/execution-contract.md` 为准。完全本地运行时，应在用户确认后使用 `--offline`。
 
 对于批量文献库，元数据补齐会在正式 A–F 审计前执行，并输出 `library-enriched.json`。如果来源暂时不可用，项目继续使用原始库并生成缺口报告。

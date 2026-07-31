@@ -6,6 +6,7 @@ import pathlib
 import urllib.parse
 import urllib.request
 import datetime as dt
+from audit_core.safe_paths import prepare_stage_dir
 from artifact_manifest import write_manifest
 from credentials import require_openalex_api_key
 from collect_open_sources import load_search_authorization
@@ -17,11 +18,13 @@ def get_json(url):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__); parser.add_argument("--seed", required=True); parser.add_argument("--run-config", required=True); parser.add_argument("--out", required=True); parser.add_argument("--limit", type=int, default=100); parser.add_argument("--allow-unavailable", action="store_true", help="write a structured zero-candidate result when permission or credentials are unavailable")
+    parser = argparse.ArgumentParser(description=__doc__); parser.add_argument("--seed", required=True); parser.add_argument("--run-config", required=True); parser.add_argument("--out", required=True); parser.add_argument("--limit", type=int, default=100); parser.add_argument("--force", action="store_true"); parser.add_argument("--resume", action="store_true"); parser.add_argument("--allow-unavailable", action="store_true", help="write a structured zero-candidate result when permission or credentials are unavailable")
     args = parser.parse_args(); allowed = load_search_authorization(args.run_config, "allow_citation_tracking")
     if "openalex" not in allowed: raise SystemExit("ERROR: OpenAlex is not authorized by automation.allowed_sources.")
     seeds = json.loads(pathlib.Path(args.seed).read_text(encoding="utf-8")); seeds = seeds if isinstance(seeds, list) else seeds.get("items", [])
-    output = pathlib.Path(args.out); output.mkdir(parents=True, exist_ok=True)
+    output = prepare_stage_dir(args.out, allowed_existing={"citation-seeds.json"},
+                               resume_existing={"citation-candidates.json", "manifest.json"},
+                               force=args.force, resume=args.resume)
     try:
         key = require_openalex_api_key()
     except Exception as exc:

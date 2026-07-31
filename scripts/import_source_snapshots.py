@@ -13,6 +13,7 @@ import json
 import pathlib
 
 from import_library import load
+from audit_core.safe_paths import prepare_output_file
 
 SUPPORTED = {"openalex", "crossref", "arxiv", "europepmc", "ieee_xplore",
              "scopus", "web_of_science", "ei_compendex", "inspec"}
@@ -86,6 +87,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", required=True, help="Per-source JSON manifest; see docs/integrations.md")
     parser.add_argument("--out", required=True)
+    parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
     try:
         manifest_path = pathlib.Path(args.manifest).resolve()
@@ -97,8 +99,7 @@ def main():
         parser.error(str(exc))
     result = {"schema_version": "1.2", "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
               "queries": [{"id": "institutional-exports", "sources": sources}]}
-    target = pathlib.Path(args.out)
-    target.parent.mkdir(parents=True, exist_ok=True)
+    target = prepare_output_file(args.out, force=args.force)
     target.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps({"sources": sorted(sources), "records": sum(x["retrieved"] for x in sources.values()),
                       "complete_sources": sorted(k for k, v in sources.items() if v["complete"]), "out": target.name}, ensure_ascii=False))

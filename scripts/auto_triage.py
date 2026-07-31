@@ -7,6 +7,7 @@ import datetime as dt
 import json
 import pathlib
 import re
+from audit_core.safe_paths import prepare_output_file
 
 
 def _norm(value):
@@ -53,6 +54,7 @@ def main():
     parser.add_argument("--candidates", required=True)
     parser.add_argument("--question", required=True)
     parser.add_argument("--out", required=True)
+    parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
     try:
         raw = json.loads(pathlib.Path(args.candidates).read_text(encoding="utf-8"))
@@ -60,7 +62,7 @@ def main():
         result = triage(candidates, args.question)
     except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
         parser.error(str(exc))
-    out = pathlib.Path(args.out); out.parent.mkdir(parents=True, exist_ok=True)
+    out = prepare_output_file(args.out, force=args.force)
     out.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"Wrote {len(result['items'])} triage suggestions; human confirmation remains required.")
 

@@ -12,6 +12,7 @@ import json
 import math
 import pathlib
 import sys
+from audit_core.safe_paths import prepare_output_file
 from datetime import datetime, timezone
 
 try:
@@ -30,9 +31,8 @@ def load(path):
     return json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
 
 
-def dump(path, value):
-    path = pathlib.Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
+def dump(path, value, force=False):
+    path = prepare_output_file(path, force=force)
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
@@ -156,16 +156,16 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
     p = sub.add_parser("counterexample"); p.add_argument("--run", required=True); p.add_argument("--item", required=True)
-    p = sub.add_parser("screen-queue"); p.add_argument("--candidates", required=True); p.add_argument("--out", required=True); p.add_argument("--budget", type=int, default=50)
-    p = sub.add_parser("canary"); p.add_argument("--baseline", required=True); p.add_argument("--current", required=True); p.add_argument("--tolerances"); p.add_argument("--out", required=True)
+    p = sub.add_parser("screen-queue"); p.add_argument("--candidates", required=True); p.add_argument("--out", required=True); p.add_argument("--budget", type=int, default=50); p.add_argument("--force", action="store_true")
+    p = sub.add_parser("canary"); p.add_argument("--baseline", required=True); p.add_argument("--current", required=True); p.add_argument("--tolerances"); p.add_argument("--out", required=True); p.add_argument("--force", action="store_true")
     args = parser.parse_args()
     try:
         if args.command == "counterexample":
             print(json.dumps(append_counterexample(args.run, load(args.item)), ensure_ascii=False, indent=2))
         elif args.command == "screen-queue":
-            queue = build_screen_queue(load(args.candidates), args.budget); dump(args.out, {"schema_version": "1.0", "created_at": now(), "budget": args.budget, "queue": queue}); print(f"screen queue written: {args.out}")
+            queue = build_screen_queue(load(args.candidates), args.budget); dump(args.out, {"schema_version": "1.0", "created_at": now(), "budget": args.budget, "queue": queue}, args.force); print(f"screen queue written: {args.out}")
         else:
-            result = compare_canary(load(args.baseline), load(args.current), load(args.tolerances) if args.tolerances else None); dump(args.out, result); print(json.dumps(result, ensure_ascii=False, indent=2)); sys.exit(1 if result["status"] == "drift" else 0)
+            result = compare_canary(load(args.baseline), load(args.current), load(args.tolerances) if args.tolerances else None); dump(args.out, result, args.force); print(json.dumps(result, ensure_ascii=False, indent=2)); sys.exit(1 if result["status"] == "drift" else 0)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         print(f"error: {exc}", file=sys.stderr); return 2
     return 0

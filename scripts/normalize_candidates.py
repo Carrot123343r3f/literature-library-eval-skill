@@ -10,6 +10,7 @@ import argparse
 import datetime as dt
 import json
 import pathlib
+from audit_core.safe_paths import prepare_output_dir
 import re
 import sys
 from collections import defaultdict
@@ -168,6 +169,7 @@ def main():
         description="Normalise candidate snapshots — dedup, version families, human-review queues")
     parser.add_argument("--snapshot", required=True)
     parser.add_argument("--out", required=True)
+    parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
 
     snap_path = pathlib.Path(args.snapshot)
@@ -289,8 +291,7 @@ def main():
         },
     }
 
-    out = pathlib.Path(args.out)
-    out.mkdir(parents=True, exist_ok=True)
+    out = prepare_output_dir(args.out, force=args.force)
     (out / "candidates.json").write_text(
         json.dumps({"items": canonical}, ensure_ascii=False, indent=2), encoding="utf-8")
     (out / "deduplication-log.json").write_text(

@@ -8,6 +8,7 @@ import argparse
 import datetime as dt
 import json
 import pathlib
+from audit_core.safe_paths import prepare_output_dir
 import sys
 
 from artifact_manifest import write_manifest
@@ -21,8 +22,9 @@ def main():
     parser.add_argument("--library", required=True)
     parser.add_argument("--run-config", required=True)
     parser.add_argument("--out", required=True, help="Output directory")
+    parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
-    out = pathlib.Path(args.out); out.mkdir(parents=True, exist_ok=True)
+    out = prepare_output_dir(args.out, force=args.force)
     artifacts = {"library": args.library, "run-config": args.run_config}
     try:
         rows = load_items(args.library)

@@ -21,13 +21,13 @@ STAGE_CONTRACTS = {
     "metadata_enrichment": {"inputs": ("library.json", "run-config.json"), "outputs": ("enrichment/library-enriched.json", "enrichment/metadata-enrichment.json"), "human_gate": False},
     "collection": {"inputs": ("run-config.json", "query-plan.json"), "outputs": ("collection/source-snapshot.json",), "human_gate": False},
     "normalization": {"inputs": ("collection/source-snapshot.json",), "outputs": ("normalization/candidates.json", "normalization/deduplication-log.json"), "human_gate": False},
-    "screening_template": {"inputs": ("normalization/candidates.json",), "outputs": ("screening/screening-decisions.json", "screening/screening-workbench.html"), "human_gate": True},
+    "screening_template": {"inputs": ("normalization/candidates.json",), "outputs": ("screening/screening-decisions.json", "screening/screening-template.csv", "screening/screening-workbench.html"), "human_gate": True},
     "screening_summary": {"inputs": ("screening-decisions.json",), "outputs": ("screening/screening-summary.json",), "human_gate": True},
     "active_screen_queue": {"inputs": ("normalization/candidates.json",), "outputs": ("screening/active-screen-queue.json",), "human_gate": True},
     "citation_seed_plan": {"inputs": ("library.json",), "outputs": ("citations/citation-seeds.json",), "human_gate": False},
     "citation_discovery": {"inputs": ("citation-seed", "run-config.json"), "outputs": ("citations/citation-candidates.json", "citations/manifest.json"), "human_gate": False},
     "audit": {"inputs": ("library.json", "run-config.json"), "outputs": ("audit/audit.json", "audit/audit.html"), "human_gate": False},
-    "actions": {"inputs": ("audit/audit.json",), "outputs": ("next-actions.json",), "human_gate": False},
+    "actions": {"inputs": ("audit/audit.json",), "outputs": ("actions/next-actions.json",), "human_gate": False},
 }
 
 
@@ -73,8 +73,15 @@ def validate_stage_contract(root, stage, outputs):
     if not contract:
         return []
     errors = validate_stage_outputs(root, stage, outputs)
-    expected = {pathlib.Path(item).name for item in contract.get("outputs", ())}
-    actual = {pathlib.Path(item).name for item in outputs}
-    if not contract.get("optional") and expected - actual:
-        errors.append(f"{stage}: runner did not declare outputs: {sorted(expected - actual)}")
+    root = pathlib.Path(root).resolve()
+    expected = {pathlib.PurePosixPath(item).as_posix() for item in contract.get("outputs", ())}
+    actual = set()
+    for item in outputs:
+        try:
+            actual.add(pathlib.PurePosixPath(pathlib.Path(item).resolve().relative_to(root)).as_posix())
+        except ValueError:
+            # validate_stage_outputs already reports this escape.
+            pass
+    if not contract.get("optional") and expected != actual:
+        errors.append(f"{stage}: declared outputs do not match contract; expected {sorted(expected)}, got {sorted(actual)}")
     return errors

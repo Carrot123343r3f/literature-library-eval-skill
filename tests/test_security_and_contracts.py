@@ -14,6 +14,8 @@ from search_for_eval import compute_recall, entry_ids
 from evalset_audit import audit as audit_evalset
 from audit_core.contracts import public_value, reconcile_indicator_evidence, validate_indicator_evidence
 from audit_core.rendering import render_markdown_html
+from audit_core.safe_paths import prepare_output_dir, prepare_output_file, prepare_stage_dir
+from lle_core.contracts import STAGE_CONTRACTS, validate_stage_contract
 from paper_evaluation.external import ExternalSearchError, require_openalex_authorization, search_openalex
 
 
@@ -31,6 +33,91 @@ def test_shared_contracts_redact_and_renderer_escapes_html():
     rendered = render_markdown_html("# <unsafe>\n\n| A | B |\n| --- | --- |\n| 1 | 2 |")
     assert "&lt;unsafe&gt;" in rendered
     assert "<table>" in rendered
+
+
+def test_safe_output_paths_refuse_overwrite_and_parent_link_escape():
+    with tempfile.TemporaryDirectory() as temp:
+        root = pathlib.Path(temp)
+        existing = root / "existing"; existing.mkdir(); (existing / "old.json").write_text("old", encoding="utf-8")
+        try:
+            prepare_output_dir(existing)
+            raise AssertionError("non-empty output directory must be refused")
+        except ValueError as exc:
+            assert "not empty" in str(exc)
+        target = root / "result.json"; target.write_text("old", encoding="utf-8")
+        try:
+            prepare_output_file(target)
+            raise AssertionError("existing output file must be refused")
+        except ValueError as exc:
+            assert "already exists" in str(exc)
+        external = root / "external"; external.mkdir(); linked = root / "linked"
+        try:
+            linked.symlink_to(external, target_is_directory=True)
+        except OSError:
+            return  # Windows symlink creation may be unavailable to this test user.
+        try:
+            prepare_output_dir(linked / "escaped")
+            raise AssertionError("linked parent must be refused")
+        except ValueError as exc:
+            assert "symbolic link" in str(exc)
+        assert not (external / "escaped").exists()
+
+
+def test_stage_dir_allows_only_declared_resume_artifacts():
+    with tempfile.TemporaryDirectory() as temp:
+        stage = pathlib.Path(temp) / "citations"; stage.mkdir()
+        (stage / "citation-seeds.json").write_text("{}", encoding="utf-8")
+        (stage / "citation-candidates.json").write_text("{}", encoding="utf-8")
+        (stage / "manifest.json").write_text("{}", encoding="utf-8")
+        try:
+            prepare_stage_dir(stage, allowed_existing={"citation-seeds.json"})
+            raise AssertionError("partial stage artifacts require --resume")
+        except ValueError:
+            pass
+        assert prepare_stage_dir(stage, allowed_existing={"citation-seeds.json"},
+                                 resume_existing={"citation-candidates.json", "manifest.json"},
+                                 resume=True) == stage.resolve()
+        (stage / "unexpected.txt").write_text("x", encoding="utf-8")
+        try:
+            prepare_stage_dir(stage, allowed_existing={"citation-seeds.json"},
+                              resume_existing={"citation-candidates.json", "manifest.json"}, resume=True)
+            raise AssertionError("unexpected stage residue must be refused")
+        except ValueError as exc:
+            assert "unexpected" in str(exc)
+
+
+def test_full_audit_init_rejects_overwrite_and_linked_parent(tmp_path):
+    script = ROOT / "scripts" / "run_full_audit.py"
+    target = tmp_path / "run-config.json"; target.write_text('{"old": true}', encoding="utf-8")
+    command = [sys.executable, str(script), "init", "--out", str(target),
+               "--question", "robot localization", "--scope-status", "in_scope", "--library", ""]
+    rejected = subprocess.run(command, capture_output=True, text=True, encoding="utf-8")
+    assert rejected.returncode != 0
+    assert target.read_text(encoding="utf-8") == '{"old": true}'
+    accepted = subprocess.run(command + ["--force"], capture_output=True, text=True, encoding="utf-8")
+    assert accepted.returncode == 0, accepted.stderr
+    assert json.loads(target.read_text(encoding="utf-8"))["project"]["research_question"] == "robot localization"
+    external = tmp_path / "external"; external.mkdir(); linked = tmp_path / "linked"
+    try:
+        linked.symlink_to(external, target_is_directory=True)
+    except OSError:
+        return
+    escaped = linked / "run-config.json"
+    result = subprocess.run([sys.executable, str(script), "init", "--out", str(escaped),
+                             "--question", "q", "--scope-status", "in_scope", "--library", ""],
+                            capture_output=True, text=True, encoding="utf-8")
+    assert result.returncode != 0
+    assert not (external / "run-config.json").exists()
+
+
+def test_actions_contract_uses_full_relative_path(tmp_path):
+    assert STAGE_CONTRACTS["actions"]["outputs"] == ("actions/next-actions.json",)
+    actions = tmp_path / "actions"; actions.mkdir()
+    artifact = actions / "next-actions.json"; artifact.write_text("{}", encoding="utf-8")
+    assert not validate_stage_contract(tmp_path, "actions", [artifact])
+    wrong = tmp_path / "next-actions.json"; wrong.write_text("{}", encoding="utf-8")
+    errors = validate_stage_contract(tmp_path, "actions", [wrong])
+    assert any("declared outputs do not match contract" in error for error in errors)
 
 
 def test_indicator_verdict_and_evidence_status_contracts_are_semantic():

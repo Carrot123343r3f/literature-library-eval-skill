@@ -95,7 +95,7 @@ of what the current library supports and what should happen next.
 | Status | Step |
 | :---: | --- |
 | ✅ Automated | Audit computation (`run_audit.py`), single-round diagnostic search (`search_for_eval.py`), candidate dedup (`normalize_candidates.py`), optimization harness (`optimization.py`), counterexample/active-screening/drift checks (`quality_optimization.py`), experiment attribution/eval-set audit (`experiment_attribution.py`/`evalset_audit.py`), iteration validation/sync (`search_iterator.py`), report generation |
-| ✅ Guided workflow | `run_full_audit.py` produces `workflow-state.json` and `next-actions.json`; it can import JSON/CSV/RIS/BibTeX and resume safely |
+| ✅ Guided workflow | `run_full_audit.py` produces `workflow-state.json` and `actions/next-actions.json`; it can import JSON/CSV/RIS/BibTeX and resume safely |
 | 🔧 Human-confirmed | Multi-round iteration, cross-database search, citation tracking, and screening remain evidence-producing steps; candidates require explicit human decisions |
 
 ```text

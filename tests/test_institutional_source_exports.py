@@ -87,7 +87,7 @@ def test_imported_snapshot_a3_is_only_estimated_when_every_source_is_complete(tm
                {**common, "source": "scopus", "input": scopus.name, "query": "q2"}]
     manifest_path = tmp_path / "exports.json"; manifest_path.write_text(json.dumps({"sources": entries}), encoding="utf-8")
     snapshot = tmp_path / "snapshot.json"
-    subprocess.run([sys.executable, str(ROOT / "scripts" / "import_source_snapshots.py"), "--manifest", str(manifest_path), "--out", str(snapshot)], check=True)
+    subprocess.run([sys.executable, str(ROOT / "scripts" / "import_source_snapshots.py"), "--manifest", str(manifest_path), "--out", str(snapshot), "--force"], check=True)
     context = tmp_path / "context.json"; context.write_text(json.dumps({"review_type": "narrative"}), encoding="utf-8")
     library = tmp_path / "library.json"; library.write_text("[]", encoding="utf-8")
     out = tmp_path / "audit"
@@ -96,6 +96,6 @@ def test_imported_snapshot_a3_is_only_estimated_when_every_source_is_complete(tm
     assert json.loads((out / "audit.json").read_text(encoding="utf-8"))["coverage"]["a3"]["status"] == "estimated_lower_bound"
     entries[1]["scope_filters"] = {"years": "2019-2026"}
     manifest_path.write_text(json.dumps({"sources": entries}), encoding="utf-8")
-    subprocess.run([sys.executable, str(ROOT / "scripts" / "import_source_snapshots.py"), "--manifest", str(manifest_path), "--out", str(snapshot)], check=True)
-    subprocess.run(command, check=True)
+    subprocess.run([sys.executable, str(ROOT / "scripts" / "import_source_snapshots.py"), "--manifest", str(manifest_path), "--out", str(snapshot), "--force"], check=True)
+    subprocess.run(command + ["--force"], check=True)
     assert json.loads((out / "audit.json").read_text(encoding="utf-8"))["coverage"]["a3"]["status"] == "partial_snapshot"

@@ -18,6 +18,8 @@ def run_audit(tmp_path, context, *extra):
     command = [sys.executable, str(ROOT / "scripts" / "run_audit.py"),
                "--library", str(ROOT / "tests" / "library.json"),
                "--context", str(context_path), "--out", str(out), *map(str, extra)]
+    if out.exists():
+        command.append("--force")
     result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8")
     return result, out
 

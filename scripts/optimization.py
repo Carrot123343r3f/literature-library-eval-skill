@@ -18,6 +18,7 @@ import hashlib
 import json
 import os
 import pathlib
+from audit_core.safe_paths import prepare_output_dir
 import re
 import sys
 import time
@@ -663,8 +664,8 @@ def status(root):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
-    p = sub.add_parser("init"); p.add_argument("--output", required=True); p.add_argument("--topic", required=True); p.add_argument("--objective", required=True); p.add_argument("--review-type", default="narrative"); p.add_argument("--max-iterations", type=int, default=MAX_ITERATIONS)
-    p = sub.add_parser("init-workspace"); p.add_argument("--skill-repo", required=True); p.add_argument("--eval-repo", required=True); p.add_argument("--run-root", required=True); p.add_argument("--topic", required=True); p.add_argument("--objective", required=True); p.add_argument("--review-type", default="narrative"); p.add_argument("--max-iterations", type=int, default=MAX_ITERATIONS)
+    p = sub.add_parser("init"); p.add_argument("--output", required=True); p.add_argument("--topic", required=True); p.add_argument("--objective", required=True); p.add_argument("--review-type", default="narrative"); p.add_argument("--max-iterations", type=int, default=MAX_ITERATIONS); p.add_argument("--force", action="store_true")
+    p = sub.add_parser("init-workspace"); p.add_argument("--skill-repo", required=True); p.add_argument("--eval-repo", required=True); p.add_argument("--run-root", required=True); p.add_argument("--topic", required=True); p.add_argument("--objective", required=True); p.add_argument("--review-type", default="narrative"); p.add_argument("--max-iterations", type=int, default=MAX_ITERATIONS); p.add_argument("--force", action="store_true")
     p = sub.add_parser("record"); p.add_argument("--run", required=True); p.add_argument("--iteration", required=True)
     p = sub.add_parser("candidate"); p.add_argument("--run", required=True); p.add_argument("--candidate", required=True)
     p = sub.add_parser("candidate-status"); p.add_argument("--run", required=True); p.add_argument("--candidate-id", required=True); p.add_argument("--state", required=True); p.add_argument("--reason", default=""); p.add_argument("--metrics")
@@ -677,8 +678,10 @@ def main():
     args = parser.parse_args()
     try:
         if args.command == "init":
+            prepare_output_dir(args.output, force=args.force)
             print(json.dumps(init_run(args.output, args.topic, args.objective, args.review_type, args.max_iterations), ensure_ascii=False, indent=2))
         elif args.command == "init-workspace":
+            prepare_output_dir(args.run_root, force=args.force)
             print(json.dumps(init_workspace(args.skill_repo, args.eval_repo, args.run_root, args.topic, args.objective, args.review_type, args.max_iterations), ensure_ascii=False, indent=2))
         elif args.command == "record":
             print(json.dumps(record_iteration(args.run, load(args.iteration)), ensure_ascii=False, indent=2))
