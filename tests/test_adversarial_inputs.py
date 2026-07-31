@@ -97,6 +97,34 @@ def test_archived_json_inputs_are_redacted(tmp_path):
             assert "DO_NOT_ARCHIVE" not in path.read_text(encoding="utf-8", errors="ignore")
 
 
+def test_non_json_inputs_are_hash_only_and_never_archived(tmp_path):
+    """CSV/RIS/log input may contain credentials and must never enter inputs/."""
+    library = tmp_path / "library.json"
+    context = tmp_path / "context.json"
+    run_log = tmp_path / "secrets.csv"
+    library.write_text(json.dumps([{"title": "A", "DOI": "10.1000/example"}]), encoding="utf-8")
+    context.write_text(json.dumps({"scope_status": "in_scope"}), encoding="utf-8")
+    run_log.write_text("query,token\nrobot,sk-LEAKED-999\n", encoding="utf-8")
+    out = tmp_path / "audit"
+    result = invoke("run_audit.py", "--library", library, "--context", context,
+                    "--run-log", run_log, "--out", out)
+    assert result.returncode == 0, result.stderr
+    manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+    entry = manifest["input_files"]["run-log"]
+    assert entry["archive_status"] == "hash_only_non_json"
+    assert "copied_to" not in entry
+    assert "sk-LEAKED-999" not in "".join(
+        path.read_text(encoding="utf-8", errors="ignore") for path in out.rglob("*") if path.is_file())
+
+
+def test_reference_demo_has_all_tracked_inputs_and_runs(tmp_path):
+    """The README demo must work from a clean clone, not just this worktree."""
+    out = tmp_path / "demo-output"
+    result = invoke("run_audit.py", "--run-config", ROOT / "example-all-modules-report" / "run-config.json", "--out", out)
+    assert result.returncode == 0, result.stderr
+    assert (out / "audit.html").is_file()
+
+
 def test_search_diagnostic_falls_back_to_arxiv_without_openalex_key(tmp_path, monkeypatch):
     import search_for_eval as module
 

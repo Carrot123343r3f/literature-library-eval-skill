@@ -62,9 +62,8 @@ python scripts/run_audit.py \
   --out demo-output
 ```
 
-Then open [`demo-output/audit.html`](demo-output/audit.html) in a browser. Before
-running the command, the same kind of result is available in the bundled report
-linked above.
+Then open `demo-output/audit.html` in a browser. Before running the command,
+inspect the committed [bundled HTML report](example-all-modules-report/audit/audit.html).
 
 This demo needs no API key, database account, research question, or personal
 literature library because all required inputs are included locally. It is a

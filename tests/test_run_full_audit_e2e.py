@@ -164,6 +164,24 @@ def test_init_uses_three_questions_and_creates_a_local_first_config(tmp_path):
     assert "Allow online" not in result.stdout
 
 
+def test_init_accepts_noninteractive_flags_and_reports_missing_input_cleanly(tmp_path):
+    output = tmp_path / "run-config.json"
+    result = subprocess.run([
+        sys.executable, str(ROOT / "scripts" / "run_full_audit.py"), "init", "--out", str(output),
+        "--question", "robot localization", "--scope-status", "in_scope", "--library", "library.json",
+    ], capture_output=True, text=True, encoding="utf-8")
+    assert result.returncode == 0, result.stderr
+    config_data = json.loads(output.read_text(encoding="utf-8"))
+    assert config_data["project"]["scope_status"] == "in_scope"
+    assert config_data["library"]["path"] == "library.json"
+    missing = subprocess.run([
+        sys.executable, str(ROOT / "scripts" / "run_full_audit.py"), "init", "--out", str(tmp_path / "missing.json"),
+    ], input="", capture_output=True, text=True, encoding="utf-8")
+    assert missing.returncode != 0
+    assert "interactive input is unavailable" in missing.stderr
+    assert "Traceback" not in missing.stderr
+
+
 def test_configure_permissions_records_explicit_online_authorization(tmp_path):
     run_config = tmp_path / "run-config.json"
     config(run_config)
@@ -177,6 +195,21 @@ def test_configure_permissions_records_explicit_online_authorization(tmp_path):
     assert config_data["automation"]["local_only_confirmed"] is False
     assert config_data["automation"]["allowed_sources"] == ["arxiv"]
     assert "Current permissions:" in result.stdout
+
+
+def test_configure_permissions_accepts_noninteractive_flags(tmp_path):
+    run_config = tmp_path / "run-config.json"
+    config(run_config)
+    result = subprocess.run([
+        sys.executable, str(ROOT / "scripts" / "run_full_audit.py"), "configure-permissions",
+        "--run-config", str(run_config), "--non-interactive", "--allow-external-discovery",
+        "--online-sources", "arxiv", "--offline-snapshot-sources", "scopus",
+    ], capture_output=True, text=True, encoding="utf-8")
+    assert result.returncode == 0, result.stderr
+    automation = json.loads(run_config.read_text(encoding="utf-8"))["automation"]
+    assert automation["allow_external_discovery"] is True
+    assert automation["online_allowed_sources"] == ["arxiv"]
+    assert automation["offline_snapshot_sources"] == ["scopus"]
 
 
 def test_unsupported_permission_source_leaves_config_unchanged(tmp_path):

@@ -110,12 +110,29 @@ def run(command, steps, name, out, run_signature, outputs, resume):
 def script(name): return str(ROOT / name)
 
 
+def prompt(message):
+    """Read interactive input without exposing an EOF traceback to agents/CI."""
+    try:
+        return input(message)
+    except EOFError:
+        raise SystemExit("ERROR: interactive input is unavailable. Supply the documented command-line options or run from a terminal.")
+
+
+def source_list(value):
+    return [item.strip().lower() for item in (value or "").split(",") if item.strip()]
+
+
 def init_config_v2(args):
     """Create a local-first config in one three-question intake round."""
-    question = input("Research question/title: ").strip()
-    scope_answer = input("Is this an engineering review question within this skill's scope? [y/n/uncertain]: ").strip().lower()
-    scope_status = {"y": "in_scope", "yes": "in_scope", "n": "out_of_scope", "no": "out_of_scope"}.get(scope_answer, "scope_uncertain")
-    library = input("Library path (optional; can be imported later): ").strip()
+    question = (args.question if args.question is not None else prompt("Research question/title: ")).strip()
+    if not question:
+        raise SystemExit("ERROR: --question must not be empty.")
+    if args.scope_status:
+        scope_status = args.scope_status
+    else:
+        scope_answer = prompt("Is this an engineering review question within this skill's scope? [y/n/uncertain]: ").strip().lower()
+        scope_status = {"y": "in_scope", "yes": "in_scope", "n": "out_of_scope", "no": "out_of_scope"}.get(scope_answer, "scope_uncertain")
+    library = (args.library if args.library is not None else prompt("Library path (optional; can be imported later): ")).strip()
     config = {"schema_version": "1.0", "project": {"research_question": question, "review_type": "narrative",
               "scope_status": scope_status,
               "scope_rationale": "confirmed during guided initialization" if scope_status != "scope_uncertain" else "user did not confirm engineering scope"},
@@ -149,27 +166,47 @@ def configure_permissions(args):
     source_summary = ", ".join(automation.get("online_allowed_sources", automation.get("allowed_sources", []))) or "none"
     print("Current permissions: fully-local confirmed=" + ("yes" if automation.get("local_only_confirmed") else "no") +
           "; enabled=" + (", ".join(enabled) if enabled else "none") + "; sources=" + source_summary)
-    local_only = input("Confirm fully local execution (disable all online capabilities)? [y/N]: ").strip().lower() in {"y", "yes"}
+    if args.non_interactive:
+        local_only = args.local_only
+        metadata = args.allow_metadata_enrichment
+        discovery = args.allow_external_discovery
+        citations = args.allow_citation_tracking
+        if local_only and any((metadata, discovery, citations)):
+            raise SystemExit("ERROR: --local-only cannot be combined with online permission flags.")
+        if not local_only and not any((metadata, discovery, citations)):
+            raise SystemExit("ERROR: --non-interactive requires --local-only or at least one --allow-* permission flag.")
+        sources = source_list(args.online_sources)
+        offline_sources = source_list(args.offline_snapshot_sources)
+        authorized = source_list(args.authorized_sources)
+    else:
+        local_only = prompt("Confirm fully local execution (disable all online capabilities)? [y/N]: ").strip().lower() in {"y", "yes"}
+        metadata = discovery = citations = False
+        sources = offline_sources = authorized = []
     if local_only:
         metadata = discovery = citations = False
         sources = offline_sources = authorized = []
-    else:
-        metadata = input("Allow online metadata enrichment? [y/N]: ").strip().lower() in {"y", "yes"}
-        discovery = input("Allow online discovery of new candidate papers? [y/N]: ").strip().lower() in {"y", "yes"}
-        citations = input("Allow online citation tracking? [y/N]: ").strip().lower() in {"y", "yes"}
+    elif not args.non_interactive:
+        metadata = prompt("Allow online metadata enrichment? [y/N]: ").strip().lower() in {"y", "yes"}
+        discovery = prompt("Allow online discovery of new candidate papers? [y/N]: ").strip().lower() in {"y", "yes"}
+        citations = prompt("Allow online citation tracking? [y/N]: ").strip().lower() in {"y", "yes"}
         if any((metadata, discovery, citations)):
-            sources = [item.strip().lower() for item in input("Online sources (default openalex,arxiv,crossref,europepmc): ").split(",") if item.strip()]
+            sources = source_list(prompt("Online sources (default openalex,arxiv,crossref,europepmc): "))
             sources = sources or ["openalex", "arxiv", "crossref", "europepmc"]
             unknown = sorted(set(sources) - {"openalex", "arxiv", "crossref", "europepmc"})
             if unknown:
                 raise SystemExit(f"ERROR: no live connector for: {', '.join(unknown)}. Add it under offline snapshot sources instead.")
-            offline_sources = [item.strip().lower() for item in input("Offline snapshot sources (optional: ieee_xplore,scopus,web_of_science,ei_compendex,inspec): ").split(",") if item.strip()]
-            unknown_offline = sorted(set(offline_sources) - SUPPORTED_SOURCES)
-            if unknown_offline:
-                raise SystemExit(f"ERROR: unsupported offline snapshot source(s): {', '.join(unknown_offline)}")
-            authorized = [item.strip().lower() for item in input("Sources with a preconfigured legal login/connector (optional): ").split(",") if item.strip()]
+            offline_sources = source_list(prompt("Offline snapshot sources (optional: ieee_xplore,scopus,web_of_science,ei_compendex,inspec): "))
+            authorized = source_list(prompt("Sources with a preconfigured legal login/connector (optional): "))
         else:
             sources = offline_sources = authorized = []
+    if any((metadata, discovery, citations)):
+        sources = sources or ["openalex", "arxiv", "crossref", "europepmc"]
+    unknown = sorted(set(sources) - {"openalex", "arxiv", "crossref", "europepmc"})
+    if unknown:
+        raise SystemExit(f"ERROR: no live connector for: {', '.join(unknown)}. Add it under offline snapshot sources instead.")
+    unknown_offline = sorted(set(offline_sources) - SUPPORTED_SOURCES)
+    if unknown_offline:
+        raise SystemExit(f"ERROR: unsupported offline snapshot source(s): {', '.join(unknown_offline)}")
     automation.update({"allow_search": any((metadata, discovery, citations)),
                        "allow_metadata_enrichment": metadata, "allow_external_discovery": discovery,
                        "allow_citation_tracking": citations, "local_only_confirmed": local_only,
@@ -188,8 +225,16 @@ def configure_permissions(args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__); sub = parser.add_subparsers(dest="command", required=True)
-    init = sub.add_parser("init"); init.add_argument("--out", required=True)
+    init = sub.add_parser("init"); init.add_argument("--out", required=True); init.add_argument("--question"); init.add_argument("--scope-status", choices=("in_scope", "out_of_scope", "scope_uncertain")); init.add_argument("--library")
     permissions = sub.add_parser("configure-permissions"); permissions.add_argument("--run-config", required=True)
+    permissions.add_argument("--non-interactive", action="store_true", help="use explicit flags instead of prompts")
+    permissions.add_argument("--local-only", action="store_true")
+    permissions.add_argument("--allow-metadata-enrichment", action="store_true")
+    permissions.add_argument("--allow-external-discovery", action="store_true")
+    permissions.add_argument("--allow-citation-tracking", action="store_true")
+    permissions.add_argument("--online-sources", help="comma-separated live connector sources")
+    permissions.add_argument("--offline-snapshot-sources", help="comma-separated offline export sources")
+    permissions.add_argument("--authorized-sources", help="comma-separated preconfigured legal connectors")
     status = sub.add_parser("status"); status.add_argument("--out", required=True)
     execute = sub.add_parser("run"); execute.add_argument("--run-config", required=True); execute.add_argument("--out", required=True); execute.add_argument("--library")
     for name in ("context", "benchmark", "gold", "query-hits", "run-log", "source-snapshot", "screening-decisions", "deduplication-log", "screening-summary", "search-meta", "search-iterations", "independent-pathways", "relevance-review"): execute.add_argument("--" + name)

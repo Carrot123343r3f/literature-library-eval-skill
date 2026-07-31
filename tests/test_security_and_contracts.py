@@ -65,6 +65,43 @@ def test_threshold_boundary_is_inclusive():
     }
     result = stability(context)
     assert all(value == "pass" for value in result["checks"].values())
+    assert result["verdict"] == "趋稳"
+
+
+def test_saturation_verdict_requires_every_convergence_gate():
+    """A single relaxed AND condition must never promote B to a stable verdict."""
+    def context():
+        return {
+            "standards": {"b_ggr_threshold": 0.02, "b_drr_threshold": 0.05},
+            "review_type": "快速综述",
+            "planned_pathways": ["db-openalex", "backward-seed"],
+            "independent_validation_passed": True,
+            "run_log_complete": True,
+            "search_rounds": [
+                {"pathway": "db-openalex", "completed": True, "core_before": 100, "included_high": 2, "screening_status": "screened_complete"},
+                {"pathway": "backward-seed", "completed": True, "core_before": 100, "included_high": 2, "screening_status": "screened_complete"},
+            ],
+            "independent_pathways": [
+                {"pathway_id": "db-openalex", "type": "db_boolean", "completed": True, "yield": 0.05, "screening_status": "screened_complete"},
+                {"pathway_id": "backward-seed", "type": "backward_citation", "completed": True, "yield": 0.05, "screening_status": "screened_complete"},
+            ],
+        }
+
+    baseline = context()
+    assert stability(baseline)["verdict"] == "趋稳"
+    cases = []
+    invalid_validation = context(); invalid_validation["independent_validation_passed"] = False
+    cases.append(invalid_validation)
+    high_ggr = context(); high_ggr["search_rounds"][1]["included_high"] = 3
+    cases.append(high_ggr)
+    high_drr = context(); high_drr["independent_pathways"][0]["yield"] = 0.06
+    cases.append(high_drr)
+    incomplete_pathway = context(); incomplete_pathway["planned_pathways"].append("forward-seed")
+    cases.append(incomplete_pathway)
+    missing_trace = context(); missing_trace["run_log_complete"] = False
+    cases.append(missing_trace)
+    for candidate in cases:
+        assert stability(candidate)["verdict"] != "趋稳"
 
 
 def test_a2_recall_counts_items_not_identifiers():

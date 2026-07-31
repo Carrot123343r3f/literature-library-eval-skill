@@ -1605,7 +1605,7 @@ def indicator_rows(report):
                    else "fail" if chk(h, "F4_exact_duplicates") == "fail" else "not_assessable")
         ver_note = (f"版本决定已保存（{h.get('dedup_log_depth','—')}）。" if chk(h, 'F4_version_decisions') == 'pass'
                     else "未提供结构化 dedup-log，版本候选待核验。")
-        return (verdict, info, h.get("status"),
+        return (verdict, info, "measured" if verdict != "not_assessable" else "not_assessable",
                 f"DOI 重复 {_fmt_num(hdoi)} 组。{'存在未处理重复。' if hdoi > 0 else '无精确重复。'}"
                 f"题名相似候选 {_fmt_num(hty)} 组（{ver_note}）")
 
@@ -1792,14 +1792,12 @@ def copy_inputs_and_manifest(report, artifact_paths, out):
             dst = inputs_dir / f"{safe_prefix}{src_path.suffix}"
             if payload is not None and (not dst.exists() or hash_file(dst) != h):
                 dst.write_bytes(payload)
-            elif src_path.suffix.lower() != ".json" and (not dst.exists() or hash_file(dst) != h):
-                shutil.copy2(src, dst)
-            if payload is not None or src_path.suffix.lower() != ".json":
+            if payload is not None:
                 entry["copied_to"] = str(dst.relative_to(out))
-                if src_path.suffix.lower() == ".json":
-                    entry["archive_status"] = "redacted_json_copy"
+                entry["archive_status"] = "redacted_json_copy"
             else:
-                entry["archive_status"] = "hash_only_unparseable_json"
+                entry["archive_status"] = ("hash_only_non_json" if src_path.suffix.lower() != ".json"
+                                           else "hash_only_unparseable_json")
             entry["source_filename"] = src_path.name
         manifest["input_files"][label] = entry
     # Also record the library file
@@ -1818,14 +1816,12 @@ def copy_inputs_and_manifest(report, artifact_paths, out):
         dst = inputs_dir / f"{safe_prefix}{lib_source.suffix}"
         if payload is not None and (not dst.exists() or hash_file(dst) != h):
             dst.write_bytes(payload)
-        elif lib_source.suffix.lower() != ".json" and (not dst.exists() or hash_file(dst) != h):
-            shutil.copy2(lib_path, dst)
-        if payload is not None or lib_source.suffix.lower() != ".json":
+        if payload is not None:
             entry["copied_to"] = str(dst.relative_to(out))
-            if lib_source.suffix.lower() == ".json":
-                entry["archive_status"] = "redacted_json_copy"
+            entry["archive_status"] = "redacted_json_copy"
         else:
-            entry["archive_status"] = "hash_only_unparseable_json"
+            entry["archive_status"] = ("hash_only_non_json" if lib_source.suffix.lower() != ".json"
+                                       else "hash_only_unparseable_json")
         manifest["input_files"]["library"] = entry
     (out / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     return manifest
