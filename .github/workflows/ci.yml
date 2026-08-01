@@ -26,7 +26,13 @@ jobs:
           cache-dependency-path: requirements-dev.txt
       - name: Install test dependencies
         run: python -m pip install --upgrade pip && python -m pip install -r requirements-dev.txt
-      - name: Run tests
-        run: python -m pytest -q
+      - name: Run smoke tests
+        run: python -m pytest -m smoke -q
+      - name: Run contract and security tests
+        run: python -m pytest -m contract_security -q
+      - name: Run remaining regression tests
+        run: python -m pytest -m "not smoke and not contract_security" -q
+      - name: Regenerate and verify the offline example
+        run: python examples/institutional-export-offline/reproduce.py
       - name: Check strict repository consistency
         run: python scripts/check_consistency.py --strict

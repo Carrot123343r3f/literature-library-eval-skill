@@ -5,8 +5,10 @@ example = pathlib.Path(__file__).resolve().parent
 repo = example.parents[1]
 env = {**os.environ, "PYTHONUTF8": "1"}
 out = example / ".local-output"
-subprocess.run([sys.executable, repo / "scripts" / "import_source_snapshots.py", "--manifest", example / "institutional-exports.json", "--out", out / "institutional-snapshot.json"], check=True, env=env)
-subprocess.run([sys.executable, repo / "scripts" / "run_audit.py", "--run-config", example / "run-config.json", "--out", out / "audit"], check=True, env=env)
+# This fixture owns .local-output; force makes repeated teaching/CI runs
+# reproducible without changing the fail-closed policy for user-selected paths.
+subprocess.run([sys.executable, repo / "scripts" / "import_source_snapshots.py", "--manifest", example / "institutional-exports.json", "--out", out / "institutional-snapshot.json", "--force"], check=True, env=env)
+subprocess.run([sys.executable, repo / "scripts" / "run_audit.py", "--run-config", example / "run-config.json", "--out", out / "audit", "--force"], check=True, env=env)
 audit = json.loads((out / "audit" / "audit.json").read_text(encoding="utf-8"))
 a3 = audit["coverage"]["a3"]
 snapshot = json.loads((out / "institutional-snapshot.json").read_text(encoding="utf-8"))

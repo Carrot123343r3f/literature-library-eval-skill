@@ -90,6 +90,10 @@ of what the current library supports and what should happen next.
 
 ## Quickstart
 
+### Windows terminal encoding
+
+All text files use UTF-8. If legacy Windows PowerShell renders text incorrectly, run `$OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()` before commands; use `$env:PYTHONUTF8 = '1'` for Python child processes.
+
 **Current capability**: A guided, resumable CLI workflow now covers import, authorized metadata enrichment, collection, deduplication, HTML/CSV human screening workbenches, audit, and recovery actions. All online capabilities are opt-in; candidates never become formal inclusions without a human decision.
 
 | Status | Step |

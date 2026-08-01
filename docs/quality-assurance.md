@@ -14,3 +14,12 @@
 | 输出安全 | HTML/JSON/manifest/输入快照均不含密钥或绝对路径 |
 
 回归测试目录 `tests/` 覆盖上述核心约束。新增功能应增加最小正例、缺参反例和安全反例；发布前运行全部测试并审查生成的 HTML。
+
+## 分层测试与发布门禁
+
+- `python -m pytest -m smoke -q`：快速检查核心命令、配置和基本审计路径。
+- `python -m pytest -m contract_security -q`：配置契约、路径隔离、脱敏、HTML 转义与证据门槛。
+- `python -m pytest -m e2e -q`：可恢复工作流和端到端场景；提交前或 CI 中运行。
+- `python -m pytest -q`：全量回归；发布前必须运行。
+
+CI 先运行 smoke 和 contract/security，再运行未被二者覆盖的剩余测试，因此整套 CI 仍覆盖全部测试而不重复执行。发布前仍须运行 `python -m pytest -q` 的真正全量回归。外部来源适配器新增或变更时，应加入脱敏的录制响应或契约 fixture，覆盖真实响应结构的关键字段与失败形态。

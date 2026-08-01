@@ -91,6 +91,10 @@ Zotero 文献库。它是一个可复现的产品体验，不代表对你自己�
 
 ## 三分钟开始自己的审计
 
+### Windows 终端编码
+
+所有文本文件使用 UTF-8。若旧版 Windows PowerShell 显示乱码，在运行命令前执行 `$OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()`；Python 子进程可使用 `$env:PYTHONUTF8 = '1'`。
+
 ```text
 使用 literature-library-eval 评估我的文献库，
 判断它能否支撑"工业视觉缺陷检测的跨产线迁移"的系统综述。
