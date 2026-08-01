@@ -164,12 +164,13 @@ def write_library_health(out, library, output_language="zh-CN", *, out_of_scope=
         (out / "library-health.html").write_text(page, encoding="utf-8")
         return
     scope_notice = "该问题已明确超出本 skill 的适用范围；本页仅作题录健康检查。" if out_of_scope else "本模式只检查基础可用性；不对召回率、饱和度或文献库能否支撑综述作出结论。"
+    next_step = "该问题超出本 skill 的适用范围；本 skill 不提供其充分性审计。只有项目范围实际改变后，才应重新分类。" if out_of_scope else "如需充分性审计，请明确综述类型，并运行 <code>--mode sufficiency-audit --review-type ...</code>。"
     page = f"""<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>文献库健康检查</title>
 <body><main style="max-width:760px;margin:48px auto;font:16px/1.55 system-ui,sans-serif">
 <h1>文献库健康检查（不是充分性审计）</h1>
 <p>{scope_notice}</p>
 <ul><li>可读取记录：{total}</li><li>标题完整率：{rate('title'):.0%}</li><li>年份完整率：{rate('date', 'year', 'publication_year'):.0%}</li><li>摘要完整率：{rate('abstractNote', 'abstract'):.0%}</li><li>DOI 完整率：{rate('DOI', 'doi'):.0%}</li></ul>
-<p>如需充分性审计，请明确综述类型，并运行 <code>--mode sufficiency-audit --review-type ...</code>。</p>
+<p>{next_step}</p>
 </main></body></html>"""
     (out / "library-health.html").write_text(page, encoding="utf-8")
 
@@ -441,6 +442,7 @@ def run(args):
             write_out_of_scope_notice(out, args.question, output_language)
             manifest = {"schema_version": "1.0", "mode": "out_of_scope", "audit_status": "not_started", "question": args.question, "scope_status": args.scope_status}
         (out / "autopilot-manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print("[2/3] Delivered an out-of-scope bibliographic health check." if args.library else "[2/3] Delivered an out-of-scope stop notice.", flush=True)
         return
     mode = args.mode
     if mode == "auto":

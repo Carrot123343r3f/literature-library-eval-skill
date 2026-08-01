@@ -106,7 +106,10 @@ def test_autopilot_out_of_scope_library_gets_health_check_not_onboarding(tmp_pat
     result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8")
     assert result.returncode == 0, result.stderr
     assert (out / "library-health.html").is_file() and not (out / "onboarding.html").exists()
-    assert "超出本 skill 的适用范围" in (out / "library-health.html").read_text(encoding="utf-8")
+    page = (out / "library-health.html").read_text(encoding="utf-8")
+    assert "超出本 skill 的适用范围" in page
+    assert "本 skill 不提供其充分性审计" in page and "--mode sufficiency-audit" not in page
+    assert "Delivered an out-of-scope bibliographic health check." in result.stdout
     manifest = json.loads((out / "autopilot-manifest.json").read_text(encoding="utf-8"))
     assert manifest["mode"] == "out_of_scope_library_health"
 
