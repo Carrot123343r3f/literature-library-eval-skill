@@ -6,7 +6,10 @@ import argparse
 import datetime as dt
 import json
 import pathlib
-from audit_core.safe_paths import prepare_output_file
+try:
+    from audit_core.safe_paths import prepare_output_file
+except ImportError:
+    from scripts.audit_core.safe_paths import prepare_output_file
 import re
 
 

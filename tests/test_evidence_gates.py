@@ -87,6 +87,40 @@ def test_autopilot_unconfirmed_scope_writes_onboarding_without_audit(tmp_path):
     assert not (out / "audit" / "audit.html").exists()
 
 
+def test_autopilot_onboarding_respects_chinese_output_language(tmp_path):
+    out = tmp_path / "zh-onboarding"
+    command = [sys.executable, str(ROOT / "scripts" / "autopilot.py"),
+               "--question", "机器人定位", "--out", str(out), "--offline", "--output-language", "zh-CN"]
+    result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8")
+    assert result.returncode == 0, result.stderr
+    page = (out / "onboarding.html").read_text(encoding="utf-8")
+    assert 'lang="zh-CN"' in page and "开始文献库审计" in page
+    assert "library.{json,csv,ris,bib}" in page
+
+
+def test_autopilot_out_of_scope_library_gets_health_check_not_onboarding(tmp_path):
+    out = tmp_path / "out-of-scope-library"
+    command = [sys.executable, str(ROOT / "scripts" / "autopilot.py"),
+               "--question", "clinical treatment", "--library", str(ROOT / "tests" / "library.json"),
+               "--out", str(out), "--offline", "--scope-status", "out_of_scope"]
+    result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8")
+    assert result.returncode == 0, result.stderr
+    assert (out / "library-health.html").is_file() and not (out / "onboarding.html").exists()
+    assert "超出本 skill 的适用范围" in (out / "library-health.html").read_text(encoding="utf-8")
+    manifest = json.loads((out / "autopilot-manifest.json").read_text(encoding="utf-8"))
+    assert manifest["mode"] == "out_of_scope_library_health"
+
+
+def test_autopilot_out_of_scope_without_library_stops_without_reclassification_hint(tmp_path):
+    out = tmp_path / "out-of-scope"
+    command = [sys.executable, str(ROOT / "scripts" / "autopilot.py"),
+               "--question", "clinical treatment", "--out", str(out), "--offline", "--scope-status", "out_of_scope"]
+    result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8")
+    assert result.returncode == 0, result.stderr
+    page = (out / "out-of-scope.html").read_text(encoding="utf-8")
+    assert "超出本 skill 的适用范围" in page and "--scope-status in_scope" not in page
+
+
 def test_autopilot_confirmed_scope_without_library_delivers_search_preparation_only(tmp_path):
     out = tmp_path / "first-pass"
     command = [sys.executable, str(ROOT / "scripts" / "autopilot.py"),

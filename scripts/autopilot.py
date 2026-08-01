@@ -79,23 +79,52 @@ def bundle_input(path, bundle_dir, label):
     return f"inputs/{destination.name}", {"sha256": digest, "filename": destination.name, "redacted_json": suffix == ".json"}
 
 
-def write_onboarding(out, question, plan, sources):
-    """Write a safe first-run handoff when scope has not been confirmed yet."""
+def write_onboarding(out, question, plan, sources, output_language="zh-CN"):
+    """Write a safe, localized first-run handoff when scope is uncertain."""
     query_count = len(plan.get("queries", [])) if isinstance(plan, dict) else 0
     command = "python scripts/autopilot.py --question " + json.dumps(question, ensure_ascii=False) + " --scope-status in_scope --out first-pass"
     if sources:
         command += " --sources " + json.dumps(",".join(sources), ensure_ascii=False)
-    page = f"""<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Literature audit: start here</title>
+    if str(output_language).lower().startswith("en"):
+        page = f"""<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Literature audit: start here</title>
 <body><main style=\"max-width:760px;margin:48px auto;font:16px/1.55 system-ui,sans-serif\">
 <h1>Start your literature audit</h1>
 <p>Your question has been saved and a {query_count}-query starter plan was created. No A–F conclusion was produced because the engineering scope has not yet been confirmed.</p>
 <h2>Question</h2><p>{html.escape(question)}</p>
 <h2>Next step</h2><p>If this is an engineering review question within this skill's scope, run:</p>
 <pre>{html.escape(command)}</pre>
-<p>You may add <code>--library path/to/library.json</code> now or later. Without a library, the first confirmed run delivers a search-preparation plan and does not start an A–F audit.</p>
+<p>You may add <code>--library path/to/library.{{json,csv,ris,bib}}</code> now or later. Without a library, the first confirmed run delivers a search-preparation plan and does not start an A–F audit.</p>
 <h2>Why this pause exists</h2><p>It prevents an automated draft from silently deciding that an out-of-scope question deserves a full evidence verdict.</p>
 </main></body></html>"""
+        (out / "onboarding.html").write_text(page, encoding="utf-8")
+        return
+    page = f"""<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>文献库审计：从这里开始</title>
+<body><main style="max-width:760px;margin:48px auto;font:16px/1.55 system-ui,sans-serif">
+<h1>开始文献库审计</h1>
+<p>已保存你的研究问题，并生成 {query_count} 条起步检索式。由于尚未确认该问题是否属于本 skill 的工程研究范围，本次没有生成 A–F 结论。</p>
+<h2>研究问题</h2><p>{html.escape(question)}</p>
+<h2>下一步</h2><p>如果这是本 skill 适用范围内的工程综述问题，请运行：</p>
+<pre>{html.escape(command)}</pre>
+<p>现在或之后均可补充 <code>--library path/to/library.{{json,csv,ris,bib}}</code>。未提供文献库时，首次确认范围后的运行只交付检索准备计划，不会启动 A–F 审计。</p>
+<h2>为何暂停</h2><p>此步骤避免自动化系统在范围不明时，擅自对超出适用范围的问题给出完整证据结论。</p>
+</main></body></html>"""
     (out / "onboarding.html").write_text(page, encoding="utf-8")
+
+
+def write_out_of_scope_notice(out, question, output_language="zh-CN"):
+    """Stop without suggesting an out-of-scope question be reclassified."""
+    if str(output_language).lower().startswith("en"):
+        page = f"""<!doctype html><html lang="en"><meta charset="utf-8"><title>Outside this skill's scope</title>
+<body><main style="max-width:760px;margin:48px auto;font:16px/1.55 system-ui,sans-serif"><h1>Outside this skill's scope</h1>
+<p>This question is explicitly marked out of scope, so no search plan or A–F audit was started.</p><h2>Question</h2><p>{html.escape(question)}</p>
+<p>Reclassify the scope only if the original project scope changes; this page is not a review-readiness conclusion.</p></main></body></html>"""
+        (out / "out-of-scope.html").write_text(page, encoding="utf-8")
+        return
+    page = f"""<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>超出本 skill 的适用范围</title>
+<body><main style="max-width:760px;margin:48px auto;font:16px/1.55 system-ui,sans-serif"><h1>超出本 skill 的适用范围</h1>
+<p>该问题已被明确标记为超出范围，因此不会启动检索计划或 A–F 审计。</p><h2>研究问题</h2><p>{html.escape(question)}</p>
+<p>只有原始项目范围实际发生变化时，才应重新分类；本页不构成综述准备度结论。</p></main></body></html>"""
+    (out / "out-of-scope.html").write_text(page, encoding="utf-8")
 
 
 def write_search_preparation(out, question, plan, output_language="zh-CN"):
@@ -121,22 +150,24 @@ def write_search_preparation(out, question, plan, output_language="zh-CN"):
     (out / "search-preparation.html").write_text(page, encoding="utf-8")
 
 
-def write_library_health(out, library, output_language="zh-CN"):
+def write_library_health(out, library, output_language="zh-CN", *, out_of_scope=False):
     """Provide a lightweight health check without claiming review sufficiency."""
     records = load_library(library)
     total = len(records)
     def rate(*keys):
         return (sum(bool(str(next((row.get(key) for key in keys if row.get(key)), "")).strip()) for row in records) / total) if total else 0
     if str(output_language).lower().startswith("en"):
+        scope_notice = "This question is outside this skill's scope; this page is only a bibliographic health check." if out_of_scope else "This mode checks basic usability only; it does not establish recall, saturation, or review readiness."
         page = f"""<!doctype html><html lang="en"><meta charset="utf-8"><title>Library health check</title>
 <body><main style="max-width:760px;margin:48px auto;font:16px/1.55 system-ui,sans-serif"><h1>Library health check (not a sufficiency conclusion)</h1>
-<p>This mode checks basic usability only; it does not establish recall, saturation, or review readiness.</p><ul><li>Readable records: {total}</li><li>Titles present: {rate('title'):.0%}</li><li>Years present: {rate('date', 'year', 'publication_year'):.0%}</li><li>Abstracts present: {rate('abstractNote', 'abstract'):.0%}</li><li>DOIs present: {rate('DOI', 'doi'):.0%}</li></ul></main></body></html>"""
+<p>{scope_notice}</p><ul><li>Readable records: {total}</li><li>Titles present: {rate('title'):.0%}</li><li>Years present: {rate('date', 'year', 'publication_year'):.0%}</li><li>Abstracts present: {rate('abstractNote', 'abstract'):.0%}</li><li>DOIs present: {rate('DOI', 'doi'):.0%}</li></ul></main></body></html>"""
         (out / "library-health.html").write_text(page, encoding="utf-8")
         return
+    scope_notice = "该问题已明确超出本 skill 的适用范围；本页仅作题录健康检查。" if out_of_scope else "本模式只检查基础可用性；不对召回率、饱和度或文献库能否支撑综述作出结论。"
     page = f"""<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>文献库健康检查</title>
 <body><main style="max-width:760px;margin:48px auto;font:16px/1.55 system-ui,sans-serif">
 <h1>文献库健康检查（不是充分性审计）</h1>
-<p>本模式只检查基础可用性；不对召回率、饱和度或文献库能否支撑综述作出结论。</p>
+<p>{scope_notice}</p>
 <ul><li>可读取记录：{total}</li><li>标题完整率：{rate('title'):.0%}</li><li>年份完整率：{rate('date', 'year', 'publication_year'):.0%}</li><li>摘要完整率：{rate('abstractNote', 'abstract'):.0%}</li><li>DOI 完整率：{rate('DOI', 'doi'):.0%}</li></ul>
 <p>如需充分性审计，请明确综述类型，并运行 <code>--mode sufficiency-audit --review-type ...</code>。</p>
 </main></body></html>"""
@@ -397,9 +428,19 @@ def run(args):
         time_end=args.time_end, languages=[item.strip() for item in (args.languages or "").split(",") if item.strip()],
         output_language=args.output_language or "zh-CN", evidence_inputs=bundled_evidence), ensure_ascii=False, indent=2), encoding="utf-8")
     (control / "input-bundle-manifest.json").write_text(json.dumps(bundle_manifest, ensure_ascii=False, indent=2), encoding="utf-8")
-    if args.scope_status not in {"in_scope", "cross_domain"}:
-        write_onboarding(out, args.question, plan, sources)
+    output_language = args.output_language or "zh-CN"
+    if args.scope_status == "scope_uncertain":
+        write_onboarding(out, args.question, plan, sources, output_language)
         (out / "autopilot-manifest.json").write_text(json.dumps({"schema_version": "1.0", "mode": "needs_scope_confirmation", "sources_requested": sources, "question": args.question, "scope_status": args.scope_status, "human_gates": ["scope"]}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        return
+    if args.scope_status == "out_of_scope":
+        if args.library:
+            write_library_health(out, pathlib.Path(args.library).resolve(), output_language, out_of_scope=True)
+            manifest = {"schema_version": "1.0", "mode": "out_of_scope_library_health", "audit_status": "not_started", "question": args.question, "scope_status": args.scope_status}
+        else:
+            write_out_of_scope_notice(out, args.question, output_language)
+            manifest = {"schema_version": "1.0", "mode": "out_of_scope", "audit_status": "not_started", "question": args.question, "scope_status": args.scope_status}
+        (out / "autopilot-manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         return
     mode = args.mode
     if mode == "auto":
